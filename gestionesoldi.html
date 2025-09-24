@@ -24,7 +24,7 @@
             background-color: white;
             border-radius: 0.75rem;
             padding: 1.5rem;
-            box-shadow: 0 4px 6px -1-px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
         }
         .action-btn.active {
             background-color: #4f46e5; /* indigo-600 */
@@ -383,309 +383,309 @@
 
 
     <script type="module">
-    // Import the functions you need from the SDKs you need
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-    import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 
-    // Your web app's Firebase configuration
-    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-    const firebaseConfig = {
-      apiKey: "AIzaSyBtQZkX6r4F2W0BsIo6nsD27dUZHv3e8RU",
-      authDomain: "studio-kraken-gate.firebaseapp.com",
-      projectId: "studio-kraken-gate",
-      storageBucket: "studio-kraken-gate.firebasestorage.app",
-      messagingSenderId: "744360512833",
-      appId: "1:744360512833:web:ed0952f304c37bd5ee25c0",
-      measurementId: "G-39RLC549LJ",
-      databaseURL: "https://studio-kraken-gate-default-rtdb.firebaseio.com"
-    };
+        // Your web app's Firebase configuration
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+          apiKey: "AIzaSyBtQZkX6r4F2W0BsIo6nsD27dUZHv3e8RU",
+          authDomain: "studio-kraken-gate.firebaseapp.com",
+          projectId: "studio-kraken-gate",
+          storageBucket: "studio-kraken-gate.firebasestorage.app",
+          messagingSenderId: "744360512833",
+          appId: "1:744360512833:web:ed0952f304c37bd5ee25c0",
+          measurementId: "G-39RLC549LJ",
+          databaseURL: "https://studio-kraken-gate-default-rtdb.firebaseio.com"
+        };
 
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const analytics = getAnalytics(app);
-    const database = getDatabase(app);
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const database = getDatabase(app);
 
-    // Riferimenti ai nodi del tuo database
-    const membersRef = ref(database, 'members');
-    const varExpensesRef = ref(database, 'variableExpenses');
-    const fixedExpensesRef = ref(database, 'fixedExpenses');
-    const incomeRef = ref(database, 'incomeEntries');
-    const wishlistRef = ref(database, 'wishlist');
-    const futureMovementsRef = ref(database, 'futureMovements');
-    const pendingPaymentsRef = ref(database, 'pendingPayments');
-    const cassaComuneRef = ref(database, 'cassaComune');
+        // Riferimenti ai nodi del tuo database
+        const membersRef = ref(database, 'members');
+        const varExpensesRef = ref(database, 'variableExpenses');
+        const fixedExpensesRef = ref(database, 'fixedExpenses');
+        const incomeRef = ref(database, 'incomeEntries');
+        const wishlistRef = ref(database, 'wishlist');
+        const futureMovementsRef = ref(database, 'futureMovements');
+        const pendingPaymentsRef = ref(database, 'pendingPayments');
+        const cassaComuneRef = ref(database, 'cassaComune');
 
-    // --- Data State (Firebase-synced) ---
-    let members = [];
-    let variableExpenses = [];
-    let fixedExpenses = [];
-    let incomeEntries = [];
-    let wishlist = [];
-    let futureMovements = [];
-    let pendingPayments = [];
-    let cassaComune = { balance: 0, movements: [] };
+        // --- Data State (Firebase-synced) ---
+        let members = [];
+        let variableExpenses = [];
+        let fixedExpenses = [];
+        let incomeEntries = [];
+        let wishlist = [];
+        let futureMovements = [];
+        let pendingPayments = [];
+        let cassaComune = { balance: 0, movements: [] };
 
-    function saveDataToFirebase() {
-        set(membersRef, members);
-        set(varExpensesRef, variableExpenses);
-        set(fixedExpensesRef, fixedExpenses);
-        set(incomeRef, incomeEntries);
-        set(wishlistRef, wishlist);
-        set(futureMovementsRef, futureMovements);
-        set(pendingPaymentsRef, pendingPayments);
-        set(cassaComuneRef, cassaComune);
-    }
+        function saveDataToFirebase() {
+            set(membersRef, members);
+            set(varExpensesRef, variableExpenses);
+            set(fixedExpensesRef, fixedExpenses);
+            set(incomeRef, incomeEntries);
+            set(wishlistRef, wishlist);
+            set(futureMovementsRef, futureMovements);
+            set(pendingPaymentsRef, pendingPayments);
+            set(cassaComuneRef, cassaComune);
+        }
 
-    function loadDataFromFirebase() {
-        onValue(membersRef, (snapshot) => {
-            members = snapshot.val() || [];
-            renderMembers();
-            toggleSectionsVisibility();
-            updatePayerSelects();
-        });
+        function loadDataFromFirebase() {
+            onValue(membersRef, (snapshot) => {
+                members = snapshot.val() || [];
+                renderMembers();
+                toggleSectionsVisibility();
+                updatePayerSelects();
+            });
 
-        onValue(varExpensesRef, (snapshot) => {
-            variableExpenses = snapshot.val() || [];
-            renderVariableExpenses();
-            updateDashboardView();
-            populateMonthFilter();
-        });
+            onValue(varExpensesRef, (snapshot) => {
+                variableExpenses = snapshot.val() || [];
+                renderVariableExpenses();
+                updateDashboardView();
+                populateMonthFilter();
+            });
 
-        onValue(fixedExpensesRef, (snapshot) => {
-            fixedExpenses = snapshot.val() || [];
-            renderFixedExpenses();
-            updateDashboardView();
-        });
+            onValue(fixedExpensesRef, (snapshot) => {
+                fixedExpenses = snapshot.val() || [];
+                renderFixedExpenses();
+                updateDashboardView();
+            });
 
-        onValue(incomeRef, (snapshot) => {
-            incomeEntries = snapshot.val() || [];
-            renderIncomeEntries();
-            updateDashboardView();
-            populateMonthFilter();
-        });
+            onValue(incomeRef, (snapshot) => {
+                incomeEntries = snapshot.val() || [];
+                renderIncomeEntries();
+                updateDashboardView();
+                populateMonthFilter();
+            });
 
-        onValue(wishlistRef, (snapshot) => {
-            wishlist = snapshot.val() || [];
-            renderWishlist();
-        });
+            onValue(wishlistRef, (snapshot) => {
+                wishlist = snapshot.val() || [];
+                renderWishlist();
+            });
 
-        onValue(futureMovementsRef, (snapshot) => {
-            futureMovements = snapshot.val() || [];
-            renderFutureMovements();
-        });
+            onValue(futureMovementsRef, (snapshot) => {
+                futureMovements = snapshot.val() || [];
+                renderFutureMovements();
+            });
 
-        onValue(pendingPaymentsRef, (snapshot) => {
-            pendingPayments = snapshot.val() || [];
-            renderPendingPayments();
-        });
+            onValue(pendingPaymentsRef, (snapshot) => {
+                pendingPayments = snapshot.val() || [];
+                renderPendingPayments();
+            });
 
-        onValue(cassaComuneRef, (snapshot) => {
-            cassaComune = snapshot.val() || { balance: 0, movements: [] };
-            renderCassaComune();
-        });
-    }
-    
-    // --- App Logic ---
-    const monthFilter = document.getElementById('month-filter');
-    const memberCountEl = document.getElementById('member-count');
-    const membersListEl = document.getElementById('members-list');
-    const newMemberNameInput = document.getElementById('new-member-name');
-    const addMemberBtn = document.getElementById('add-member-btn');
-    const payerSelect = document.getElementById('payer');
-    const expenseDateInput = document.getElementById('expense-date');
-    const amountInput = document.getElementById('amount');
-    const categoryInput = document.getElementById('category');
-    const descriptionInput = document.getElementById('description');
-    const addExpenseBtn = document.getElementById('add-expense-btn');
-    const fixedDescInput = document.getElementById('fixed-desc');
-    const fixedAmountInput = document.getElementById('fixed-amount');
-    const addFixedExpenseBtn = document.getElementById('add-fixed-expense-btn');
-    const fixedExpensesListEl = document.getElementById('fixed-expenses-list');
-    const totalFixedEl = document.getElementById('total-fixed-expense');
-    const totalVariableEl = document.getElementById('total-variable-expense');
-    const totalIncomeEl = document.getElementById('total-income');
-    const perPersonShareEl = document.getElementById('per-person-share');
-    const expensesListContainer = document.getElementById('expenses-list-container');
-    const calculateBtn = document.getElementById('calculate-btn');
-    const settlementContainer = document.getElementById('settlement-container');
-    const settlementList = document.getElementById('settlement-list');
-    const exportExcelBtn = document.getElementById('export-excel-btn');
-    const exportDataBtn = document.getElementById('export-data-btn');
-    const importDataBtn = document.getElementById('import-data-btn');
-    const importFileInput = document.getElementById('import-file-input');
-    const incomeDateInput = document.getElementById('income-date');
-    const incomeAmountInput = document.getElementById('income-amount');
-    const incomeDescriptionInput = document.getElementById('income-description');
-    const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
-    const addIncomeBtn = document.getElementById('add-income-btn');
-    const incomeListContainer = document.getElementById('income-list-container');
-    const wishlistItemNameInput = document.getElementById('wishlist-item-name');
-    const wishlistItemCostInput = document.getElementById('wishlist-item-cost');
-    const wishlistItemPriorityInput = document.getElementById('wishlist-item-priority');
-    const addWishlistItemBtn = document.getElementById('add-wishlist-item-btn');
-    const wishlistContainer = document.getElementById('wishlist-container');
-    const wishlistNewLinkInput = document.getElementById('wishlist-new-link-input');
-    const addWishlistLinkBtn = document.getElementById('add-wishlist-link-btn');
-    const wishlistLinksContainer = document.getElementById('wishlist-links-container');
-    const futureMovementDescriptionInput = document.getElementById('future-movement-description');
-    const futureMovementCostInput = document.getElementById('future-movement-cost');
-    const futureMovementDueDateInput = document.getElementById('future-movement-due-date');
-    const addFutureMovementBtn = document.getElementById('add-future-movement-btn');
-    const futureMovementsContainer = document.getElementById('future-movements-container');
-    const pendingPaymentMemberSelect = document.getElementById('pending-payment-member');
-    const pendingPaymentAmountInput = document.getElementById('pending-payment-amount');
-    const pendingPaymentDescriptionInput = document.getElementById('pending-payment-description');
-    const addPendingPaymentBtn = document.getElementById('add-pending-payment-btn');
-    const pendingPaymentsContainer = document.getElementById('pending-payments-container');
-    const quickActionsContainer = document.getElementById('quick-actions-container');
-    const actionForms = document.querySelectorAll('.action-form');
-    const editModal = document.getElementById('edit-modal');
-    const editModalContent = document.getElementById('edit-modal-content');
-    const editModalTitle = document.getElementById('edit-modal-title');
-    const editModalFormContainer = document.getElementById('edit-modal-form-container');
-    const editModalActions = document.getElementById('edit-modal-actions');
-    const closeEditModalBtn = document.getElementById('close-edit-modal-btn');
-    const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
-    const cashMovementTypeSelect = document.getElementById('cash-movement-type');
-    const cashMovementMemberSelect = document.getElementById('cash-movement-member');
-    const cashMovementAmountInput = document.getElementById('cash-movement-amount');
-    const cashMovementDescriptionInput = document.getElementById('cash-movement-description');
-    const addCashMovementBtn = document.getElementById('add-cash-movement-btn');
-    const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
-    
-    let tempWishlistLinks = [];
-    let membersContributionsChart, membersIncomeChart, categoriesChart, balancesChart;
-
-    const sections = {
-        summary: document.getElementById('summary-section'),
-        cashBalance: document.getElementById('cash-balance-section'),
-        expensesList: document.getElementById('expenses-list-section'),
-        incomeList: document.getElementById('income-list-section'),
-        wishlist: document.getElementById('wishlist-section'),
-        futureMovements: document.getElementById('future-movements-section'),
-        pendingPayments: document.getElementById('pending-payments-section'),
-        quickActions: document.getElementById('quick-actions-section'),
-    };
-
-    // --- Utility Functions ---
-    const populateMonthFilter = () => {
-        const months = new Set();
-        [...variableExpenses, ...incomeEntries].forEach(item => {
-            if (item.date) {
-                const date = new Date(item.date);
-                const month = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-                months.add(month);
-            }
-        });
-
-        const currentSelection = monthFilter.value;
+            onValue(cassaComuneRef, (snapshot) => {
+                cassaComune = snapshot.val() || { balance: 0, movements: [] };
+                renderCassaComune();
+            });
+        }
         
-        monthFilter.innerHTML = '<option value="all">Globale</option>';
-
-        const sortedMonths = Array.from(months).sort().reverse();
+        // --- App Logic ---
+        const monthFilter = document.getElementById('month-filter');
+        const memberCountEl = document.getElementById('member-count');
+        const membersListEl = document.getElementById('members-list');
+        const newMemberNameInput = document.getElementById('new-member-name');
+        const addMemberBtn = document.getElementById('add-member-btn');
+        const payerSelect = document.getElementById('payer');
+        const expenseDateInput = document.getElementById('expense-date');
+        const amountInput = document.getElementById('amount');
+        const categoryInput = document.getElementById('category');
+        const descriptionInput = document.getElementById('description');
+        const addExpenseBtn = document.getElementById('add-expense-btn');
+        const fixedDescInput = document.getElementById('fixed-desc');
+        const fixedAmountInput = document.getElementById('fixed-amount');
+        const addFixedExpenseBtn = document.getElementById('add-fixed-expense-btn');
+        const fixedExpensesListEl = document.getElementById('fixed-expenses-list');
+        const totalFixedEl = document.getElementById('total-fixed-expense');
+        const totalVariableEl = document.getElementById('total-variable-expense');
+        const totalIncomeEl = document.getElementById('total-income');
+        const perPersonShareEl = document.getElementById('per-person-share');
+        const expensesListContainer = document.getElementById('expenses-list-container');
+        const calculateBtn = document.getElementById('calculate-btn');
+        const settlementContainer = document.getElementById('settlement-container');
+        const settlementList = document.getElementById('settlement-list');
+        const exportExcelBtn = document.getElementById('export-excel-btn');
+        const exportDataBtn = document.getElementById('export-data-btn');
+        const importDataBtn = document.getElementById('import-data-btn');
+        const importFileInput = document.getElementById('import-file-input');
+        const incomeDateInput = document.getElementById('income-date');
+        const incomeAmountInput = document.getElementById('income-amount');
+        const incomeDescriptionInput = document.getElementById('income-description');
+        const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
+        const addIncomeBtn = document.getElementById('add-income-btn');
+        const incomeListContainer = document.getElementById('income-list-container');
+        const wishlistItemNameInput = document.getElementById('wishlist-item-name');
+        const wishlistItemCostInput = document.getElementById('wishlist-item-cost');
+        const wishlistItemPriorityInput = document.getElementById('wishlist-item-priority');
+        const addWishlistItemBtn = document.getElementById('add-wishlist-item-btn');
+        const wishlistContainer = document.getElementById('wishlist-container');
+        const wishlistNewLinkInput = document.getElementById('wishlist-new-link-input');
+        const addWishlistLinkBtn = document.getElementById('add-wishlist-link-btn');
+        const wishlistLinksContainer = document.getElementById('wishlist-links-container');
+        const futureMovementDescriptionInput = document.getElementById('future-movement-description');
+        const futureMovementCostInput = document.getElementById('future-movement-cost');
+        const futureMovementDueDateInput = document.getElementById('future-movement-due-date');
+        const addFutureMovementBtn = document.getElementById('add-future-movement-btn');
+        const futureMovementsContainer = document.getElementById('future-movements-container');
+        const pendingPaymentMemberSelect = document.getElementById('pending-payment-member');
+        const pendingPaymentAmountInput = document.getElementById('pending-payment-amount');
+        const pendingPaymentDescriptionInput = document.getElementById('pending-payment-description');
+        const addPendingPaymentBtn = document.getElementById('add-pending-payment-btn');
+        const pendingPaymentsContainer = document.getElementById('pending-payments-container');
+        const quickActionsContainer = document.getElementById('quick-actions-container');
+        const actionForms = document.querySelectorAll('.action-form');
+        const editModal = document.getElementById('edit-modal');
+        const editModalContent = document.getElementById('edit-modal-content');
+        const editModalTitle = document.getElementById('edit-modal-title');
+        const editModalFormContainer = document.getElementById('edit-modal-form-container');
+        const editModalActions = document.getElementById('edit-modal-actions');
+        const closeEditModalBtn = document.getElementById('close-edit-modal-btn');
+        const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
+        const cashMovementTypeSelect = document.getElementById('cash-movement-type');
+        const cashMovementMemberSelect = document.getElementById('cash-movement-member');
+        const cashMovementAmountInput = document.getElementById('cash-movement-amount');
+        const cashMovementDescriptionInput = document.getElementById('cash-movement-description');
+        const addCashMovementBtn = document.getElementById('add-cash-movement-btn');
+        const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
         
-        sortedMonths.forEach(month => {
-            const [year, monthNum] = month.split('-');
-            const date = new Date(year, monthNum - 1);
-            const optionText = date.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+        let tempWishlistLinks = [];
+        let membersContributionsChart, membersIncomeChart, categoriesChart, balancesChart;
+
+        const sections = {
+            summary: document.getElementById('summary-section'),
+            cashBalance: document.getElementById('cash-balance-section'),
+            expensesList: document.getElementById('expenses-list-section'),
+            incomeList: document.getElementById('income-list-section'),
+            wishlist: document.getElementById('wishlist-section'),
+            futureMovements: document.getElementById('future-movements-section'),
+            pendingPayments: document.getElementById('pending-payments-section'),
+            quickActions: document.getElementById('quick-actions-section'),
+        };
+
+        // --- Utility Functions ---
+        const populateMonthFilter = () => {
+            const months = new Set();
+            [...variableExpenses, ...incomeEntries].forEach(item => {
+                if (item.date) {
+                    const date = new Date(item.date);
+                    const month = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+                    months.add(month);
+                }
+            });
+
+            const currentSelection = monthFilter.value;
             
-            const option = document.createElement('option');
-            option.value = month; 
-            option.textContent = optionText.charAt(0).toUpperCase() + optionText.slice(1);
-            monthFilter.appendChild(option);
-        });
+            monthFilter.innerHTML = '<option value="all">Globale</option>';
 
-        if (Array.from(monthFilter.options).some(opt => opt.value === currentSelection)) {
-            monthFilter.value = currentSelection;
-        }
-    };
+            const sortedMonths = Array.from(months).sort().reverse();
+            
+            sortedMonths.forEach(month => {
+                const [year, monthNum] = month.split('-');
+                const date = new Date(year, monthNum - 1);
+                const optionText = date.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+                
+                const option = document.createElement('option');
+                option.value = month; 
+                option.textContent = optionText.charAt(0).toUpperCase() + optionText.slice(1);
+                monthFilter.appendChild(option);
+            });
 
-    const toggleSectionsVisibility = () => {
-        const hasMembers = members.length > 0;
-        Object.values(sections).forEach(section => {
-            section.classList.toggle('hidden', !hasMembers);
-        });
-    };
-    
-    const formatDate = (dateString) => {
-        if (!dateString) return '';
-        try {
-            const date = new Date(dateString);
-            const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-            return new Date(date.getTime() + userTimezoneOffset).toISOString().split('T')[0];
-        } catch (e) {
-            return '';
-        }
-    };
-    
-    const displayDate = (dateString) => {
-         if (!dateString) return 'N/A';
-         const date = new Date(dateString);
-         const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-         return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    }
+            if (Array.from(monthFilter.options).some(opt => opt.value === currentSelection)) {
+                monthFilter.value = currentSelection;
+            }
+        };
 
-    // --- Rendering Functions ---
-    const renderMembers = () => {
-        membersListEl.innerHTML = '';
-        payerSelect.innerHTML = '';
-        pendingPaymentMemberSelect.innerHTML = '';
-        incomeMembersCheckboxes.innerHTML = '';
-        cashMovementMemberSelect.innerHTML = '<option value="">Nessuno</option>';
-        memberCountEl.textContent = members.length;
-
-        const cassaOption = document.createElement('option');
-        cassaOption.value = "Cassa Comune";
-        cassaOption.textContent = "Cassa Comune";
-        payerSelect.appendChild(cassaOption);
-
-
-        members.forEach((member, index) => {
-            const tag = document.createElement('div');
-            tag.className = 'flex items-center bg-indigo-100 text-indigo-800 text-sm font-medium px-3 py-1 rounded-full';
-            tag.innerHTML = `<span>${member}</span><button data-index="${index}" class="remove-member-btn ml-2 text-indigo-500 hover:text-indigo-800 font-bold">&times;</button>`;
-            membersListEl.appendChild(tag);
-
-            const option = document.createElement('option');
-            option.value = member;
-            option.textContent = member;
-            payerSelect.appendChild(option.cloneNode(true));
-            pendingPaymentMemberSelect.appendChild(option.cloneNode(true));
-            cashMovementMemberSelect.appendChild(option.cloneNode(true));
-
-            const checkboxDiv = document.createElement('div');
-            checkboxDiv.className = 'flex items-center';
-            checkboxDiv.innerHTML = `<input id="income-member-${index}" type="checkbox" value="${member}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                   <label for="income-member-${index}" class="ml-2 block text-sm text-gray-900">${member}</label>`;
-            incomeMembersCheckboxes.appendChild(checkboxDiv);
-        });
-    };
-
-    const renderCassaComune = () => {
-        cashBalanceAmountEl.textContent = `€${cassaComune.balance.toFixed(2)}`;
-        cashMovementsHistoryEl.innerHTML = '';
-        if(cassaComune.movements.length === 0){
-            cashMovementsHistoryEl.innerHTML = '<p class="text-gray-500 text-sm">Nessun movimento registrato.</p>';
-            return;
+        const toggleSectionsVisibility = () => {
+            const hasMembers = members.length > 0;
+            Object.values(sections).forEach(section => {
+                section.classList.toggle('hidden', !hasMembers);
+            });
+        };
+        
+        const formatDate = (dateString) => {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+                return new Date(date.getTime() + userTimezoneOffset).toISOString().split('T')[0];
+            } catch (e) {
+                return '';
+            }
+        };
+        
+        const displayDate = (dateString) => {
+             if (!dateString) return 'N/A';
+             const date = new Date(dateString);
+             const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+             return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
         }
 
-        [...cassaComune.movements].reverse().forEach(mov => {
-            const isDeposit = mov.type === 'deposit';
-            const el = document.createElement('div');
-            el.className = `text-sm p-2 rounded-lg flex justify-between items-center ${isDeposit ? 'bg-green-50' : 'bg-red-50'}`;
-            el.innerHTML = `
-                <div>
-                    <p class="font-medium">${mov.description}</p>
-                    <p class="text-xs text-gray-500">${displayDate(mov.date)} ${mov.member ? `(${mov.member})` : ''}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                     <p class="font-bold ${isDeposit ? 'text-green-600' : 'text-red-600'}">
-                        ${isDeposit ? '+' : '-'}€${mov.amount.toFixed(2)}
-                     </p>
-                     <button data-id="${mov.id}" class="remove-cash-movement-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
-                </div>
-            `;
+        // --- Rendering Functions ---
+        const renderMembers = () => {
+            membersListEl.innerHTML = '';
+            payerSelect.innerHTML = '';
+            pendingPaymentMemberSelect.innerHTML = '';
+            incomeMembersCheckboxes.innerHTML = '';
+            cashMovementMemberSelect.innerHTML = '<option value="">Nessuno</option>';
+            memberCountEl.textContent = members.length;
+
+            const cassaOption = document.createElement('option');
+            cassaOption.value = "Cassa Comune";
+            cassaOption.textContent = "Cassa Comune";
+            payerSelect.appendChild(cassaOption);
+
+
+            members.forEach((member, index) => {
+                const tag = document.createElement('div');
+                tag.className = 'flex items-center bg-indigo-100 text-indigo-800 text-sm font-medium px-3 py-1 rounded-full';
+                tag.innerHTML = `<span>${member}</span><button data-index="${index}" class="remove-member-btn ml-2 text-indigo-500 hover:text-indigo-800 font-bold">&times;</button>`;
+                membersListEl.appendChild(tag);
+
+                const option = document.createElement('option');
+                option.value = member;
+                option.textContent = member;
+                payerSelect.appendChild(option.cloneNode(true));
+                pendingPaymentMemberSelect.appendChild(option.cloneNode(true));
+                cashMovementMemberSelect.appendChild(option.cloneNode(true));
+
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.className = 'flex items-center';
+                checkboxDiv.innerHTML = `<input id="income-member-${index}" type="checkbox" value="${member}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                       <label for="income-member-${index}" class="ml-2 block text-sm text-gray-900">${member}</label>`;
+                incomeMembersCheckboxes.appendChild(checkboxDiv);
+            });
+        };
+
+        const renderCassaComune = () => {
+            cashBalanceAmountEl.textContent = `€${cassaComune.balance.toFixed(2)}`;
+            cashMovementsHistoryEl.innerHTML = '';
+            if(cassaComune.movements.length === 0){
+                cashMovementsHistoryEl.innerHTML = '<p class="text-gray-500 text-sm">Nessun movimento registrato.</p>';
+                return;
+            }
+
+            [...cassaComune.movements].reverse().forEach(mov => {
+                const isDeposit = mov.type === 'deposit';
+                const el = document.createElement('div');
+                el.className = `text-sm p-2 rounded-lg flex justify-between items-center ${isDeposit ? 'bg-green-50' : 'bg-red-50'}`;
+                el.innerHTML = `
+                    <div>
+                        <p class="font-medium">${mov.description}</p>
+                        <p class="text-xs text-gray-500">${displayDate(mov.date)} ${mov.member ? `(${mov.member})` : ''}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                         <p class="font-bold ${isDeposit ? 'text-green-600' : 'text-red-600'}">
+                            ${isDeposit ? '+' : '-'}€${mov.amount.toFixed(2)}
+                         </p>
+                         <button data-id="${mov.id}" class="remove-cash-movement-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
+                    </div>
+                `;
             cashMovementsHistoryEl.appendChild(el);
         });
     };
@@ -1877,37 +1877,23 @@
     importFileInput.addEventListener('change', handleImportData);
 
     function initializeCharts() {
-        const categories = {};
-        const initialData = {
-            labels: Object.keys(categories),
-            datasets: [{
-                data: Object.values(categories),
-                backgroundColor: [
-                    '#4B5563', '#9CA3AF', '#6B7280', '#E5E7EB', '#D1D5DB'
-                ],
-                hoverOffset: 4
-            }]
-        };
-
-        const initialOptions = {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                title: {
-                    display: false,
-                }
-            }
-        };
-        categoriesChart = new Chart(document.getElementById('categoriesChart'), {
-            type: 'pie',
-            data: initialData,
-            options: initialOptions
+        const createBarChart = (canvasId, label) => new Chart(document.getElementById(canvasId).getContext('2d'), {
+            type: 'bar', data: { labels: [], datasets: [{ label, data: [], backgroundColor: [] }] },
+            options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
         });
-        membersContributionsChart = new Chart(document.getElementById('membersContributionsChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Contributi Versati (€)', data: [], backgroundColor: 'rgba(79, 70, 229, 0.8)' }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
-        membersIncomeChart = new Chart(document.getElementById('membersIncomeChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Entrate Generate (€)', data: [], backgroundColor: 'rgba(13, 148, 136, 0.8)' }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
-        balancesChart = new Chart(document.getElementById('balancesChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Saldo per Membro (€)', data: [], backgroundColor: [] }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
+        
+        membersContributionsChart = createBarChart('membersContributionsChart', 'Contributi Versati (€)');
+        membersContributionsChart.data.datasets[0].backgroundColor = 'rgba(79, 70, 229, 0.8)';
+        
+        membersIncomeChart = createBarChart('membersIncomeChart', 'Entrate Generate (€)');
+        membersIncomeChart.data.datasets[0].backgroundColor = 'rgba(13, 148, 136, 0.8)';
+
+        categoriesChart = new Chart(document.getElementById('categoriesChart').getContext('2d'), {
+            type: 'doughnut', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#4f46e5', '#10b981', '#ef4444', '#f97316', '#3b82f6', '#eab308', '#8b5cf6'] }] },
+            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } } }
+        });
+
+        balancesChart = createBarChart('balancesChart', 'Saldo per Membro (€)');
     }
     
     document.addEventListener('DOMContentLoaded', () => {
