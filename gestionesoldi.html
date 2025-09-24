@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-sCALE=1.0">
     <title>Gateradio - Dashboard Finanziaria</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -935,12 +935,17 @@
     }
 
     // --- Charting Functions ---
+    const createBarChart = (canvasId, label) => new Chart(document.getElementById(canvasId).getContext('2d'), {
+        type: 'bar', data: { labels: [], datasets: [{ label, data: [], backgroundColor: [] }] },
+        options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
+    });
+    
+    let membersContributionsChart;
+    let membersIncomeChart;
+    let categoriesChart;
+    let balancesChart;
+
     const initializeCharts = () => {
-        const createBarChart = (canvasId, label) => new Chart(document.getElementById(canvasId).getContext('2d'), {
-            type: 'bar', data: { labels: [], datasets: [{ label, data: [], backgroundColor: [] }] },
-            options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
-        });
-        
         membersContributionsChart = createBarChart('membersContributionsChart', 'Contributi Versati (€)');
         membersContributionsChart.data.datasets[0].backgroundColor = 'rgba(79, 70, 229, 0.8)';
         
@@ -1877,23 +1882,37 @@
     importFileInput.addEventListener('change', handleImportData);
 
     function initializeCharts() {
-        const createBarChart = (canvasId, label) => new Chart(document.getElementById(canvasId).getContext('2d'), {
-            type: 'bar', data: { labels: [], datasets: [{ label, data: [], backgroundColor: [] }] },
-            options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
-        });
-        
-        membersContributionsChart = createBarChart('membersContributionsChart', 'Contributi Versati (€)');
-        membersContributionsChart.data.datasets[0].backgroundColor = 'rgba(79, 70, 229, 0.8)';
-        
-        membersIncomeChart = createBarChart('membersIncomeChart', 'Entrate Generate (€)');
-        membersIncomeChart.data.datasets[0].backgroundColor = 'rgba(13, 148, 136, 0.8)';
+        const categories = {};
+        const initialData = {
+            labels: Object.keys(categories),
+            datasets: [{
+                data: Object.values(categories),
+                backgroundColor: [
+                    '#4B5563', '#9CA3AF', '#6B7280', '#E5E7EB', '#D1D5DB'
+                ],
+                hoverOffset: 4
+            }]
+        };
 
-        categoriesChart = new Chart(document.getElementById('categoriesChart').getContext('2d'), {
-            type: 'doughnut', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#4f46e5', '#10b981', '#ef4444', '#f97316', '#3b82f6', '#eab308', '#8b5cf6'] }] },
-            options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } } }
+        const initialOptions = {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: false,
+                }
+            }
+        };
+        categoriesChart = new Chart(document.getElementById('categoriesChart'), {
+            type: 'pie',
+            data: initialData,
+            options: initialOptions
         });
-
-        balancesChart = createBarChart('balancesChart', 'Saldo per Membro (€)');
+        membersContributionsChart = new Chart(document.getElementById('membersContributionsChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Contributi Versati (€)', data: [], backgroundColor: 'rgba(79, 70, 229, 0.8)' }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
+        membersIncomeChart = new Chart(document.getElementById('membersIncomeChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Entrate Generate (€)', data: [], backgroundColor: 'rgba(13, 148, 136, 0.8)' }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
+        balancesChart = new Chart(document.getElementById('balancesChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Saldo per Membro (€)', data: [], backgroundColor: [] }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
     }
     
     document.addEventListener('DOMContentLoaded', () => {
