@@ -45,3 +45,8 @@ body {
 #event-modal {
     transition: opacity 0.3s ease;
 }
+/* Stili per il contenitore del calendario */
+#calendar-container {
+    height: 75vh; /* Imposta l'altezza a 75% dell'altezza della finestra */
+}
+
