@@ -49,4 +49,34 @@ body {
 #calendar-container {
     height: 75vh; /* Imposta l'altezza a 75% dell'altezza della finestra */
 }
+/* Stili Aggiuntivi per la Board Attività (Trello) */
+
+.card-container {
+    padding-bottom: 20px; /* Spazio extra per il drop */
+}
+
+.task-card {
+    background-color: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    cursor: grab;
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+.task-card:hover {
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+.sortable-ghost {
+    opacity: 0.4;
+    background: #c7d2fe; /* Colore dell'ombra durante il trascinamento */
+}
+
+.priority-badge {
+    width: 1.75rem;
+    height: 0.25rem;
+    border-radius: 9999px;
+    margin-bottom: 0.5rem;
+}
 
