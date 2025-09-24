@@ -940,8 +940,6 @@
         options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
     });
     
-   
-
     const initializeCharts = () => {
         membersContributionsChart = createBarChart('membersContributionsChart', 'Contributi Versati (€)');
         membersContributionsChart.data.datasets[0].backgroundColor = 'rgba(79, 70, 229, 0.8)';
@@ -1877,40 +1875,6 @@
     exportDataBtn.addEventListener('click', handleExportData);
     importDataBtn.addEventListener('click', () => importFileInput.click());
     importFileInput.addEventListener('change', handleImportData);
-
-    function initializeCharts() {
-        const categories = {};
-        const initialData = {
-            labels: Object.keys(categories),
-            datasets: [{
-                data: Object.values(categories),
-                backgroundColor: [
-                    '#4B5563', '#9CA3AF', '#6B7280', '#E5E7EB', '#D1D5DB'
-                ],
-                hoverOffset: 4
-            }]
-        };
-
-        const initialOptions = {
-            responsive: true,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                title: {
-                    display: false,
-                }
-            }
-        };
-        categoriesChart = new Chart(document.getElementById('categoriesChart'), {
-            type: 'pie',
-            data: initialData,
-            options: initialOptions
-        });
-        membersContributionsChart = new Chart(document.getElementById('membersContributionsChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Contributi Versati (€)', data: [], backgroundColor: 'rgba(79, 70, 229, 0.8)' }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
-        membersIncomeChart = new Chart(document.getElementById('membersIncomeChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Entrate Generate (€)', data: [], backgroundColor: 'rgba(13, 148, 136, 0.8)' }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
-        balancesChart = new Chart(document.getElementById('balancesChart'), { type: 'bar', data: { labels: [], datasets: [{ label: 'Saldo per Membro (€)', data: [], backgroundColor: [] }] }, options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } } });
-    }
     
     document.addEventListener('DOMContentLoaded', () => {
         initializeCharts();
@@ -1919,4 +1883,3 @@
 </script>
 </body>
 </html>
-
