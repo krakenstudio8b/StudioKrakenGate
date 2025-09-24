@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inizializzazione di FullCalendar
     const calendar = new FullCalendar.Calendar(calendarEl, {
         locale: 'it',
+        firstDay: 1, // Imposta Lunedì come primo giorno della settimana
         initialView: 'dayGridMonth',
         headerToolbar: {
             left: 'prev,next today',
@@ -114,18 +115,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const eventIndex = allEvents.findIndex(e => e.id === event.id);
             if (eventIndex !== -1) {
                 allEvents[eventIndex].start = event.start.toISOString();
-                allEvents[eventIndex].end = event.end ? event.end.toISOString() : event.start.toISOString();
+                allEvents[eventIndex].end = event.end ? event.end.toISOString() : null;
                 saveDataToFirebase();
             }
         },
         
-        eventContent: (arg) => {
-            const room = arg.event.extendedProps.room;
-            let roomEl = '';
+        // Questo metodo viene chiamato dopo che un evento è stato renderizzato
+        // Lo usiamo per personalizzare l'aspetto senza rompere i colori
+        eventDidMount: (info) => {
+            const room = info.event.extendedProps.room;
             if (room) {
-                roomEl = `<div style="font-size: 0.75em; margin-top: 2px; opacity: 0.8;">📍 ${room}</div>`;
+                const titleEl = info.el.querySelector('.fc-event-title');
+                if (titleEl) {
+                    const roomEl = document.createElement('div');
+                    roomEl.style.fontSize = '0.75em';
+                    roomEl.style.marginTop = '2px';
+                    roomEl.style.opacity = '0.8';
+                    roomEl.innerHTML = `📍 ${room}`;
+                    titleEl.parentNode.appendChild(roomEl);
+                }
             }
-            return { html: `<div>${arg.event.title}</div>${roomEl}` };
         }
     });
 
@@ -204,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     addEventExternBtn.addEventListener('click', () => {
-        openModalForNewEvent({}); // Apre il modale per un nuovo evento senza date pre-selezionate
+        openModalForNewEvent({});
     });
 
     cancelEventBtn.addEventListener('click', closeModal);
