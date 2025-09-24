@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const eventEndInput = document.getElementById('event-end');
     const eventPrioritySelect = document.getElementById('event-priority');
     const eventRoomSelect = document.getElementById('event-room');
+    const eventDescriptionInput = document.getElementById('event-description');
     const participantsContainer = document.getElementById('event-participants-checkboxes');
     const saveEventBtn = document.getElementById('save-event-btn');
     const deleteEventBtn = document.getElementById('delete-event-btn');
@@ -28,11 +29,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const openModal = () => eventModal.classList.remove('hidden');
     const closeModal = () => {
         eventModal.classList.add('hidden');
-        currentEventInfo = null; // Resetta l'evento corrente
+        currentEventInfo = null;
     };
 
     const saveDataToFirebase = () => {
         set(eventsRef, allEvents);
+    };
+
+    const openModalForNewEvent = (info) => {
+        modalTitle.textContent = 'Aggiungi Evento';
+        eventTitleInput.value = '';
+        
+        const startDate = info.start ? new Date(info.start) : new Date();
+        startDate.setMinutes(startDate.getMinutes() - startDate.getTimezoneOffset());
+        eventStartInput.value = startDate.toISOString().slice(0, 16);
+
+        const endDate = info.end ? new Date(info.end) : startDate;
+        if(info.end) endDate.setMinutes(endDate.getMinutes() - endDate.getTimezoneOffset());
+        eventEndInput.value = endDate.toISOString().slice(0, 16);
+        
+        eventDescriptionInput.value = '';
+        eventPrioritySelect.value = '#3b82f6';
+        eventRoomSelect.value = '';
+        participantsContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
+        
+        deleteEventBtn.classList.add('hidden');
+        currentEventInfo = { id: null, isNew: true };
+        openModal();
     };
     
     // Inizializzazione di FullCalendar
@@ -51,33 +74,12 @@ document.addEventListener('DOMContentLoaded', () => {
             day: 'Giorno',
             list: 'Agenda'
         },
-        height: '100%', // Fa sì che il calendario riempia il contenitore
+        height: '100%',
         editable: true,
         selectable: true,
         
         select: (info) => {
-            modalTitle.textContent = 'Aggiungi Evento';
-            eventTitleInput.value = '';
-            
-            const startDate = new Date(info.startStr);
-            startDate.setMinutes(startDate.getMinutes() - startDate.getTimezoneOffset());
-            eventStartInput.value = startDate.toISOString().slice(0, 16);
-
-            if(info.endStr) {
-                const endDate = new Date(info.endStr);
-                endDate.setMinutes(endDate.getMinutes() - endDate.getTimezoneOffset());
-                eventEndInput.value = endDate.toISOString().slice(0, 16);
-            } else {
-                eventEndInput.value = eventStartInput.value;
-            }
-
-            eventPrioritySelect.value = '#3b82f6'; // Default Bassa Priorità
-            eventRoomSelect.value = ''; // Nessuna sala
-            participantsContainer.querySelectorAll('input').forEach(cb => cb.checked = false); // Deseleziona tutti
-            
-            deleteEventBtn.classList.add('hidden');
-            currentEventInfo = { id: null, isNew: true };
-            openModal();
+            openModalForNewEvent({ start: info.startStr, end: info.endStr });
         },
 
         eventClick: (info) => {
@@ -94,6 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if(event.end) endDate.setMinutes(endDate.getMinutes() - endDate.getTimezoneOffset());
             eventEndInput.value = endDate.toISOString().slice(0, 16);
 
+            eventDescriptionInput.value = extendedProps.description || '';
             eventPrioritySelect.value = event.backgroundColor || '#3b82f6';
             eventRoomSelect.value = extendedProps.room || '';
             
@@ -116,18 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         
-        // Formatta il titolo per mostrare anche la sala
-        eventContent: function(arg) {
+        eventContent: (arg) => {
             const room = arg.event.extendedProps.room;
-            const title = arg.event.title;
+            let roomEl = '';
             if (room) {
-                return { html: `<div class="fc-event-main-frame">
-                                    <div class="fc-event-title-container">
-                                        <div class="fc-event-title">${title}</div>
-                                    </div>
-                                    <div class="fc-event-room">${room}</div>
-                                </div>` };
+                roomEl = `<div style="font-size: 0.75em; margin-top: 2px; opacity: 0.8;">📍 ${room}</div>`;
             }
+            return { html: `<div>${arg.event.title}</div>${roomEl}` };
         }
     });
 
@@ -137,15 +135,19 @@ document.addEventListener('DOMContentLoaded', () => {
     onValue(membersRef, (snapshot) => {
         allMembers = snapshot.val() || [];
         participantsContainer.innerHTML = '';
-        allMembers.forEach(member => {
-            const div = document.createElement('div');
-            div.className = 'flex items-center';
-            div.innerHTML = `
-                <input id="part-${member}" type="checkbox" value="${member}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                <label for="part-${member}" class="ml-2 block text-sm text-gray-900">${member}</label>
-            `;
-            participantsContainer.appendChild(div);
-        });
+        if (allMembers.length > 0) {
+            allMembers.forEach(member => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center';
+                div.innerHTML = `
+                    <input id="part-${member}" type="checkbox" value="${member}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="part-${member}" class="ml-2 block text-sm text-gray-900">${member}</label>
+                `;
+                participantsContainer.appendChild(div);
+            });
+        } else {
+            participantsContainer.innerHTML = '<p class="text-gray-400">Nessun membro trovato.</p>';
+        }
     });
 
     // Carica gli eventi da Firebase
@@ -163,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const end = eventEndInput.value;
         const color = eventPrioritySelect.value;
         const room = eventRoomSelect.value;
+        const description = eventDescriptionInput.value.trim();
         const participants = Array.from(participantsContainer.querySelectorAll('input:checked')).map(cb => cb.value);
 
         if (!title || !start) {
@@ -171,8 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const eventData = {
-            title, start, end, room, participants,
-            color: color, // Per la retrocompatibilità
+            title, start, end, room, participants, description,
+            color: color,
             backgroundColor: color,
             borderColor: color
         };
@@ -201,10 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     addEventExternBtn.addEventListener('click', () => {
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        const fakeInfo = { startStr: now.toISOString() };
-        calendar.select(fakeInfo); // Simula una selezione sulla data di oggi
+        openModalForNewEvent({}); // Apre il modale per un nuovo evento senza date pre-selezionate
     });
 
     cancelEventBtn.addEventListener('click', closeModal);
