@@ -36,7 +36,7 @@
     </div>
 
     <div id="event-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
-        <div class="card w-full max-w-lg">
+        <div class="card w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <h2 id="modal-title" class="text-2xl font-semibold mb-6">Aggiungi Evento</h2>
             <div class="space-y-4">
                 <div>
@@ -71,7 +71,13 @@
                 <div>
                     <label class="block text-sm font-medium">Partecipanti</label>
                     <div id="event-participants-checkboxes" class="p-3 border rounded-lg max-h-32 overflow-y-auto space-y-2 mt-1">
-                        </div>
+                        <p class="text-gray-400">Caricamento membri...</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="event-description" class="block text-sm font-medium">Descrizione</label>
+                    <textarea id="event-description" rows="3" placeholder="Aggiungi dettagli o note..." class="w-full p-2 border rounded-lg mt-1"></textarea>
                 </div>
 
                 <div>
