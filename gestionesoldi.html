@@ -442,7 +442,6 @@
                 members = snapshot.val() || [];
                 renderMembers();
                 toggleSectionsVisibility();
-                updatePayerSelects();
             });
 
             onValue(varExpensesRef, (snapshot) => {
@@ -640,7 +639,6 @@
             cassaOption.textContent = "Cassa Comune";
             payerSelect.appendChild(cassaOption);
 
-
             members.forEach((member, index) => {
                 const tag = document.createElement('div');
                 tag.className = 'flex items-center bg-indigo-100 text-indigo-800 text-sm font-medium px-3 py-1 rounded-full';
@@ -665,7 +663,7 @@
         const renderCassaComune = () => {
             cashBalanceAmountEl.textContent = `€${cassaComune.balance.toFixed(2)}`;
             cashMovementsHistoryEl.innerHTML = '';
-            if(cassaComune.movements.length === 0){
+            if(!cassaComune.movements || cassaComune.movements.length === 0){
                 cashMovementsHistoryEl.innerHTML = '<p class="text-gray-500 text-sm">Nessun movimento registrato.</p>';
                 return;
             }
@@ -959,13 +957,13 @@
     const getCalculationData = (selectedMonth = 'all') => {
         let filteredVarExpenses = variableExpenses;
         let filteredIncome = incomeEntries;
-        let filteredCashMovements = cassaComune.movements;
+        let filteredCashMovements = cassaComune.movements || [];
         let applicableFixedExpenses = fixedExpenses;
 
         if (selectedMonth !== 'all') {
             filteredVarExpenses = variableExpenses.filter(exp => exp.date && exp.date.startsWith(selectedMonth));
             filteredIncome = incomeEntries.filter(inc => inc.date && inc.date.startsWith(selectedMonth));
-            filteredCashMovements = cassaComune.movements.filter(mov => mov.date && mov.date.startsWith(selectedMonth));
+            filteredCashMovements = (cassaComune.movements || []).filter(mov => mov.date && mov.date.startsWith(selectedMonth));
         }
         
         const totalVar = filteredVarExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
@@ -1164,7 +1162,7 @@
         
         const cashMovementsSheet = workbook.addWorksheet("Movimenti Cassa");
         cashMovementsSheet.columns = [ { header: 'Data', key: 'date' }, { header: 'Tipo', key: 'type' }, { header: 'Importo', key: 'amount' }, { header: 'Descrizione', key: 'description' }, { header: 'Membro', key: 'member' } ];
-        cashMovementsSheet.addRows(cassaComune.movements.map(m => ({...m, date: displayDate(m.date) })));
+        cashMovementsSheet.addRows((cassaComune.movements || []).map(m => ({...m, date: displayDate(m.date) })));
 
         const pendingSheet = workbook.addWorksheet("Quote da Versare");
         pendingSheet.columns = [ { header: 'Membro', key: 'member' }, { header: 'Importo', key: 'amount' }, { header: 'Descrizione', key: 'description' }, { header: 'Data Richiesta', key: 'dateAdded' } ];
@@ -1172,7 +1170,7 @@
 
         const varExpSheet = workbook.addWorksheet("Dettaglio Spese");
         varExpSheet.columns = [ { header: 'Data', key: 'date' }, { header: 'Pagato da', key: 'payer' }, { header: 'Importo', key: 'amount' }, { header: 'Categoria', key: 'category' }, { header: 'Descrizione', key: 'description' } ];
-        varExpSheet.addRows(variableExpenses);
+        varExpSheet.addRows(variableExpenses.map(e => ({...e, date: displayDate(e.date)})));
 
         const fixExpSheet = workbook.addWorksheet("Dettaglio Spese Fisse");
         fixExpSheet.columns = [ { header: 'Descrizione', key: 'description' }, { header: 'Importo', key: 'amount' } ];
@@ -1180,7 +1178,7 @@
 
         const incomeSheet = workbook.addWorksheet("Dettaglio Entrate");
         incomeSheet.columns = [ { header: 'Data', key: 'date' }, { header: 'Importo', key: 'amount' }, { header: 'Descrizione', key: 'description' }, { header: 'Membri', key: 'membersInvolved' } ];
-        incomeSheet.addRows(incomeEntries.map(i => ({...i, membersInvolved: i.membersInvolved.join(', ')})));
+        incomeSheet.addRows(incomeEntries.map(i => ({...i, date: displayDate(i.date), membersInvolved: i.membersInvolved.join(', ')})));
 
         const wishlistSheet = workbook.addWorksheet("Lista Desideri");
         wishlistSheet.columns = [ { header: 'Oggetto', key: 'name' }, { header: 'Costo Stimato', key: 'cost' }, { header: 'Priorità', key: 'priority' }, { header: 'Link', key: 'links' } ];
@@ -1188,7 +1186,7 @@
         
         const futureSheet = workbook.addWorksheet("Movimenti Futuri");
         futureSheet.columns = [ { header: 'Scadenza', key: 'dueDate' }, { header: 'Descrizione', key: 'description' }, { header: 'Costo Totale', key: 'totalCost' } ];
-        futureSheet.addRows(futureMovements);
+        futureSheet.addRows(futureMovements.map(m => ({...m, dueDate: displayDate(m.dueDate)})));
 
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -1210,6 +1208,7 @@
 
         const { memberContributions, memberIncomes, expenseBalances, categoryTotals } = calculationData;
          const updateChartData = (chart, labels, data) => {
+            if (!chart) return; // Controllo di sicurezza
             chart.data.labels = labels;
             chart.data.datasets[0].data = data;
             chart.update();
@@ -1220,7 +1219,7 @@
         updateChartData(categoriesChart, Object.keys(categoryTotals), Object.values(categoryTotals));
         
         const balancesChartEl = document.getElementById('balancesChart');
-        if (balancesChartEl) {
+        if (balancesChartEl && balancesChart) {
              balancesChartEl.parentElement.classList.remove('hidden');
              balancesChart.data.labels = members;
              balancesChart.data.datasets[0].data = expenseBalances.map(b => b.balance);
@@ -1230,22 +1229,7 @@
         
         settlementContainer.classList.add('hidden');
     };
-    
-    // --- Master Render Function ---
-    const renderAll = () => {
-        toggleSectionsVisibility();
-        populateMonthFilter(); 
-        renderMembers();
-        renderCassaComune();
-        renderVariableExpenses();
-        renderFixedExpenses();
-        renderIncomeEntries();
-        renderWishlist();
-        renderFutureMovements();
-        renderPendingPayments();
-        updateDashboardView();
-    };
-    
+        
      // --- Edit Modal Logic ---
     const getItemFromStore = (type, id) => {
         let store;
@@ -1380,6 +1364,10 @@
         } else {
             cassaComune.balance -= amount;
         }
+        
+        if (!cassaComune.movements) {
+            cassaComune.movements = [];
+        }
 
         cassaComune.movements.push({
             id: Date.now().toString(),
@@ -1387,7 +1375,9 @@
             type, amount, description, member
         });
 
-        [cashMovementAmountInput, cashMovementDescriptionInput].forEach(i => i.value = '');
+        cashMovementAmountInput.value = '';
+        cashMovementDescriptionInput.value = '';
+        cashMovementMemberSelect.value = '';
         saveDataToFirebase();
     });
 
@@ -1526,6 +1516,7 @@
 
         if (payer === 'Cassa Comune') {
             cassaComune.balance -= amount;
+             if (!cassaComune.movements) cassaComune.movements = [];
             cassaComune.movements.push({
                 id: Date.now().toString(),
                 date: date || new Date().toISOString().split('T')[0],
@@ -1645,7 +1636,7 @@
                 });
                 incomeEntries = incomeEntries.filter(inc => inc.membersInvolved.length > 0);
                 pendingPayments = pendingPayments.filter(p => p.member !== memberName);
-                cassaComune.movements = cassaComune.movements.filter(m => m.member !== memberName);
+                cassaComune.movements = (cassaComune.movements || []).filter(m => m.member !== memberName);
                 saveDataToFirebase();
             }
         }
@@ -1680,7 +1671,7 @@
         }
         if (e.target.matches('.remove-cash-movement-btn')) {
             const movementId = e.target.dataset.id;
-            const movementIndex = cassaComune.movements.findIndex(m => m.id === movementId);
+            const movementIndex = (cassaComune.movements || []).findIndex(m => m.id === movementId);
             if (movementIndex > -1) {
                 if (confirm("Sei sicuro di voler annullare questo movimento? L'azione è irreversibile e modificherà il saldo della cassa.")) {
                     const movement = cassaComune.movements[movementIndex];
@@ -1701,6 +1692,7 @@
                 const isForCash = confirm(`Il pagamento di ${payment.member} per €${payment.amount} è un versamento nella Cassa Comune?`);
                 if (isForCash) {
                      cassaComune.balance += payment.amount;
+                     if (!cassaComune.movements) cassaComune.movements = [];
                      cassaComune.movements.push({
                         id: Date.now().toString(),
                         date: new Date().toISOString().split('T')[0],
@@ -1771,6 +1763,7 @@
                 });
                 
                 cassaComune.balance -= movement.totalCost;
+                if (!cassaComune.movements) cassaComune.movements = [];
                 cassaComune.movements.push({
                     id: Date.now().toString(),
                     date: movement.dueDate,
