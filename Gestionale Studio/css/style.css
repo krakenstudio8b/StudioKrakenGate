@@ -21,4 +21,27 @@ body {
 }
 #edit-modal {
     transition: opacity 0.3s ease;
+
+}
+/* Stili Aggiuntivi per FullCalendar e Modale */
+
+/* Personalizzazione di FullCalendar */
+:root {
+  --fc-border-color: #e5e7eb;
+  --fc-daygrid-event-dot-width: 8px;
+  --fc-list-event-dot-width: 10px;
+  --fc-event-bg-color: #3b82f6;
+  --fc-event-border-color: #3b82f6;
+  --fc-event-text-color: #ffffff;
+  --fc-button-bg-color: #4f46e5;
+  --fc-button-active-bg-color: #4338ca;
+  --fc-today-bg-color: rgba(239, 246, 255, 0.7);
+}
+
+.fc-daygrid-day.fc-day-today {
+    background-color: var(--fc-today-bg-color) !important;
+}
+
+#event-modal {
+    transition: opacity 0.3s ease;
 }
