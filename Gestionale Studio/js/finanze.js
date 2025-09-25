@@ -349,9 +349,15 @@ const renderFutureMovements = () => {
         if (isExpanded) {
             sharesHtml = `<div class="mt-3 pt-3 border-t border-cyan-200 space-y-2">`;
             (mov.shares || []).forEach(share => {
+                const isPaid = share.paid || false;
                 sharesHtml += `
                     <div class="flex items-center justify-between text-sm gap-2">
-                        <label for="share-${mov.id}-${share.member}" class="font-medium">${share.member}</label>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="paid-${mov.id}-${share.member}" 
+                                   class="paid-checkbox h-4 w-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" 
+                                   data-movement-id="${mov.id}" data-member-name="${share.member}" ${isPaid ? 'checked' : ''}>
+                            <label for="paid-${mov.id}-${share.member}" class="font-medium ${isPaid ? 'line-through text-gray-500' : ''}">${share.member}</label>
+                        </div>
                         <div class="flex items-center gap-1">
                             <input type="number" step="0.01" id="share-${mov.id}-${share.member}" 
                                 data-movement-id="${mov.id}" data-member-name="${share.member}"
@@ -721,7 +727,9 @@ const handleImportData = (event) => {
 };
 
 // --- Excel Export ---
-const exportToExcel = async () => { /* Lasciato vuoto per brevità, codice invariato */ };
+const exportToExcel = async () => {
+    // Il codice completo per l'esportazione Excel va qui...
+};
 
 // --- Main View Update Function ---
 const updateDashboardView = () => {
@@ -951,7 +959,7 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
         return;
     }
     const share = members.length > 0 ? totalCost / members.length : 0;
-    const shares = members.map(member => ({ member, amount: share, edited: false }));
+    const shares = members.map(member => ({ member, amount: share, edited: false, paid: false }));
     futureMovements.push({
         id: Date.now().toString(),
         description, totalCost, dueDate, shares
@@ -1100,6 +1108,20 @@ if (document.body) {
                 editedMemberShare.edited = true;
             }
             renderFutureMovements();
+        }
+        if (e.target.matches('.paid-checkbox')) {
+            const movementId = e.target.dataset.movementId;
+            const memberName = e.target.dataset.memberName;
+            const isChecked = e.target.checked;
+            const movement = futureMovements.find(m => m.id === movementId);
+            if (movement) {
+                const share = (movement.shares || []).find(s => s.member === memberName);
+                if (share) {
+                    share.paid = isChecked;
+                    saveDataToFirebase();
+                    renderFutureMovements(); // Re-render to apply strikethrough style
+                }
+            }
         }
     });
 
@@ -1286,15 +1308,6 @@ if (document.body) {
                     return;
                 }
                 
-                variableExpenses.push({
-                    id: Date.now().toString(),
-                    date: movement.dueDate,
-                    payer: 'Cassa Comune',
-                    amount: movement.totalCost,
-                    description: movement.description,
-                    category: "Spesa Pianificata"
-                });
-                
                 cassaComune.balance -= movement.totalCost;
                 if (!cassaComune.movements) cassaComune.movements = [];
                 cassaComune.movements.push({
@@ -1304,6 +1317,15 @@ if (document.body) {
                     amount: movement.totalCost, 
                     description: `Spesa pianificata: ${movement.description}`, 
                     member: ''
+                });
+                
+                variableExpenses.push({
+                    id: Date.now().toString(),
+                    date: movement.dueDate,
+                    payer: 'Cassa Comune',
+                    amount: movement.totalCost,
+                    description: movement.description,
+                    category: "Spesa Pianificata"
                 });
                 
                 futureMovements = futureMovements.filter(m => m.id !== movementId);
@@ -1384,7 +1406,7 @@ if (editModal) editModal.addEventListener('click', (e) => {
                 item.dueDate = document.getElementById('edit-future-due-date').value;
                 if (item.totalCost !== oldTotalCost && confirm("Il costo totale è cambiato. Vuoi resettare le quote individuali per distribuirle equamente?")) {
                     const share = members.length > 0 ? item.totalCost / members.length : 0;
-                    item.shares = members.map(member => ({ member, amount: share, edited: false }));
+                    item.shares = members.map(member => ({ member, amount: share, edited: false, paid: false }));
                 }
                 break;
         }
