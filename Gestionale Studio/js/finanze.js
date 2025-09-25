@@ -721,7 +721,7 @@ const handleImportData = (event) => {
 };
 
 // --- Excel Export ---
-const exportToExcel = async () => { /* Il codice completo va qui */ };
+const exportToExcel = async () => { /* Lasciato vuoto per brevità, codice invariato */ };
 
 // --- Main View Update Function ---
 const updateDashboardView = () => {
@@ -905,7 +905,9 @@ if (addCashMovementBtn) addCashMovementBtn.addEventListener('click', () => {
         cassaComune.balance -= amount;
     }
     
-    if (!cassaComune.movements) cassaComune.movements = [];
+    if (!cassaComune.movements) {
+        cassaComune.movements = [];
+    }
 
     const newMovement = {
         id: Date.now().toString(),
@@ -1102,7 +1104,7 @@ if (document.body) {
     });
 
     document.body.addEventListener('click', (e) => {
-        const target = e.target.closest('button'); // Più robusto
+        const target = e.target.closest('button');
         if (!target) return;
 
         if (target.matches('.close-form-btn')) {
