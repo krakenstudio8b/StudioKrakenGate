@@ -29,8 +29,7 @@
 
             <div class="bg-gray-100 rounded-xl p-4">
                 <h2 class="font-bold text-lg mb-4 text-gray-700">📝 Da Fare</h2>
-                <div id="column-todo" data-status="todo" class="card-container min-h-[200px] space-y-4">
-                    </div>
+                <div id="column-todo" data-status="todo" class="card-container min-h-[200px] space-y-3"></div>
                 <button id="add-task-btn" class="mt-4 w-full bg-white border-2 border-dashed border-gray-300 text-gray-500 font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 hover:text-indigo-600 transition-colors">
                     + Aggiungi Task
                 </button>
@@ -38,14 +37,12 @@
 
             <div class="bg-gray-100 rounded-xl p-4">
                 <h2 class="font-bold text-lg mb-4 text-gray-700">⏳ In Corso</h2>
-                <div id="column-inprogress" data-status="inprogress" class="card-container min-h-[200px] space-y-4">
-                    </div>
+                <div id="column-inprogress" data-status="inprogress" class="card-container min-h-[200px] space-y-3"></div>
             </div>
 
             <div class="bg-gray-100 rounded-xl p-4">
                 <h2 class="font-bold text-lg mb-4 text-gray-700">✅ Fatto</h2>
-                <div id="column-done" data-status="done" class="card-container min-h-[200px] space-y-4">
-                    </div>
+                <div id="column-done" data-status="done" class="card-container min-h-[200px] space-y-3"></div>
             </div>
 
         </div>
@@ -63,6 +60,17 @@
                     <label for="task-description" class="block text-sm font-medium">Descrizione</label>
                     <textarea id="task-description" rows="3" placeholder="Aggiungi dettagli..." class="w-full p-2 border rounded-lg mt-1"></textarea>
                 </div>
+                
+                <div>
+                    <label class="block text-sm font-medium">Checklist</label>
+                    <div id="checklist-container" class="mt-1 border rounded-lg p-3 space-y-2">
+                        </div>
+                    <div class="flex gap-2 mt-2">
+                        <input type="text" id="new-checklist-item-input" placeholder="Aggiungi un punto..." class="flex-grow p-2 border rounded-lg">
+                        <button id="add-checklist-item-btn" class="bg-indigo-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-indigo-600">Aggiungi</button>
+                    </div>
+                </div>
+
                 <div>
                     <label class="block text-sm font-medium">Assegna a</label>
                     <div id="task-members-checkboxes" class="p-3 border rounded-lg max-h-32 overflow-y-auto space-y-2 mt-1">
