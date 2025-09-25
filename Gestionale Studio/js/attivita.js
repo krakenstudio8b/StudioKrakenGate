@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const membersCheckboxesContainer = document.getElementById('task-members-checkboxes');
     const dueDateInput = document.getElementById('task-due-date');
     const prioritySelect = document.getElementById('task-priority');
+    const checklistContainer = document.getElementById('checklist-container');
+    const newChecklistItemInput = document.getElementById('new-checklist-item-input');
+    const addChecklistItemBtn = document.getElementById('add-checklist-item-btn');
 
     const priorityMap = {
         low: { label: 'Bassa', color: 'bg-blue-500' },
@@ -47,20 +50,34 @@ document.addEventListener('DOMContentLoaded', () => {
             .join('');
         
         const dueDateHtml = task.dueDate 
-            ? `<div class="text-xs text-gray-500 flex items-center gap-1 mt-2">
+            ? `<div class="text-xs text-gray-500 flex items-center gap-1">
                  <i class="fa-regular fa-calendar"></i>
                  <span>${new Date(task.dueDate).toLocaleDateString('it-IT')}</span>
                </div>` 
             : '';
+            
+        const checklist = task.checklist || [];
+        const completedItems = checklist.filter(item => item.done).length;
+        const checklistProgressHtml = checklist.length > 0
+            ? `<div class="checklist-progress">
+                 <i class="fa-regular fa-square-check"></i>
+                 <span>${completedItems}/${checklist.length}</span>
+               </div>`
+            : '';
 
         card.innerHTML = `
-            <div class="priority-badge ${priority.color}"></div>
-            <p class="font-semibold">${task.title}</p>
-            <div class="flex items-center justify-between mt-3">
-                <div class="flex -space-x-2">
-                    ${assignedMembersHtml}
+            <div class="priority-bar ${priority.color}"></div>
+            <div class="task-card-content">
+                <p class="task-card-title">${task.title}</p>
+                <div class="task-card-footer">
+                    <div class="flex -space-x-2">
+                        ${assignedMembersHtml}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        ${checklistProgressHtml}
+                        ${dueDateHtml}
+                    </div>
                 </div>
-                ${dueDateHtml}
             </div>
         `;
 
@@ -69,9 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const renderTasks = () => {
-        // Pulisce le colonne
         Object.values(columns).forEach(col => col.innerHTML = '');
-        // Popola le colonne
         allTasks.forEach(task => {
             const card = createTaskCard(task);
             columns[task.status]?.appendChild(card);
@@ -80,7 +95,35 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const saveData = () => set(tasksRef, allTasks);
 
-    // LOGICA DEL MODALE
+    // LOGICA DEL MODALE E CHECKLIST
+    const renderChecklist = (checklist = []) => {
+        checklistContainer.innerHTML = '';
+        checklist.forEach((item, index) => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'checklist-item';
+            itemEl.innerHTML = `
+                <input type="checkbox" id="check-${index}" ${item.done ? 'checked' : ''}>
+                <label for="check-${index}" class="text-sm">${item.text}</label>
+            `;
+            checklistContainer.appendChild(itemEl);
+        });
+    };
+
+    addChecklistItemBtn.addEventListener('click', () => {
+        const text = newChecklistItemInput.value.trim();
+        if (!text) return;
+        const newItem = { text, done: false };
+        // Aggiungi visivamente l'elemento alla lista nel modale
+        const itemEl = document.createElement('div');
+        itemEl.className = 'checklist-item';
+        itemEl.innerHTML = `
+            <input type="checkbox" id="check-new-${Date.now()}">
+            <label for="check-new-${Date.now()}" class="text-sm">${text}</label>
+        `;
+        checklistContainer.appendChild(itemEl);
+        newChecklistItemInput.value = '';
+    });
+    
     const openModalForNew = () => {
         currentTaskId = null;
         modalTitle.textContent = 'Nuovo Task';
@@ -89,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         dueDateInput.value = '';
         prioritySelect.value = 'low';
         membersCheckboxesContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
+        renderChecklist([]); // Pulisce la checklist
         deleteTaskBtn.classList.add('hidden');
         modal.classList.remove('hidden');
     };
@@ -106,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
         membersCheckboxesContainer.querySelectorAll('input').forEach(cb => {
             cb.checked = (task.assignedTo || []).includes(cb.value);
         });
+        renderChecklist(task.checklist);
         deleteTaskBtn.classList.remove('hidden');
         modal.classList.remove('hidden');
     };
@@ -119,30 +164,43 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const checklistItems = [];
+        checklistContainer.querySelectorAll('.checklist-item').forEach(itemEl => {
+            const checkbox = itemEl.querySelector('input[type="checkbox"]');
+            const label = itemEl.querySelector('label');
+            if (label.textContent) {
+                checklistItems.push({
+                    text: label.textContent,
+                    done: checkbox.checked
+                });
+            }
+        });
+
         const taskData = {
             title: title,
             description: descriptionInput.value.trim(),
             priority: prioritySelect.value,
             dueDate: dueDateInput.value,
-            assignedTo: Array.from(membersCheckboxesContainer.querySelectorAll('input:checked')).map(cb => cb.value)
+            assignedTo: Array.from(membersCheckboxesContainer.querySelectorAll('input:checked')).map(cb => cb.value),
+            checklist: checklistItems
         };
 
-        if (currentTaskId) { // Modifica
+        if (currentTaskId) {
             const taskIndex = allTasks.findIndex(t => t.id === currentTaskId);
             if (taskIndex !== -1) {
                 allTasks[taskIndex] = { ...allTasks[taskIndex], ...taskData };
             }
-        } else { // Creazione
+        } else {
             const newTask = {
                 id: Date.now().toString(),
-                status: 'todo', // I nuovi task partono sempre da "Da Fare"
+                status: 'todo',
                 ...taskData
             };
             allTasks.push(newTask);
         }
         
         saveData();
-        renderTasks(); // Ri-renderizza subito per un feedback immediato
+        renderTasks();
         closeModal();
     });
 
@@ -161,9 +219,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // INIZIALIZZAZIONE DI SORTABLEJS (DRAG-AND-DROP)
     Object.values(columns).forEach(columnEl => {
         new Sortable(columnEl, {
-            group: 'shared', // Permette di spostare le card tra colonne
+            group: 'shared',
             animation: 150,
-            ghostClass: 'sortable-ghost', // Classe CSS per l'elemento "fantasma"
+            ghostClass: 'sortable-ghost',
             onEnd: (evt) => {
                 const taskId = evt.item.dataset.taskId;
                 const newStatus = evt.to.dataset.status;
