@@ -24,10 +24,7 @@ const adminPanelLink = document.getElementById('admin-panel-link');
 // Esportiamo un oggetto mutabile per i dettagli dell'utente
 export const currentUser = {};
 
-// ------------------------------------------------------------------
-// --- NUOVA LOGICA: Funzione per attendere che l'Auth sia completo ---
-// ------------------------------------------------------------------
-
+// NUOVA LOGICA: Funzione per attendere che l'Auth sia completo
 let isAuthCompleted = false;
 const onAuthReadyCallbacks = [];
 
@@ -37,15 +34,11 @@ const onAuthReadyCallbacks = [];
  */
 export function onAuthReady(callback) {
     if (isAuthCompleted) {
-        callback(currentUser);
+        callback(currentUser); 
     } else {
         onAuthReadyCallbacks.push(callback);
     }
 }
-
-// ------------------------------------------------------------------
-// --- LOGICA DI AUTENTICAZIONE (ON AUTH STATE CHANGED) ---
-// ------------------------------------------------------------------
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -53,7 +46,12 @@ onAuthStateChanged(auth, async (user) => {
         if (window.location.pathname.endsWith('login.html') === false) {
             window.location.href = 'login.html';
         }
-        isAuthCompleted = true; // Necessario anche in caso di non login per prevenire blocchi
+        
+        // Segnala che l'auth è completato (anche se senza utente)
+        isAuthCompleted = true;
+        onAuthReadyCallbacks.forEach(callback => callback(currentUser));
+        onAuthReadyCallbacks.length = 0; 
+        
     } else {
         // Se c'è un utente loggato, popoliamo il nostro oggetto currentUser
         currentUser.uid = user.uid;
@@ -66,12 +64,12 @@ onAuthStateChanged(auth, async (user) => {
         if (snapshot.exists()) {
             currentUser.role = snapshot.val().role || 'user';
         } else {
-            currentUser.role = 'user'; // Se non ha un ruolo definito, è un utente normale
+            currentUser.role = 'user'; 
         }
 
         console.log(`Accesso effettuato come: ${currentUser.email} (Ruolo: ${currentUser.role})`);
         
-        // Mostra il link al pannello admin solo se si ha un ruolo speciale
+        // Mostra il link al pannello admin
         if (adminPanelLink) {
             if (currentUser.role === 'admin' || currentUser.role === 'calendar_admin') {
                 adminPanelLink.classList.remove('hidden');
@@ -80,11 +78,10 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
         
-        // **** PUNTO CRITICO: SEGNALA CHE L'AUTENTICAZIONE È COMPLETA ****
+        // SEGNALA CHE L'AUTENTICAZIONE È COMPLETA E IL RUOLO È CARICATO
         isAuthCompleted = true;
-        // Esegui tutti i callback in attesa (inclusa la funzione di caricamento dati di finanze.js)
         onAuthReadyCallbacks.forEach(callback => callback(currentUser));
-        onAuthReadyCallbacks.length = 0; // Svuota l'array
+        onAuthReadyCallbacks.length = 0; 
     }
 });
 
