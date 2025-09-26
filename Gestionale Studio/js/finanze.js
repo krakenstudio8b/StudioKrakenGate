@@ -6,9 +6,12 @@ import { currentUser } from './auth-guard.js';
 
 // Aspetta il segnale da auth-guard.js prima di fare QUALSIASI COSA.
 document.addEventListener('authReady', () => {
-    if (document.getElementById('member-count')) {
-        initializeFinancePage();
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+        initializePage();
+        loadDataFromFirebase();
+        initializeCharts();
+        updateDashboardView();
+    });
 });
 
 function initializeFinancePage() {
@@ -1423,4 +1426,5 @@ function initializeFinancePage() {
     }
 }
     
+
 
