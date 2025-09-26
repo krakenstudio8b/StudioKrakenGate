@@ -1411,12 +1411,16 @@ function initializeFinancePage() {
     
     // Ascolta l'evento 'authReady' prima di inizializzare la pagina
     document.addEventListener('authReady', () => {
-        initializePage();
+    initializePage();
+    loadDataFromFirebase();
+    initializeCharts();
+    updateDashboardView();
     });
-    
+
     // Fallback per il caso in cui lo script carichi dopo l'evento
     if (currentUser && currentUser.uid) {
         initializePage();
     }
 }
     
+
