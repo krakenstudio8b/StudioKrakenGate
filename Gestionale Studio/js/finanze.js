@@ -4,6 +4,14 @@ import { database } from './firebase-config.js';
 import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
+// Aspetta il segnale da auth-guard.js prima di fare QUALSIASI COSA.
+document.addEventListener('authReady', () => {
+    // Controlla se siamo sulla pagina finanze prima di eseguire
+    if (document.getElementById('member-count')) {
+        initializeFinancePage();
+    }
+});
+
 // Riferimenti ai nodi del tuo database
 const membersRef = ref(database, 'members');
 const varExpensesRef = ref(database, 'variableExpenses');
@@ -1412,3 +1420,4 @@ document.addEventListener('authReady', () => {
 if (currentUser && currentUser.uid) {
     initializePage();
 }
+
