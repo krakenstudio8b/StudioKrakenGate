@@ -3,7 +3,6 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth
 import { getDatabase, ref, onValue, get, set, push, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
-// Riconfigura Firebase qui perché questo script è un punto di ingresso separato
 const firebaseConfig = {
     apiKey: "AIzaSyBtQZkX6r4F2W0BsIo6nsD27dUZHv3e8RU",
     authDomain: "studio-kraken-gate.firebaseapp.com",
@@ -25,6 +24,14 @@ const userManagementSection = document.getElementById('user-management-section')
 const pendingEventsContainer = document.getElementById('pending-events-container');
 const pendingFinanceContainer = document.getElementById('pending-finance-container');
 const usersListEl = document.getElementById('users-list');
+
+const displayDate = (dateString) => {
+     if (!dateString) return 'N/A';
+     const date = new Date(dateString);
+     if (isNaN(date)) return 'Data non valida';
+     const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+     return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 
 // Funzione per creare una card di approvazione generica
 const createApprovalCard = (id, title, details, onApprove, onReject) => {
@@ -57,55 +64,72 @@ const createApprovalCard = (id, title, details, onApprove, onReject) => {
 
 // Funzioni generiche per approvare/rifiutare
 const approveRequest = async (mainNode, pendingNode, id, data) => {
-    // Logica speciale per la cassa
-    if (pendingNode === 'pendingCashMovements') {
-        const cassaRef = ref(database, 'cassaComune');
-        const snapshot = await get(cassaRef);
-        const cassa = snapshot.val() || { balance: 0, movements: [] };
-        let newBalance = cassa.balance;
-        if (data.type === 'deposit') {
-            newBalance += data.amount;
+    try {
+        if (pendingNode === 'pendingCashMovements') {
+            const cassaRef = ref(database, 'cassaComune');
+            const snapshot = await get(cassaRef);
+            const cassa = snapshot.val() || { balance: 0, movements: [] };
+            let newBalance = cassa.balance;
+
+            if (data.type === 'deposit') {
+                newBalance += data.amount;
+            } else {
+                newBalance -= data.amount;
+            }
+            
+            const movements = cassa.movements || [];
+            movements.push(data);
+            await set(cassaRef, { balance: newBalance, movements: movements });
+
         } else {
-            newBalance -= data.amount;
+            const mainRef = ref(database, mainNode);
+            const newEntryRef = push(mainRef);
+            await set(newEntryRef, data);
         }
-        
-        const movements = cassa.movements || [];
-        movements.push(data);
-        await set(cassaRef, { balance: newBalance, movements: movements });
-    } else {
-        const mainRef = ref(database, mainNode);
-        const newEntryRef = push(mainRef);
-        await set(newEntryRef, data);
+        await remove(ref(database, `${pendingNode}/${id}`));
+        alert("Richiesta approvata con successo!");
+    } catch (err) {
+        console.error("Errore durante l'approvazione:", err);
+        alert("Si è verificato un errore durante l'approvazione.");
     }
-    await remove(ref(database, `${pendingNode}/${id}`));
 };
 
 const rejectRequest = (pendingNode, id) => {
-    remove(ref(database, `${pendingNode}/${id}`)).catch(err => console.error("Errore rifiuto:", err));
+    if (confirm("Sei sicuro di voler rifiutare questa richiesta? L'azione è irreversibile.")) {
+        remove(ref(database, `${pendingNode}/${id}`))
+            .then(() => alert("Richiesta rifiutata."))
+            .catch(err => console.error("Errore rifiuto:", err));
+    }
 };
 
-// Funzione per caricare le richieste
+// Funzione per caricare le richieste in sospeso
 const loadPendingItems = (container, nodeName, titleKey, detailsBuilder, mainNode) => {
     const pendingRef = ref(database, nodeName);
+
     onValue(pendingRef, (snapshot) => {
-        // Rimuove solo le card di questo tipo, non svuota tutto il contenitore
+        // Rimuove solo le card di questo tipo per evitare di cancellare altre richieste
         container.querySelectorAll(`[data-request-type="${nodeName}"]`).forEach(el => el.remove());
         
+        // Se non ci sono più richieste di nessun tipo, mostra il messaggio di default
+        if (container.children.length === 0) {
+             container.innerHTML = '<p class="text-gray-500">Nessuna richiesta da approvare.</p>';
+        }
+
         if (snapshot.exists()) {
+            // Se esiste almeno una richiesta, rimuoviamo il messaggio di default
+            const placeholder = container.querySelector('p');
+            if (placeholder) placeholder.remove();
+
             snapshot.forEach(childSnapshot => {
                 const id = childSnapshot.key;
                 const data = childSnapshot.val();
-                const card = createApprovalCard(id, data[titleKey], detailsBuilder(data),
+                const card = createApprovalCard(id, data[titleKey] || "Senza Titolo", detailsBuilder(data),
                     () => approveRequest(mainNode, nodeName, id, data),
                     () => rejectRequest(nodeName, id)
                 );
-                card.dataset.requestType = nodeName; // Aggiunge un marcatore
+                card.dataset.requestType = nodeName;
                 container.appendChild(card);
             });
-        }
-        // Se non ci sono snapshot e il contenitore è vuoto, mostra il messaggio
-        if (container.children.length === 0) {
-             container.innerHTML = '<p class="text-gray-500">Nessuna richiesta da approvare.</p>';
         }
     });
 };
@@ -114,8 +138,6 @@ const loadPendingItems = (container, nodeName, titleKey, detailsBuilder, mainNod
 // Funzione per la gestione utenti
 const loadUsersForManagement = async () => {
     const usersDbRef = ref(database, 'users');
-    // Nota: Per ottenere le email in un'app reale, si usano le Cloud Functions.
-    // Qui le lasceremo fuori per semplicità, mostrando solo l'UID.
     
     onValue(usersDbRef, (snapshot) => {
         usersListEl.innerHTML = '';
@@ -127,6 +149,7 @@ const loadUsersForManagement = async () => {
                 const userEl = document.createElement('div');
                 userEl.className = 'flex justify-between items-center bg-gray-50 p-3 rounded-lg';
                 
+                // Mostriamo l'UID come identificativo principale
                 userEl.innerHTML = `
                     <div>
                         <p class="font-semibold text-sm font-mono">${uid}</p>
@@ -170,6 +193,7 @@ document.addEventListener('change', (e) => {
 
 // Inizializzazione della pagina
 document.addEventListener('DOMContentLoaded', () => {
+    // Usiamo un piccolo ritardo per assicurarci che currentUser da auth-guard.js sia stato valorizzato
     setTimeout(() => {
         if (currentUser.role === 'admin') {
             calendarApprovalSection.classList.remove('hidden');
@@ -177,23 +201,23 @@ document.addEventListener('DOMContentLoaded', () => {
             userManagementSection.classList.remove('hidden');
             
             loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
-                data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start) }), 'calendarEvents');
+                data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start), Richiesto_da: data.requesterEmail || data.createdBy }), 'calendarEvents');
             
             loadPendingItems(pendingFinanceContainer, 'pendingVariableExpenses', 'description', 
-                data => ({ Importo: `€${data.amount}`, Pagato_da: data.payer, Tipo: 'Spesa' }), 'variableExpenses');
+                data => ({ Importo: `€${data.amount}`, Pagato_da: data.payer, Tipo: 'Spesa', Richiesto_da: data.requesterEmail || data.createdBy }), 'variableExpenses');
                 
             loadPendingItems(pendingFinanceContainer, 'pendingIncomeEntries', 'description', 
-                data => ({ Importo: `+€${data.amount}`, Membri: (data.membersInvolved || []).join(', '), Tipo: 'Entrata' }), 'incomeEntries');
+                data => ({ Importo: `+€${data.amount}`, Membri: (data.membersInvolved || []).join(', '), Tipo: 'Entrata', Richiesto_da: data.requesterEmail || data.createdBy }), 'incomeEntries');
             
             loadPendingItems(pendingFinanceContainer, 'pendingCashMovements', 'description', 
-                data => ({ Importo: `${data.type === 'deposit' ? '+' : '-'}€${data.amount}`, Membro: data.member || 'N/A', Tipo: 'Mov. Cassa' }), 'cassaComune');
+                data => ({ Importo: `${data.type === 'deposit' ? '+' : '-'}€${data.amount}`, Membro: data.member || 'N/A', Tipo: 'Mov. Cassa', Richiesto_da: data.requesterEmail || data.createdBy }), 'cassaComune');
 
             loadUsersForManagement();
 
         } else if (currentUser.role === 'calendar_admin') {
             calendarApprovalSection.classList.remove('hidden');
             loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
-                data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start) }), 'calendarEvents');
+                data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start), Richiesto_da: data.requesterEmail || data.createdBy }), 'calendarEvents');
         }
     }, 500); 
 });
