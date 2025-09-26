@@ -11,6 +11,16 @@ export let currentUser = {
 let authReadyFired = false;
 
 onAuthStateChanged(auth, async (user) => {
+    const logoutBtn = document.getElementById('logout-btn');
+    const adminPanelLink = document.getElementById('admin-panel-link');
+
+    // Associa l'evento di logout subito, se il pulsante esiste
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            signOut(auth).catch((error) => console.error("Errore durante il logout:", error));
+        });
+    }
+
     if (!user) {
         // Se non c'è utente e NON siamo sulla pagina di login, allora reindirizza.
         if (!window.location.pathname.endsWith('login.html')) {
@@ -19,7 +29,7 @@ onAuthStateChanged(auth, async (user) => {
         return; // Interrompe l'esecuzione se non c'è utente
     }
     
-    // Se l'utente c'è, procediamo
+    // Se l'utente è loggato, procediamo
     currentUser.uid = user.uid;
     currentUser.email = user.email;
     currentUser.displayName = user.displayName || user.email.split('@')[0];
@@ -36,7 +46,6 @@ onAuthStateChanged(auth, async (user) => {
     
     console.log(`Accesso effettuato come: ${currentUser.email} (Ruolo: ${currentUser.role})`);
     
-    const adminPanelLink = document.getElementById('admin-panel-link');
     if (adminPanelLink) {
         if (currentUser.role === 'admin' || currentUser.role === 'calendar_admin') {
             adminPanelLink.classList.remove('hidden');
@@ -45,13 +54,6 @@ onAuthStateChanged(auth, async (user) => {
         }
     }
     
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', () => {
-            signOut(auth).catch((error) => console.error("Errore durante il logout:", error));
-        });
-    }
-
     // Invia il segnale che l'autenticazione è pronta, una sola volta
     if (!authReadyFired) {
         authReadyFired = true;
