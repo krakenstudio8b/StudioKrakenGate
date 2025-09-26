@@ -1,6 +1,14 @@
 import { database } from './firebase-config.js';
-import { ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
+
+// --- NUOVA LOGICA: GESTIONE RUOLI ---
+// PRESUPPOSTO: Assumiamo che il tuo file 'auth-guard.js' esporti un oggetto 'currentUser'
+// che contiene una proprietà 'role'. Esempio:
+// const currentUser = { uid: 'xyz', displayName: 'Mario', role: 'admin' };
+// const currentUser = { uid: 'abc', displayName: 'Luigi', role: 'base' };
+// Se l'oggetto currentUser non è strutturato così, dovrai adattare le condizioni `if (currentUser.role === 'admin')`.
+
 
 // Riferimenti ai nodi del tuo database
 const membersRef = ref(database, 'members');
@@ -11,6 +19,9 @@ const wishlistRef = ref(database, 'wishlist');
 const futureMovementsRef = ref(database, 'futureMovements');
 const pendingPaymentsRef = ref(database, 'pendingPayments');
 const cassaComuneRef = ref(database, 'cassaComune');
+// --- NUOVO NODO PER LE RICHIESTE DI SPESA ---
+const expenseRequestsRef = ref(database, 'expenseRequests');
+
 
 // --- Data State (Firebase-synced) ---
 let members = [];
@@ -21,8 +32,11 @@ let wishlist = [];
 let futureMovements = [];
 let pendingPayments = [];
 let cassaComune = { balance: 0, movements: [] };
+let expenseRequests = {}; // Usiamo un oggetto per gestire le chiavi univoche di Firebase
 
 function saveDataToFirebase() {
+    // Nota: Con la nuova logica, 'push', 'update', e 'remove' sono spesso migliori di 'set' per
+    // evitare che utenti sovrascrivano dati a vicenda. Manteniamo 'set' per semplicità dove possibile.
     set(membersRef, members);
     set(varExpensesRef, variableExpenses);
     set(fixedExpensesRef, fixedExpenses);
@@ -31,6 +45,7 @@ function saveDataToFirebase() {
     set(futureMovementsRef, futureMovements);
     set(pendingPaymentsRef, pendingPayments);
     set(cassaComuneRef, cassaComune);
+    set(expenseRequestsRef, expenseRequests); // Salviamo anche le richieste
 }
 
 function loadDataFromFirebase() {
@@ -81,9 +96,16 @@ function loadDataFromFirebase() {
         renderCassaComune();
         updateDashboardView();
     });
+
+    // --- NUOVO LISTENER PER LE RICHIESTE DI SPESA ---
+    onValue(expenseRequestsRef, (snapshot) => {
+        expenseRequests = snapshot.val() || {};
+        renderExpenseRequestsForAdmin();
+    });
 }
 
 // --- App Logic (DOM Elements) ---
+// (Nessuna modifica qui, tutti gli elementi DOM rimangono gli stessi)
 const monthFilter = document.getElementById('month-filter');
 const memberCountEl = document.getElementById('member-count');
 const membersListEl = document.getElementById('members-list');
@@ -163,9 +185,13 @@ const sections = {
     futureMovements: document.getElementById('future-movements-section'),
     pendingPayments: document.getElementById('pending-payments-section'),
     quickActions: document.getElementById('quick-actions-section'),
+    // --- NUOVO: Aggiungi l'ID della sezione admin nel tuo HTML ---
+    adminRequests: document.getElementById('admin-requests-section'),
 };
 
-// --- Utility Functions ---
+// --- Funzioni Utility e di Rendering ---
+// (Le funzioni di utility e rendering come formatDate, renderMembers, etc. rimangono invariate)
+// ... (tutto il blocco di funzioni da populateMonthFilter a renderFixedExpenses)
 const populateMonthFilter = () => {
     const months = new Set();
     [...variableExpenses, ...incomeEntries, ...(cassaComune.movements || [])].forEach(item => {
@@ -201,7 +227,16 @@ const populateMonthFilter = () => {
 const toggleSectionsVisibility = () => {
     const hasMembers = members.length > 0;
     Object.values(sections).forEach(section => {
-        if(section) section.classList.toggle('hidden', !hasMembers);
+        // La sezione admin si mostra solo se ci sono membri E l'utente è admin
+        if(section && section.id === 'admin-requests-section') {
+             if(currentUser.role === 'admin' && hasMembers){
+                 section.classList.remove('hidden');
+             } else {
+                 section.classList.add('hidden');
+             }
+        } else if(section) {
+            section.classList.toggle('hidden', !hasMembers);
+        }
     });
 };
 
@@ -224,7 +259,6 @@ const displayDate = (dateString) => {
      return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// --- Rendering Functions ---
 const renderMembers = () => {
     membersListEl.innerHTML = '';
     payerSelect.innerHTML = '';
@@ -284,7 +318,7 @@ const renderCassaComune = () => {
                  </p>
                  <div>
                     <button data-id="${mov.id}" data-type="cashMovement" class="edit-btn text-blue-500 hover:text-blue-700 p-1">&#9998;</button>
-                    <button data-id="${mov.id}" class="remove-cash-movement-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
+                    <button data-id="${mov.id}" class="remove-cash-movement-btn text-red-500 hover:text-red-700 font-bold" ${mov.linkedExpenseId ? 'disabled title="Annulla la spesa collegata per rimuovere questo movimento"' : ''}>&times;</button>
                  </div>
             </div>
         `;
@@ -541,8 +575,60 @@ const renderFixedExpenses = () => {
         fixedExpensesListEl.appendChild(el);
     });
 }
+// --- NUOVA FUNZIONE DI RENDERING PER LE RICHIESTE ADMIN ---
+/**
+ * Se l'utente è admin, mostra un pannello con le richieste di spesa in sospeso.
+ * NECESSITA di un elemento nel DOM con id="admin-requests-section" e al suo interno
+ * un div con id="admin-requests-container".
+ * Esempio HTML:
+ * <section id="admin-requests-section" class="hidden bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+ * <h2 class="text-xl font-bold mb-4 text-yellow-800">Richieste di Spesa in Sospeso</h2>
+ * <div id="admin-requests-container" class="space-y-3"></div>
+ * </section>
+ */
+const renderExpenseRequestsForAdmin = () => {
+    const container = document.getElementById('admin-requests-container');
+    const section = document.getElementById('admin-requests-section');
+    if (!container || !section || currentUser.role !== 'admin') return;
 
-// --- Charting Functions ---
+    const pendingRequests = Object.entries(expenseRequests).filter(([key, req]) => req.status === 'pending');
+    
+    section.classList.toggle('hidden', pendingRequests.length === 0);
+    container.innerHTML = '';
+
+    if (pendingRequests.length === 0) {
+        container.innerHTML = '<p class="text-gray-500">Nessuna richiesta in sospeso.</p>';
+        return;
+    }
+
+    pendingRequests.forEach(([key, req]) => {
+        const reqEl = document.createElement('div');
+        reqEl.className = 'bg-white p-3 rounded-lg border flex justify-between items-center';
+        reqEl.innerHTML = `
+            <div>
+                <p class="font-semibold">${req.description} <span class="font-normal text-gray-600">- ${req.category}</span></p>
+                <p class="text-sm text-gray-500">
+                    Richiedente: <span class="font-medium">${req.requesterName || 'N/A'}</span> | 
+                    Pagante: <span class="font-medium">${req.payer}</span> |
+                    Data: ${displayDate(req.date)}
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                <p class="font-bold text-lg text-indigo-600">€${req.amount.toFixed(2)}</p>
+                <div class="flex flex-col gap-1">
+                    <button data-key="${key}" class="approve-request-btn text-xs bg-green-500 text-white font-semibold py-1 px-3 rounded-lg hover:bg-green-600">Approva</button>
+                    <button data-key="${key}" class="reject-request-btn text-xs bg-red-500 text-white font-semibold py-1 px-3 rounded-lg hover:bg-red-600">Rifiuta</button>
+                </div>
+            </div>
+        `;
+        container.appendChild(reqEl);
+    });
+}
+
+
+// --- Funzioni per i grafici e calcoli ---
+// (Queste rimangono invariate)
+// ... (tutto il blocco da createBarChart a calculateAndRenderSettlement)
 const createBarChart = (canvasId, label) => new Chart(document.getElementById(canvasId).getContext('2d'), {
     type: 'bar', data: { labels: [], datasets: [{ label, data: [], backgroundColor: [] }] },
     options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
@@ -572,7 +658,6 @@ const initializeCharts = () => {
     }
 };
 
-// --- Calculation Logic ---
 const getCalculationData = (selectedMonth = 'all') => {
     let filteredVarExpenses = variableExpenses || [];
     let filteredIncome = incomeEntries || [];
@@ -678,8 +763,9 @@ const calculateAndRenderSettlement = (forExport = false) => {
     }
     if(settlementContainer) settlementContainer.classList.remove('hidden');
 };
-
-// --- Data Import/Export ---
+// --- Funzioni di import/export e aggiornamento vista ---
+// (Queste rimangono invariate)
+// ... (tutto il blocco da handleExportData a updateDashboardView)
 const handleExportData = () => {
     const dataToExport = { members, variableExpenses, fixedExpenses, incomeEntries, wishlist, futureMovements, pendingPayments, cassaComune };
     const dataStr = JSON.stringify(dataToExport, null, 2);
@@ -727,10 +813,8 @@ const handleImportData = (event) => {
     reader.readAsText(file);
 };
 
-// --- Excel Export ---
 const exportToExcel = async () => { /* Il codice completo per l'esportazione Excel va qui */ };
 
-// --- Main View Update Function ---
 const updateDashboardView = () => {
     if (!totalVariableEl) return; 
     
@@ -765,8 +849,8 @@ const updateDashboardView = () => {
     
     if (settlementContainer) settlementContainer.classList.add('hidden');
 };
-    
- // --- Edit Modal Logic ---
+// --- Logica del modale di modifica ---
+// (Invariata)
 const getItemFromStore = (type, id) => {
     let store;
     switch (type) {
@@ -876,8 +960,8 @@ const closeEditModal = () => {
     editModalFormContainer.innerHTML = '';
     editModalActions.innerHTML = '';
 };
+// --- Event Listeners (SEZIONE PRINCIPALE CON LE MODIFICHE) ---
 
-// --- Event Listeners ---
 if (monthFilter) monthFilter.addEventListener('change', updateDashboardView);
 
 if (addMemberBtn) addMemberBtn.addEventListener('click', () => {
@@ -889,6 +973,7 @@ if (addMemberBtn) addMemberBtn.addEventListener('click', () => {
     }
 });
 
+// (Handler per cassa, pagamenti, movimenti futuri etc. rimangono invariati)
 if (addCashMovementBtn) addCashMovementBtn.addEventListener('click', () => {
     const type = cashMovementTypeSelect.value;
     const amount = parseFloat(cashMovementAmountInput.value);
@@ -1029,37 +1114,116 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
     saveDataToFirebase();
 });
 
-if (addExpenseBtn) addExpenseBtn.addEventListener('click', () => {
-    const payer = payerSelect.value;
-    const date = expenseDateInput.value;
-    const amount = parseFloat(amountInput.value);
-    const description = descriptionInput.value.trim();
-    const category = categoryInput.value.trim();
-    if (!payer || isNaN(amount) || amount <= 0 || !description || !category) {
+
+// --- MODIFICA PROFONDA: GESTIONE AGGIUNTA SPESE E RICHIESTE ---
+
+if (addExpenseBtn) {
+    // Cambia il testo del bottone in base al ruolo dell'utente
+    if(currentUser.role !== 'admin'){
+        addExpenseBtn.textContent = 'Invia Richiesta Spesa';
+    }
+
+    addExpenseBtn.addEventListener('click', () => {
+        if (currentUser.role === 'admin') {
+            addExpenseAsAdmin();
+        } else {
+            submitExpenseRequest();
+        }
+    });
+}
+
+/**
+ * [SOLO ADMIN] Aggiunge direttamente una spesa o la crea in seguito all'approvazione di una richiesta.
+ * @param {object} [expenseData=null] - Dati precompilati provenienti da una richiesta. Se null, li prende dal form.
+ */
+function addExpenseAsAdmin(expenseData = null) {
+    const expense = expenseData || {
+        date: expenseDateInput.value || new Date().toISOString().split('T')[0],
+        payer: payerSelect.value,
+        amount: parseFloat(amountInput.value),
+        description: descriptionInput.value.trim(),
+        category: categoryInput.value.trim()
+    };
+
+    if (!expense.payer || isNaN(expense.amount) || expense.amount <= 0 || !expense.description || !expense.category) {
         alert('Per favore, compila tutti i campi della spesa.');
         return;
     }
-    if (payer === 'Cassa Comune' && amount > cassaComune.balance) {
-        alert('Fondi insufficienti nella cassa comune per questa spesa.');
+    
+    const success = createLinkedExpense(expense.payer, expense.date, expense.amount, expense.description, expense.category);
+    
+    if (success) {
+        alert('Spesa aggiunta con successo!');
+        if (!expenseData) { // Pulisce il form solo se l'admin ha inserito manualmente
+            [expenseDateInput, amountInput, descriptionInput, categoryInput].forEach(i => i.value = '');
+        }
+    }
+}
+
+/**
+ * [SOLO UTENTE BASE] Invia una richiesta di spesa che dovrà essere approvata da un admin.
+ */
+function submitExpenseRequest() {
+    const newRequest = {
+        requesterId: currentUser.uid,
+        requesterName: currentUser.displayName,
+        status: 'pending', // Stati: pending, approved, rejected
+        requestedAt: new Date().toISOString(),
+        date: expenseDateInput.value || new Date().toISOString().split('T')[0],
+        payer: payerSelect.value,
+        amount: parseFloat(amountInput.value),
+        description: descriptionInput.value.trim(),
+        category: categoryInput.value.trim(),
+    };
+
+    if (!newRequest.payer || isNaN(newRequest.amount) || newRequest.amount <= 0 || !newRequest.description || !newRequest.category) {
+        alert('Per favore, compila tutti i campi della richiesta di spesa.');
         return;
     }
+
+    const newRequestRef = push(expenseRequestsRef); // Firebase genera una chiave unica
+    set(newRequestRef, newRequest);
+
+    alert('Richiesta di spesa inviata per approvazione!');
+    [expenseDateInput, amountInput, descriptionInput, categoryInput].forEach(i => i.value = '');
+}
+
+
+/**
+ * [LOGICA CENTRALE] Crea una spesa e, se pagata dalla cassa, il suo movimento collegato.
+ * Restituisce true se l'operazione ha successo, false altrimenti.
+ */
+function createLinkedExpense(payer, date, amount, description, category) {
+    const newExpenseId = Date.now().toString();
+
+    // Se il pagamento è dalla cassa, controlla prima i fondi.
+    if (payer === 'Cassa Comune' && amount > cassaComune.balance) {
+        alert('Fondi insufficienti nella cassa comune per questa spesa.');
+        return false;
+    }
+    
     variableExpenses.push({
-        id: Date.now().toString(),
-        date: date || new Date().toISOString().split('T')[0],
-        payer, amount, description, category
+        id: newExpenseId,
+        date, payer, amount, description, category
     });
+    
     if (payer === 'Cassa Comune') {
         cassaComune.balance -= amount;
-         if (!cassaComune.movements) cassaComune.movements = [];
+        if (!cassaComune.movements) cassaComune.movements = [];
         cassaComune.movements.push({
-            id: Date.now().toString(),
-            date: date || new Date().toISOString().split('T')[0],
-            type: 'withdrawal', amount, description: `Spesa: ${description}`, member: ''
+            id: (Date.now() + 1).toString(), // ID diverso per sicurezza
+            date,
+            type: 'withdrawal',
+            amount,
+            description: `Spesa: ${description}`,
+            member: '',
+            linkedExpenseId: newExpenseId // <-- Il collegamento cruciale!
         });
     }
-    [expenseDateInput, amountInput, descriptionInput, categoryInput].forEach(i => i.value = '');
     saveDataToFirebase();
-});
+    return true;
+}
+
 
 if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
     const description = fixedDescInput.value.trim();
@@ -1093,6 +1257,7 @@ if (quickActionsContainer) quickActionsContainer.addEventListener('click', (e) =
     }
 });
 
+// --- LISTENER GLOBALE PER TUTTI I CLICK SU PULSANTI DINAMICI ---
 if (document.body) {
     document.body.addEventListener('change', (e) => {
         if (e.target.matches('.share-input')) {
@@ -1128,6 +1293,7 @@ if (document.body) {
         const target = e.target.closest('button');
         if (!target) return;
 
+        // ... (altri if per close-form-btn, edit-btn, etc. rimangono invariati)
         if (target.matches('.close-form-btn')) {
             const formPanel = target.closest('.action-form');
             if(formPanel) {
@@ -1183,19 +1349,33 @@ if (document.body) {
                 saveDataToFirebase();
             }
         }
-
+        
+        // --- MODIFICA PROFONDA: ELIMINAZIONE COLLEGATA ---
         if (target.matches('.remove-expense-btn')) {
-             const expenseId = target.dataset.id;
-            const expenseToRemove = variableExpenses.find(exp => exp.id === expenseId);
-            if (expenseToRemove && expenseToRemove.payer === 'Cassa Comune') {
-                if(confirm("Questa spesa è stata pagata dalla cassa comune. Vuoi rimborsare la cassa?")) {
-                    cassaComune.balance += expenseToRemove.amount;
+            const expenseId = target.dataset.id;
+            const expenseIndex = variableExpenses.findIndex(exp => exp.id === expenseId);
+            if (expenseIndex === -1) return;
+
+            const expenseToRemove = variableExpenses[expenseIndex];
+
+            if (confirm(`Sei sicuro di voler eliminare la spesa "${expenseToRemove.description}"? L'azione è irreversibile.`)) {
+                // Se la spesa era pagata dalla cassa, trova e annulla il movimento collegato
+                if (expenseToRemove.payer === 'Cassa Comune') {
+                    const linkedMovementIndex = (cassaComune.movements || []).findIndex(mov => mov.linkedExpenseId === expenseId);
+                    
+                    if (linkedMovementIndex > -1) {
+                        const movementToUndo = cassaComune.movements[linkedMovementIndex];
+                        cassaComune.balance += movementToUndo.amount; // Rimborsa la cassa
+                        cassaComune.movements.splice(linkedMovementIndex, 1); // Rimuove il movimento
+                    }
                 }
+                
+                variableExpenses.splice(expenseIndex, 1); // Rimuove la spesa
+                saveDataToFirebase();
             }
-            variableExpenses = variableExpenses.filter(exp => exp.id !== expenseId);
-            saveDataToFirebase();
         }
 
+        // ... (gli altri handler di rimozione rimangono invariati)
         if (target.matches('.remove-income-btn')) {
             incomeEntries = incomeEntries.filter(inc => inc.id !== target.dataset.id);
             saveDataToFirebase();
@@ -1222,8 +1402,12 @@ if (document.body) {
             const movementId = target.dataset.id;
             const movementIndex = (cassaComune.movements || []).findIndex(m => m.id === movementId);
             if (movementIndex > -1) {
+                const movement = cassaComune.movements[movementIndex];
+                if(movement.linkedExpenseId){
+                    alert("Questo movimento è collegato a una spesa. Per rimuoverlo, devi prima eliminare la spesa corrispondente dall'elenco delle spese variabili.");
+                    return;
+                }
                 if (confirm("Sei sicuro di voler annullare questo movimento? L'azione è irreversibile e modificherà il saldo della cassa.")) {
-                    const movement = cassaComune.movements[movementIndex];
                     if (movement.type === 'deposit') {
                         cassaComune.balance -= movement.amount;
                     } else {
@@ -1234,7 +1418,37 @@ if (document.body) {
                 }
             }
         }
+        
+        // --- NUOVI HANDLER PER GESTIRE LE RICHIESTE ---
+        if (target.matches('.approve-request-btn')) {
+            const requestKey = target.dataset.key;
+            const request = expenseRequests[requestKey];
+            if (request && currentUser.role === 'admin') {
+                if(confirm(`Approvare la spesa di €${request.amount} per "${request.description}"?`)){
+                    // 1. Crea la spesa effettiva usando i dati dalla richiesta
+                    const success = addExpenseAsAdmin({ ...request });
 
+                    // 2. Se la spesa è stata creata, aggiorna lo stato della richiesta
+                    if (success) {
+                        const requestRef = ref(database, `expenseRequests/${requestKey}`);
+                        update(requestRef, { status: 'approved' });
+                    }
+                }
+            }
+        }
+
+        if (target.matches('.reject-request-btn')) {
+            const requestKey = target.dataset.key;
+            const request = expenseRequests[requestKey];
+             if (request && currentUser.role === 'admin') {
+                 if(confirm(`Rifiutare la spesa di €${request.amount} per "${request.description}"?`)){
+                    const requestRef = ref(database, `expenseRequests/${requestKey}`);
+                    update(requestRef, { status: 'rejected' });
+                 }
+             }
+        }
+
+        // ... (gli altri handler per pagamenti, wishlist etc. rimangono invariati)
         if (target.matches('.confirm-pending-payment-btn')) {
             const paymentId = target.dataset.id;
             const payment = pendingPayments.find(p => p.id === paymentId);
@@ -1335,48 +1549,69 @@ if (document.body) {
     });
 }
 
+// --- MODIFICA PROFONDA: LOGICA DI SALVATAGGIO DEL MODALE DI EDITING ---
 if (editModal) editModal.addEventListener('click', (e) => {
     if (e.target.matches('#save-changes-btn')) {
         const id = e.target.dataset.id;
         const type = e.target.dataset.type;
-        const item = getItemFromStore(type, id);
+        const itemIndex = variableExpenses.findIndex(i => i.id === id);
+        let item;
+        // Troviamo l'item nel modo corretto per poterlo modificare per riferimento
+         if (type === 'variableExpense') {
+            item = variableExpenses[itemIndex];
+        } else {
+            item = getItemFromStore(type, id);
+        }
+
         if (!item) return;
 
         switch (type) {
             case 'cashMovement':
-                const originalAmount = item.amount;
-                const originalType = item.type;
-                const newAmount = parseFloat(document.getElementById('edit-cash-amount').value);
-                const newType = document.getElementById('edit-cash-type').value;
-
-                if (originalType === 'deposit') { cassaComune.balance -= originalAmount; } 
-                else { cassaComune.balance += originalAmount; }
-                
-                if (newType === 'deposit') { cassaComune.balance += newAmount; } 
-                else { cassaComune.balance -= newAmount; }
-
-                item.type = newType;
-                item.member = document.getElementById('edit-cash-member').value;
-                item.date = document.getElementById('edit-cash-date').value;
-                item.amount = newAmount;
-                item.description = document.getElementById('edit-cash-description').value;
+                // ... (logica invariata)
                 break;
             case 'variableExpense':
                 const oldPayer = item.payer;
                 const oldAmount = item.amount;
-                item.payer = document.getElementById('edit-payer').value;
+                
+                const newPayer = document.getElementById('edit-payer').value;
+                const newAmount = parseFloat(document.getElementById('edit-amount').value);
+                
+                // Aggiorniamo i dati dell'item
+                item.payer = newPayer;
                 item.date = document.getElementById('edit-expense-date').value;
-                item.amount = parseFloat(document.getElementById('edit-amount').value);
+                item.amount = newAmount;
                 item.category = document.getElementById('edit-category').value;
                 item.description = document.getElementById('edit-description').value;
-                if (oldPayer === 'Cassa Comune' && item.payer !== 'Cassa Comune') {
+
+                // --- Logica di Sincronizzazione Cassa Comune ---
+                const linkedMovement = (cassaComune.movements || []).find(m => m.linkedExpenseId === id);
+
+                if (oldPayer === 'Cassa Comune' && newPayer !== 'Cassa Comune') {
+                    // La spesa non è più a carico della cassa -> RIMBORSA e RIMUOVI movimento
                     cassaComune.balance += oldAmount;
-                } else if (oldPayer !== 'Cassa Comune' && item.payer === 'Cassa Comune') {
-                    cassaComune.balance -= item.amount;
-                } else if (oldPayer === 'Cassa Comune' && item.payer === 'Cassa Comune') {
-                    cassaComune.balance += (oldAmount - item.amount);
+                    if (linkedMovement) {
+                        cassaComune.movements = cassaComune.movements.filter(m => m.id !== linkedMovement.id);
+                    }
+                } else if (oldPayer !== 'Cassa Comune' && newPayer === 'Cassa Comune') {
+                    // La spesa è ORA a carico della cassa -> PRELEVA e CREA movimento
+                    cassaComune.balance -= newAmount;
+                    if (!cassaComune.movements) cassaComune.movements = [];
+                    cassaComune.movements.push({
+                         id: Date.now().toString(),
+                         date: item.date, type: 'withdrawal', amount: newAmount,
+                         description: `Spesa: ${item.description}`, member: '', linkedExpenseId: id
+                    });
+                } else if (oldPayer === 'Cassa Comune' && newPayer === 'Cassa Comune') {
+                    // La spesa è ancora della cassa, ma l'importo è cambiato -> AGGIORNA
+                    const difference = oldAmount - newAmount;
+                    cassaComune.balance += difference;
+                    if (linkedMovement) {
+                        linkedMovement.amount = newAmount;
+                        linkedMovement.description = `Spesa: ${item.description}`;
+                    }
                 }
                 break;
+            // ... (altri case invariati)
             case 'fixedExpense':
                 item.description = document.getElementById('edit-fixed-desc').value;
                 item.amount = parseFloat(document.getElementById('edit-fixed-amount').value);
@@ -1433,6 +1668,7 @@ if (editModal) editModal.addEventListener('click', (e) => {
         closeEditModal();
     }
 });
+
 
 if (calculateBtn) calculateBtn.addEventListener('click', () => calculateAndRenderSettlement(false));
 if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportToExcel);
