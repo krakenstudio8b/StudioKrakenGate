@@ -1,5 +1,6 @@
 import { database } from './firebase-config.js';
-import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { currentUser } from './auth-guard.js';
 
 // Riferimenti ai nodi del tuo database
 const membersRef = ref(database, 'members');
@@ -911,7 +912,9 @@ if (addCashMovementBtn) addCashMovementBtn.addEventListener('click', () => {
         cassaComune.balance -= amount;
     }
     
-    if (!cassaComune.movements) cassaComune.movements = [];
+    if (!cassaComune.movements) {
+        cassaComune.movements = [];
+    }
 
     const newMovement = {
         id: Date.now().toString(),
@@ -1439,6 +1442,7 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 
 // --- App Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
+    // Controlla su quale pagina ci si trova per inizializzare solo il codice necessario
     if (document.getElementById('calendar-container')) {
         // La logica per il calendario è in js/calendario.js
     } else if (document.getElementById('kanban-board')) {
