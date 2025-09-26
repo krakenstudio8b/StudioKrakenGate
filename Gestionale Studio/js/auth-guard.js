@@ -30,7 +30,7 @@ export let currentUser = {
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        // Se NON c'è un utente loggato, reindirizza alla pagina di login.
+        // Se non c'è utente, torna al login
         // Controlliamo di non essere già sulla pagina di login per evitare un loop infinito.
         if (window.location.pathname.endsWith('login.html') === false) {
             window.location.href = 'login.html';
