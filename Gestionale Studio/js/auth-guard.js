@@ -14,6 +14,9 @@ export let currentUser = {
     role: 'user' // Ruolo di default
 };
 
+// Aggiungiamo una variabile per evitare che l'evento venga lanciato più volte
+let authReadyFired = false;
+
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
         if (!window.location.pathname.endsWith('login.html')) {
@@ -44,18 +47,16 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
 
-        // Invia un evento globale per notificare a tutti gli altri script che l'autenticazione è completa.
-        document.dispatchEvent(new CustomEvent('authReady', { detail: { user: currentUser } }));
+        // Invia l'evento solo se non è già stato inviato
+        if (!authReadyFired) {
+            authReadyFired = true;
+            document.dispatchEvent(new CustomEvent('authReady', { detail: { user: currentUser } }));
+        }
     }
 });
 
 if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
-        signOut(auth)
-            .then(() => {
-                console.log('Logout effettuato con successo');
-                // Il redirect verrà gestito dall'onAuthStateChanged
-            })
-            .catch((error) => console.error("Errore durante il logout:", error));
+        signOut(auth).catch((error) => console.error("Errore durante il logout:", error));
     });
 }
