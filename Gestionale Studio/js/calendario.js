@@ -1,8 +1,12 @@
+// js/calendario.js - VERSIONE COMPLETA CON LISTENER 'authReady'
+
 import { database } from './firebase-config.js';
-import { ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+// --- FUNZIONE DI INIZIALIZZAZIONE ---
+// Spostiamo tutta la logica dentro una funzione che chiameremo solo quando l'utente è pronto.
+function initializeCalendar() {
     // Riferimenti agli elementi del DOM
     const calendarEl = document.getElementById('calendar');
     const eventModal = document.getElementById('event-modal');
@@ -21,9 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Riferimenti a Firebase
     const eventsRef = ref(database, 'calendarEvents');
+    const pendingEventsRef = ref(database, 'pendingCalendarEvents');
     const membersRef = ref(database, 'members');
-    let allEvents = [];
-    let allMembers = [];
+    
+    // Stato locale
     let currentEventInfo = null;
 
     // Funzioni per gestire il modale
@@ -31,10 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeModal = () => {
         eventModal.classList.add('hidden');
         currentEventInfo = null;
-    };
-
-    const saveDataToFirebase = () => {
-        set(eventsRef, allEvents);
     };
 
     const openModalForNewEvent = (info) => {
@@ -45,9 +46,14 @@ document.addEventListener('DOMContentLoaded', () => {
         startDate.setMinutes(startDate.getMinutes() - startDate.getTimezoneOffset());
         eventStartInput.value = startDate.toISOString().slice(0, 16);
 
-        const endDate = info.end ? new Date(info.end) : startDate;
-        if(info.end) endDate.setMinutes(endDate.getMinutes() - endDate.getTimezoneOffset());
-        eventEndInput.value = endDate.toISOString().slice(0, 16);
+        const endDate = info.end ? new Date(info.end) : new Date(startDate);
+        if(info.end) {
+            const tempEndDate = new Date(info.end);
+            tempEndDate.setMinutes(tempEndDate.getMinutes() - tempEndDate.getTimezoneOffset());
+            eventEndInput.value = tempEndDate.toISOString().slice(0, 16);
+        } else {
+             eventEndInput.value = startDate.toISOString().slice(0, 16);
+        }
         
         eventDescriptionInput.value = '';
         eventPrioritySelect.value = '#3b82f6';
@@ -62,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inizializzazione di FullCalendar
     const calendar = new FullCalendar.Calendar(calendarEl, {
         locale: 'it',
-        firstDay: 1, // Imposta Lunedì come primo giorno della settimana
+        firstDay: 1,
         initialView: 'dayGridMonth',
         headerToolbar: {
             left: 'prev,next today',
@@ -76,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
             day: 'Giorno',
             list: 'Agenda'
         },
-        height: '100%',
+        height: 'auto', // Lasciamo che il contenitore gestisca l'altezza
         editable: true,
         selectable: true,
         
@@ -85,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         eventClick: (info) => {
-            // Gli utenti normali non possono modificare gli eventi esistenti dal calendario
             if (currentUser.role === 'user') {
                 alert("Non hai i permessi per modificare questo evento. Contatta un amministratore.");
                 return;
@@ -120,16 +125,15 @@ document.addEventListener('DOMContentLoaded', () => {
         eventDrop: (info) => {
             if (currentUser.role === 'user') {
                 alert("Non hai i permessi per spostare questo evento. Contatta un amministratore.");
-                info.revert(); // Annulla lo spostamento
+                info.revert();
                 return;
             }
             const event = info.event;
-            const eventIndex = allEvents.findIndex(e => e.id === event.id);
-            if (eventIndex !== -1) {
-                allEvents[eventIndex].start = event.start.toISOString();
-                allEvents[eventIndex].end = event.end ? event.end.toISOString() : null;
-                saveDataToFirebase();
-            }
+            const eventToUpdateRef = ref(database, `calendarEvents/${event.id}`);
+            update(eventToUpdateRef, {
+                start: event.start.toISOString(),
+                end: event.end ? event.end.toISOString() : null
+            });
         },
         
         eventDidMount: (info) => {
@@ -152,7 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Carica i membri per la lista partecipanti
     onValue(membersRef, (snapshot) => {
-        allMembers = snapshot.val() || [];
+        const allMembers = snapshot.val() || [];
         participantsContainer.innerHTML = '';
         if (allMembers.length > 0) {
             allMembers.forEach(member => {
@@ -171,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Carica gli eventi da Firebase
     onValue(eventsRef, (snapshot) => {
-        allEvents = [];
+        const allEvents = [];
         if (snapshot.exists()) {
             snapshot.forEach(child => {
                 allEvents.push({ id: child.key, ...child.val() });
@@ -219,8 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Non hai i permessi per modificare un evento. Puoi solo crearne di nuovi.");
                 return;
             }
-            const pendingRef = ref(database, 'pendingCalendarEvents');
-            const newPendingRef = push(pendingRef);
+            const newPendingRef = push(pendingEventsRef);
             set(newPendingRef, eventData);
             alert('Richiesta di evento inviata per approvazione!');
         }
@@ -241,4 +244,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     cancelEventBtn.addEventListener('click', closeModal);
+}
+
+// --- PUNTO DI INGRESSO DELLO SCRIPT ---
+// Aspetta il segnale da auth-guard.js prima di inizializzare tutto.
+document.addEventListener('authReady', () => {
+    initializeCalendar();
 });
+
+// Fallback nel caso in cui questo script carichi dopo che l'evento è già stato inviato
+if (currentUser && currentUser.uid) {
+    initializeCalendar();
+}
