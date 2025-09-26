@@ -901,33 +901,35 @@ if (addCashMovementBtn) addCashMovementBtn.addEventListener('click', () => {
         return;
     }
 
-    if(type === 'withdrawal' && amount > cassaComune.balance) {
-        alert("Fondi insufficienti nella cassa comune per questo prelievo.");
-        return;
-    }
-    
-    if (type === 'deposit') {
-        cassaComune.balance += amount;
+    const newMovement = {
+        date, type, amount, description, member,
+        createdBy: currentUser.uid,
+        requesterEmail: currentUser.email
+    };
+
+    if (currentUser.role === 'admin') {
+        if(type === 'withdrawal' && amount > cassaComune.balance) {
+            alert("Fondi insufficienti nella cassa comune per questo prelievo.");
+            return;
+        }
+        if (type === 'deposit') cassaComune.balance += amount;
+        else cassaComune.balance -= amount;
+        
+        if (!cassaComune.movements) cassaComune.movements = [];
+        cassaComune.movements.push(newMovement);
+        saveDataToFirebase();
+        alert('Movimento di cassa aggiunto con successo.');
     } else {
-        cassaComune.balance -= amount;
-    }
-    
-    if (!cassaComune.movements) {
-        cassaComune.movements = [];
+        const pendingRef = ref(database, 'pendingCashMovements');
+        const newPendingRef = push(pendingRef);
+        set(newPendingRef, newMovement);
+        alert('Richiesta di movimento cassa inviata per approvazione!');
     }
 
-    const newMovement = {
-        id: Date.now().toString(),
-        date: date,
-        type, amount, description, member
-    };
-    cassaComune.movements.push(newMovement);
-    
     cashMovementAmountInput.value = '';
     cashMovementDateInput.value = '';
     cashMovementDescriptionInput.value = '';
     cashMovementMemberSelect.value = '';
-    saveDataToFirebase();
 });
 
 if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
@@ -1019,14 +1021,27 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
         alert('Per favore, compila tutti i campi dell\'entrata e seleziona almeno un membro.');
         return;
     }
-    incomeEntries.push({
-        id: Date.now().toString(),
+    
+    const newIncome = {
         date: date || new Date().toISOString().split('T')[0],
-        amount, description, membersInvolved
-    });
+        amount, description, membersInvolved,
+        createdBy: currentUser.uid,
+        requesterEmail: currentUser.email
+    };
+
+    if (currentUser.role === 'admin') {
+        incomeEntries.push(newIncome);
+        saveDataToFirebase();
+        alert('Entrata aggiunta con successo.');
+    } else {
+        const pendingRef = ref(database, 'pendingIncomeEntries');
+        const newPendingRef = push(pendingRef);
+        set(newPendingRef, newIncome);
+        alert('Richiesta di entrata inviata per approvazione!');
+    }
+    
     [incomeDateInput, incomeAmountInput, incomeDescriptionInput].forEach(i => i.value = '');
     incomeMembersCheckboxes.querySelectorAll('input:checked').forEach(cb => cb.checked = false);
-    saveDataToFirebase();
 });
 
 if (addExpenseBtn) addExpenseBtn.addEventListener('click', () => {
@@ -1035,30 +1050,42 @@ if (addExpenseBtn) addExpenseBtn.addEventListener('click', () => {
     const amount = parseFloat(amountInput.value);
     const description = descriptionInput.value.trim();
     const category = categoryInput.value.trim();
-    if (!payer || isNaN(amount) || amount <= 0 || !description || !category) {
+    if (!payer || !date || isNaN(amount) || amount <= 0 || !description || !category) {
         alert('Per favore, compila tutti i campi della spesa.');
         return;
     }
-    if (payer === 'Cassa Comune' && amount > cassaComune.balance) {
-        alert('Fondi insufficienti nella cassa comune per questa spesa.');
-        return;
+
+    const newExpense = {
+        date, payer, amount, description, category,
+        createdBy: currentUser.uid,
+        requesterEmail: currentUser.email
+    };
+
+    if (currentUser.role === 'admin') {
+        if (payer === 'Cassa Comune' && amount > cassaComune.balance) {
+            alert('Fondi insufficienti nella cassa comune per questa spesa.');
+            return;
+        }
+        variableExpenses.push(newExpense);
+        if (payer === 'Cassa Comune') {
+            cassaComune.balance -= amount;
+             if (!cassaComune.movements) cassaComune.movements = [];
+            cassaComune.movements.push({
+                id: Date.now().toString(),
+                date: date,
+                type: 'withdrawal', amount, description: `Spesa: ${description}`, member: ''
+            });
+        }
+        saveDataToFirebase();
+        alert('Spesa aggiunta con successo.');
+    } else {
+        const pendingRef = ref(database, 'pendingVariableExpenses');
+        const newPendingRef = push(pendingRef);
+        set(newPendingRef, newExpense);
+        alert('Richiesta di spesa inviata per approvazione!');
     }
-    variableExpenses.push({
-        id: Date.now().toString(),
-        date: date || new Date().toISOString().split('T')[0],
-        payer, amount, description, category
-    });
-    if (payer === 'Cassa Comune') {
-        cassaComune.balance -= amount;
-         if (!cassaComune.movements) cassaComune.movements = [];
-        cassaComune.movements.push({
-            id: Date.now().toString(),
-            date: date || new Date().toISOString().split('T')[0],
-            type: 'withdrawal', amount, description: `Spesa: ${description}`, member: ''
-        });
-    }
+
     [expenseDateInput, amountInput, descriptionInput, categoryInput].forEach(i => i.value = '');
-    saveDataToFirebase();
 });
 
 if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
