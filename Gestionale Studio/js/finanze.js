@@ -1,1430 +1,1364 @@
-// js/finanze.js - VERSIONE DEFINITIVA COMPLETA
-
 import { database } from './firebase-config.js';
 import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-import { currentUser } from './auth-guard.js';
+// FIX: Aggiunto onAuthReady per risolvere il problema di timing
+import { currentUser, onAuthReady } from './auth-guard.js';
 
-// Aspetta il segnale da auth-guard.js prima di fare QUALSIASI COSA.
-document.addEventListener('authReady', () => {
-    document.addEventListener('DOMContentLoaded', () => {
-        initializePage();
-        loadDataFromFirebase();
-        initializeCharts();
+
+// --- Riferimenti ai nodi del tuo database ---
+const membersRef = ref(database, 'members');
+const varExpensesRef = ref(database, 'variableExpenses');
+const fixedExpensesRef = ref(database, 'fixedExpenses');
+const incomeRef = ref(database, 'incomeEntries');
+const wishlistRef = ref(database, 'wishlist');
+const futureMovementsRef = ref(database, 'futureMovements');
+const pendingPaymentsRef = ref(database, 'pendingPayments');
+const cassaComuneRef = ref(database, 'cassaComune');
+const expenseRequestsRef = ref(database, 'expenseRequests');
+
+
+// --- Data State (Firebase-synced) ---
+let members = [];
+let variableExpenses = [];
+let fixedExpenses = [];
+let incomeEntries = [];
+let wishlist = [];
+let futureMovements = [];
+let pendingPayments = [];
+let cassaComune = { balance: 0, movements: [] };
+let expenseRequests = {}; 
+
+// Variabili per i grafici
+let membersContributionsChart, membersIncomeChart, categoriesChart, balancesChart;
+let tempWishlistLinks = [];
+
+
+// --- Funzioni Utility ---
+
+const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('it-IT', { year: 'numeric', month: '2-digit', day: '2-digit' });
+};
+
+const displayDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('it-IT');
+};
+
+const getItemFromStore = (type, id) => {
+    let store;
+    switch (type) {
+        case 'variableExpense': store = variableExpenses; break;
+        case 'fixedExpense': store = fixedExpenses; break;
+        case 'incomeEntry': store = incomeEntries; break;
+        case 'wishlistItem': store = wishlist; break;
+        case 'futureMovement': store = futureMovements; break;
+        case 'pendingPayment': store = pendingPayments; break;
+        case 'member': store = members; break;
+        default: return null;
+    }
+    return store.find(item => item.id === id);
+};
+
+// --- Funzioni di Interazione con Firebase ---
+
+function saveDataToFirebase() {
+    set(membersRef, members);
+    set(varExpensesRef, variableExpenses);
+    set(fixedExpensesRef, fixedExpenses);
+    set(incomeRef, incomeEntries);
+    set(wishlistRef, wishlist);
+    set(futureMovementsRef, futureMovements);
+    set(pendingPaymentsRef, pendingPayments);
+    set(cassaComuneRef, cassaComune);
+    set(expenseRequestsRef, expenseRequests);
+}
+
+function loadDataFromFirebase() {
+    onValue(membersRef, (snapshot) => {
+        members = snapshot.val() || [];
+        renderMembers();
+        toggleSectionsVisibility();
         updateDashboardView();
     });
-});
 
-function initializeFinancePage() {
-    // Riferimenti DOM
+    onValue(varExpensesRef, (snapshot) => {
+        variableExpenses = snapshot.val() || [];
+        renderVariableExpenses();
+        updateDashboardView();
+        populateMonthFilter();
+    });
+
+    onValue(fixedExpensesRef, (snapshot) => {
+        fixedExpenses = snapshot.val() || [];
+        renderFixedExpenses();
+        updateDashboardView();
+    });
+
+    onValue(incomeRef, (snapshot) => {
+        incomeEntries = snapshot.val() || [];
+        renderIncomeEntries();
+        updateDashboardView();
+        populateMonthFilter();
+    });
+
+    onValue(wishlistRef, (snapshot) => {
+        wishlist = snapshot.val() || [];
+        renderWishlist();
+    });
+
+    onValue(futureMovementsRef, (snapshot) => {
+        futureMovements = snapshot.val() || [];
+        renderFutureMovements();
+    });
+
+    onValue(pendingPaymentsRef, (snapshot) => {
+        pendingPayments = snapshot.val() || [];
+        renderPendingPayments();
+    });
+
+    onValue(cassaComuneRef, (snapshot) => {
+        cassaComune = snapshot.val() || { balance: 0, movements: [] };
+        renderCassaComune();
+        updateDashboardView();
+    });
+
+    onValue(expenseRequestsRef, (snapshot) => {
+        expenseRequests = snapshot.val() || {};
+        renderExpenseRequestsForAdmin();
+    });
+}
+
+// --- Funzioni di Rendering e Logica ---
+
+// Riferimenti DOM cruciali
+const monthFilter = document.getElementById('month-filter');
+const memberCountEl = document.getElementById('member-count');
+const membersListEl = document.getElementById('members-list');
+const newMemberNameInput = document.getElementById('new-member-name');
+const addMemberBtn = document.getElementById('add-member-btn');
+const payerSelect = document.getElementById('payer');
+const expenseDateInput = document.getElementById('expense-date');
+const amountInput = document.getElementById('amount');
+const categoryInput = document.getElementById('category');
+const descriptionInput = document.getElementById('description');
+const addExpenseBtn = document.getElementById('add-expense-btn');
+const fixedDescInput = document.getElementById('fixed-desc');
+const fixedAmountInput = document.getElementById('fixed-amount');
+const addFixedExpenseBtn = document.getElementById('add-fixed-expense-btn');
+const fixedExpensesListEl = document.getElementById('fixed-expenses-list');
+const totalFixedEl = document.getElementById('total-fixed-expense');
+const totalVariableEl = document.getElementById('total-variable-expense');
+const totalIncomeEl = document.getElementById('total-income');
+const perPersonShareEl = document.getElementById('per-person-share');
+const expensesListContainer = document.getElementById('expenses-list-container');
+const calculateBtn = document.getElementById('calculate-btn');
+const settlementContainer = document.getElementById('settlement-container');
+const settlementList = document.getElementById('settlement-list');
+const exportExcelBtn = document.getElementById('export-excel-btn');
+const exportDataBtn = document.getElementById('export-data-btn');
+const importDataBtn = document.getElementById('import-data-btn');
+const importFileInput = document.getElementById('import-file-input');
+const incomeDateInput = document.getElementById('income-date');
+const incomeAmountInput = document.getElementById('income-amount');
+const incomeDescriptionInput = document.getElementById('income-description');
+const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
+const addIncomeBtn = document.getElementById('add-income-btn');
+const incomeListContainer = document.getElementById('income-list-container');
+const wishlistItemNameInput = document.getElementById('wishlist-item-name');
+const wishlistItemCostInput = document.getElementById('wishlist-item-cost');
+const wishlistItemPriorityInput = document.getElementById('wishlist-item-priority');
+const addWishlistItemBtn = document.getElementById('add-wishlist-item-btn');
+const wishlistContainer = document.getElementById('wishlist-container');
+const wishlistNewLinkInput = document.getElementById('wishlist-new-link-input');
+const addWishlistLinkBtn = document.getElementById('add-wishlist-link-btn');
+const wishlistLinksContainer = document.getElementById('wishlist-links-container');
+const futureMovementDescriptionInput = document.getElementById('future-movement-description');
+const futureMovementCostInput = document.getElementById('future-movement-cost');
+const futureMovementDueDateInput = document.getElementById('future-movement-due-date');
+const addFutureMovementBtn = document.getElementById('add-future-movement-btn');
+const futureMovementsContainer = document.getElementById('future-movements-container');
+const pendingPaymentMemberSelect = document.getElementById('pending-payment-member');
+const pendingPaymentAmountInput = document.getElementById('pending-payment-amount');
+const pendingPaymentDescriptionInput = document.getElementById('pending-payment-description');
+const addPendingPaymentBtn = document.getElementById('add-pending-payment-btn');
+const pendingPaymentsContainer = document.getElementById('pending-payments-container');
+const quickActionsContainer = document.getElementById('quick-actions-section');
+const actionForms = document.querySelectorAll('.action-form');
+const editModal = document.getElementById('edit-modal');
+const editModalTitle = document.getElementById('edit-modal-title');
+const editModalFormContainer = document.getElementById('edit-modal-form-container');
+const editModalActions = document.getElementById('edit-modal-actions');
+const closeEditModalBtn = document.getElementById('close-edit-modal-btn');
+const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
+const cashMovementTypeSelect = document.getElementById('cash-movement-type');
+const cashMovementMemberSelect = document.getElementById('cash-movement-member');
+const cashMovementAmountInput = document.getElementById('cash-movement-amount');
+const cashMovementDateInput = document.getElementById('cash-movement-date');
+const cashMovementDescriptionInput = document.getElementById('cash-movement-description');
+const addCashMovementBtn = document.getElementById('add-cash-movement-btn');
+const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
+
+
+const sections = {
+    summary: document.getElementById('summary-section'),
+    cashBalance: document.getElementById('cash-balance-section'),
+    expensesList: document.getElementById('expenses-list-section'),
+    incomeList: document.getElementById('income-list-section'),
+    wishlist: document.getElementById('wishlist-section'),
+    futureMovements: document.getElementById('future-movements-section'),
+    pendingPayments: document.getElementById('pending-payments-section'),
+    quickActions: document.getElementById('quick-actions-section'),
+    adminRequests: document.getElementById('admin-requests-section'),
+};
+
+const toggleSectionsVisibility = () => { 
+    const hasMembers = members.length > 0;
+    Object.values(sections).forEach(section => {
+        if(section && section.id === 'admin-requests-section') {
+             if(currentUser.role === 'admin' && hasMembers){
+                 section.classList.remove('hidden');
+             } else {
+                 section.classList.add('hidden');
+             }
+        } else if(section) {
+            section.classList.toggle('hidden', !hasMembers);
+        }
+    });
+};
+
+const populateMonthFilter = () => { 
     const monthFilter = document.getElementById('month-filter');
+    if (!monthFilter) return;
+
+    const allDates = [...variableExpenses, ...incomeEntries].map(item => new Date(item.date)).filter(d => !isNaN(d));
+    const uniqueMonths = new Set(allDates.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`));
+    
+    // Rimuovi le vecchie opzioni
+    monthFilter.innerHTML = '<option value="all">Tutti i mesi</option>';
+
+    // Aggiungi le nuove opzioni
+    Array.from(uniqueMonths).sort((a, b) => b.localeCompare(a)).forEach(monthYear => {
+        const [year, month] = monthYear.split('-');
+        const date = new Date(year, parseInt(month) - 1);
+        const monthName = date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+        const option = document.createElement('option');
+        option.value = monthYear;
+        option.textContent = monthName;
+        monthFilter.appendChild(option);
+    });
+};
+
+const renderMembers = () => {
     const memberCountEl = document.getElementById('member-count');
     const membersListEl = document.getElementById('members-list');
-    const newMemberNameInput = document.getElementById('new-member-name');
-    const addMemberBtn = document.getElementById('add-member-btn');
     const payerSelect = document.getElementById('payer');
-    const expenseDateInput = document.getElementById('expense-date');
-    const amountInput = document.getElementById('amount');
-    const categoryInput = document.getElementById('category');
-    const descriptionInput = document.getElementById('description');
-    const addExpenseBtn = document.getElementById('add-expense-btn');
-    const fixedDescInput = document.getElementById('fixed-desc');
-    const fixedAmountInput = document.getElementById('fixed-amount');
-    const addFixedExpenseBtn = document.getElementById('add-fixed-expense-btn');
-    const fixedExpensesListEl = document.getElementById('fixed-expenses-list');
-    const totalFixedEl = document.getElementById('total-fixed-expense');
-    const totalVariableEl = document.getElementById('total-variable-expense');
-    const totalIncomeEl = document.getElementById('total-income');
-    const perPersonShareEl = document.getElementById('per-person-share');
-    const expensesListContainer = document.getElementById('expenses-list-container');
-    const calculateBtn = document.getElementById('calculate-btn');
-    const settlementContainer = document.getElementById('settlement-container');
-    const settlementList = document.getElementById('settlement-list');
-    const exportDataBtn = document.getElementById('export-data-btn');
-    const importDataBtn = document.getElementById('import-data-btn');
-    const importFileInput = document.getElementById('import-file-input');
-    const incomeDateInput = document.getElementById('income-date');
-    const incomeAmountInput = document.getElementById('income-amount');
-    const incomeDescriptionInput = document.getElementById('income-description');
+    const fixedPayerSelect = document.getElementById('fixed-payer');
     const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
-    const addIncomeBtn = document.getElementById('add-income-btn');
-    const incomeListContainer = document.getElementById('income-list-container');
-    const wishlistItemNameInput = document.getElementById('wishlist-item-name');
-    const wishlistItemCostInput = document.getElementById('wishlist-item-cost');
-    const wishlistItemPriorityInput = document.getElementById('wishlist-item-priority');
-    const addWishlistItemBtn = document.getElementById('add-wishlist-item-btn');
-    const wishlistContainer = document.getElementById('wishlist-container');
-    const wishlistNewLinkInput = document.getElementById('wishlist-new-link-input');
-    const addWishlistLinkBtn = document.getElementById('add-wishlist-link-btn');
-    const wishlistLinksContainer = document.getElementById('wishlist-links-container');
-    const futureMovementDescriptionInput = document.getElementById('future-movement-description');
-    const futureMovementCostInput = document.getElementById('future-movement-cost');
-    const futureMovementDueDateInput = document.getElementById('future-movement-due-date');
-    const addFutureMovementBtn = document.getElementById('add-future-movement-btn');
-    const futureMovementsContainer = document.getElementById('future-movements-container');
     const pendingPaymentMemberSelect = document.getElementById('pending-payment-member');
-    const pendingPaymentAmountInput = document.getElementById('pending-payment-amount');
-    const pendingPaymentDescriptionInput = document.getElementById('pending-payment-description');
-    const addPendingPaymentBtn = document.getElementById('add-pending-payment-btn');
-    const pendingPaymentsContainer = document.getElementById('pending-payments-container');
-    const quickActionsContainer = document.getElementById('quick-actions-section');
-    const actionForms = document.querySelectorAll('.action-form');
+    const cashMovementMemberSelect = document.getElementById('cash-movement-member');
+
+    if (memberCountEl) memberCountEl.textContent = members.length;
+    if (membersListEl) membersListEl.innerHTML = members.map(m => `<li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-sm">${m.name}<button data-id="${m.id}" data-type="member" class="open-edit-modal-btn text-indigo-500 hover:text-indigo-700">Modifica</button></li>`).join('');
+
+    // Popola tutti i select dei membri
+    const memberOptions = members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+
+    if (payerSelect) {
+        payerSelect.innerHTML = `<option value="">Seleziona chi ha pagato</option>` + memberOptions;
+    }
+    if (fixedPayerSelect) {
+        fixedPayerSelect.innerHTML = `<option value="">Seleziona chi paga (default: Tutti)</option>` + memberOptions;
+    }
+    if (pendingPaymentMemberSelect) {
+        pendingPaymentMemberSelect.innerHTML = `<option value="">Seleziona membro</option>` + memberOptions;
+    }
+    if (cashMovementMemberSelect) {
+        cashMovementMemberSelect.innerHTML = `<option value="">Nessuno</option>` + memberOptions;
+    }
+
+    if (incomeMembersCheckboxes) {
+        incomeMembersCheckboxes.innerHTML = members.map(m => `
+            <div class="flex items-center">
+                <input type="checkbox" id="income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600">
+                <label for="income-member-${m.id}" class="ml-2 text-sm">${m.name}</label>
+            </div>
+        `).join('');
+    }
+};
+
+
+const renderCassaComune = () => {
+    const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
+    const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
+
+    if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${cassaComune.balance.toFixed(2)}`;
+    
+    if (cashMovementsHistoryEl) {
+        cashMovementsHistoryEl.innerHTML = cassaComune.movements.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10).map(m => `
+            <div class="flex justify-between items-center text-sm border-b pb-1 mb-1 ${m.type === 'deposit' ? 'text-green-700' : 'text-red-700'}">
+                <span class="font-medium">${m.description} (${m.member || 'Cassa'})</span>
+                <span class="font-bold">${m.type === 'deposit' ? '+' : '-'}€${m.amount.toFixed(2)}</span>
+            </div>
+        `).join('') || '<p class="text-gray-500">Nessun movimento recente.</p>';
+    }
+};
+
+const renderPendingPayments = () => {
+    const container = document.getElementById('pending-payments-container');
+    if (!container) return;
+    container.innerHTML = pendingPayments.map(p => `
+        <div class="flex justify-between items-center bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
+            <span class="text-sm font-medium">${p.member} deve pagare ${p.description}</span>
+            <span class="font-bold text-yellow-700">€${p.amount.toFixed(2)}</span>
+            <button data-id="${p.id}" data-type="pendingPayment" class="complete-pending-btn text-sm bg-yellow-600 text-white py-1 px-3 rounded-lg hover:bg-yellow-700">Completa</button>
+        </div>
+    `).join('') || '<p class="text-gray-500">Nessun pagamento in sospeso.</p>';
+};
+
+const renderFutureMovements = () => {
+    const container = document.getElementById('future-movements-container');
+    if (!container) return;
+    container.innerHTML = futureMovements.map(m => `
+        <div class="flex justify-between items-center bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
+            <span class="text-sm font-medium">${m.description} (Data prevista: ${displayDate(m.dueDate)})</span>
+            <span class="font-bold text-blue-700">€${m.cost.toFixed(2)}</span>
+            <button data-id="${m.id}" data-type="futureMovement" class="open-edit-modal-btn text-blue-600 hover:text-blue-800">Modifica</button>
+        </div>
+    `).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
+};
+
+const renderWishlist = () => {
+    const container = document.getElementById('wishlist-container');
+    const linksContainer = document.getElementById('wishlist-links-container');
+    if (!container) return;
+
+    container.innerHTML = wishlist.sort((a, b) => b.priority - a.priority).map(item => `
+        <div class="flex justify-between items-center bg-indigo-50 p-3 rounded-lg border-l-4 border-indigo-500">
+            <span class="text-sm font-medium">${item.name} (Priorità: ${item.priority})</span>
+            <span class="font-bold text-indigo-700">€${item.cost.toFixed(2)}</span>
+            <button data-id="${item.id}" data-type="wishlistItem" class="open-edit-modal-btn text-indigo-600 hover:text-indigo-800">Modifica</button>
+        </div>
+    `).join('') || '<p class="text-gray-500">Nessun articolo nella lista desideri.</p>';
+    
+    // Render links
+    if(linksContainer && wishlist.length > 0 && wishlist[0].links) {
+        linksContainer.innerHTML = (wishlist[0].links || []).map(link => `
+            <div class="flex justify-between items-center text-sm border-b pb-1 mb-1">
+                <a href="${link}" target="_blank" class="text-indigo-500 hover:text-indigo-700 truncate">${link}</a>
+                <button data-link="${link}" data-type="wishlistLink" class="remove-wishlist-link-btn text-red-500 hover:text-red-700">&times;</button>
+            </div>
+        `).join('') || '<p class="text-gray-500 text-xs">Nessun link associato.</p>';
+    } else if (linksContainer) {
+        linksContainer.innerHTML = '<p class="text-gray-500 text-xs">Nessun link associato.</p>';
+    }
+};
+
+const renderIncomeEntries = () => {
+    const container = document.getElementById('income-list-container');
+    if (!container) return;
+    container.innerHTML = incomeEntries.sort((a, b) => new Date(b.date) - new Date(a.date)).map(i => `
+        <div class="flex justify-between items-center bg-green-50 p-3 rounded-lg border-l-4 border-green-500">
+            <div>
+                <span class="font-medium">${i.description}</span>
+                <span class="text-xs text-gray-500 block">Ricevuto da: ${i.members.join(', ')} il ${displayDate(i.date)}</span>
+            </div>
+            <span class="font-bold text-green-700">€${i.amount.toFixed(2)}</span>
+            <button data-id="${i.id}" data-type="incomeEntry" class="open-edit-modal-btn text-green-600 hover:text-green-800">Modifica</button>
+        </div>
+    `).join('') || '<p class="text-gray-500">Nessuna entrata registrata.</p>';
+};
+
+const renderVariableExpenses = () => {
+    const container = document.getElementById('expenses-list-container');
+    if (!container) return;
+    container.innerHTML = variableExpenses.sort((a, b) => new Date(b.date) - new Date(a.date)).map(e => `
+        <div class="flex justify-between items-center bg-red-50 p-3 rounded-lg border-l-4 border-red-500">
+            <div>
+                <span class="font-medium">${e.description} - ${e.category}</span>
+                <span class="text-xs text-gray-500 block">Pagato da: ${e.payer} il ${displayDate(e.date)}</span>
+            </div>
+            <span class="font-bold text-red-700">€${e.amount.toFixed(2)}</span>
+            <button data-id="${e.id}" data-type="variableExpense" class="open-edit-modal-btn text-red-600 hover:text-red-800">Modifica</button>
+        </div>
+    `).join('') || '<p class="text-gray-500">Nessuna spesa variabile registrata.</p>';
+};
+
+const renderFixedExpenses = () => {
+    const container = document.getElementById('fixed-expenses-list');
+    if (!container) return;
+    container.innerHTML = fixedExpenses.map(f => `
+        <div class="flex justify-between items-center bg-orange-50 p-3 rounded-lg border-l-4 border-orange-500">
+            <div>
+                <span class="font-medium">${f.description}</span>
+                <span class="text-xs text-gray-500 block">Paga: ${f.payer}</span>
+            </div>
+            <span class="font-bold text-orange-700">€${f.amount.toFixed(2)}</span>
+            <button data-id="${f.id}" data-type="fixedExpense" class="open-edit-modal-btn text-orange-600 hover:text-orange-800">Modifica</button>
+        </div>
+    `).join('') || '<p class="text-gray-500">Nessuna spesa fissa registrata.</p>';
+};
+
+const renderExpenseRequestsForAdmin = () => { 
+    const container = document.getElementById('admin-requests-container');
+    const section = document.getElementById('admin-requests-section');
+    if (!container || !section || currentUser.role !== 'admin') {
+        if(section) section.classList.add('hidden');
+        return;
+    }
+
+    const pendingRequests = Object.entries(expenseRequests).filter(([key, req]) => req.status === 'pending');
+    
+    section.classList.toggle('hidden', pendingRequests.length === 0);
+    container.innerHTML = '';
+
+    if (pendingRequests.length === 0) {
+        container.innerHTML = '<p class="text-gray-500">Nessuna richiesta in sospeso.</p>';
+        return;
+    }
+
+    pendingRequests.forEach(([key, req]) => {
+        const requesterName = members.find(m => m.id === req.requesterUid)?.name || 'N/A';
+        const reqEl = document.createElement('div');
+        reqEl.className = 'bg-white p-3 rounded-lg border flex justify-between items-center mb-2';
+        reqEl.innerHTML = `
+            <div>
+                <p class="font-semibold">${req.description} <span class="font-normal text-gray-600">- ${req.category}</span></p>
+                <p class="text-sm text-gray-500">
+                    Richiedente: <span class="font-medium">${requesterName}</span> | 
+                    Pagante: <span class="font-medium">${req.payer}</span> |
+                    Data: ${displayDate(req.date)}
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                <p class="font-bold text-lg text-indigo-600">€${parseFloat(req.amount).toFixed(2)}</p>
+                <div class="flex flex-col gap-1">
+                    <button data-key="${key}" class="approve-request-btn text-xs bg-green-500 text-white font-semibold py-1 px-3 rounded-lg hover:bg-green-600">Approva</button>
+                    <button data-key="${key}" class="reject-request-btn text-xs bg-red-500 text-white font-semibold py-1 px-3 rounded-lg hover:bg-red-600">Rifiuta</button>
+                </div>
+            </div>
+        `;
+        container.appendChild(reqEl);
+    });
+};
+
+// Funzioni per i grafici
+const createBarChart = (canvasId, label, data, labels, color) => {
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    const existingChart = Chart.getChart(canvasId);
+    if (existingChart) existingChart.destroy();
+
+    const chartData = {
+        labels: labels,
+        datasets: [{
+            label: label,
+            data: data,
+            backgroundColor: color,
+            borderColor: color.map(c => c.replace('0.2', '1')), // Versione più scura per il bordo
+            borderWidth: 1
+        }]
+    };
+
+    const chartConfig = {
+        type: 'bar',
+        data: chartData,
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    };
+
+    return new Chart(ctx, chartConfig);
+};
+
+const initializeCharts = () => {
+    const data = getCalculationData();
+    const memberNames = members.map(m => m.name);
+    const memberColors = ['rgba(79, 70, 239, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(16, 185, 129, 0.6)', 'rgba(239, 68, 68, 0.6)', 'rgba(99, 102, 241, 0.6)', 'rgba(251, 146, 60, 0.6)', 'rgba(52, 211, 153, 0.6)', 'rgba(248, 113, 113, 0.6)'];
+
+    // 1. Contributi per membro (Spese variabili)
+    const contributionsData = memberNames.map(name => data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + e.amount, 0));
+    if(document.getElementById('membersContributionsChart')) {
+        membersContributionsChart = createBarChart('membersContributionsChart', 'Contributi Spese Variabili', contributionsData, memberNames, memberColors);
+    }
+    
+    // 2. Entrate per membro
+    const incomeData = memberNames.map(name => data.income.filter(i => i.members.includes(name)).reduce((sum, i) => sum + i.amount / i.members.length, 0));
+    if(document.getElementById('membersIncomeChart')) {
+        membersIncomeChart = createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
+    }
+
+    // 3. Spese per categoria
+    const categoryMap = [...data.expenses, ...data.fixedExpenses].reduce((map, e) => {
+        map.set(e.category, (map.get(e.category) || 0) + e.amount);
+        return map;
+    }, new Map());
+    const categoryLabels = Array.from(categoryMap.keys());
+    const categoryData = Array.from(categoryMap.values());
+    const categoryColors = categoryLabels.map((_, i) => memberColors[i % memberColors.length].replace('1', '0.6'));
+    if(document.getElementById('categoriesChart')) {
+        categoriesChart = createBarChart('categoriesChart', 'Spese per Categoria', categoryData, categoryLabels, categoryColors);
+    }
+    
+    // 4. Bilanci finali (Netto) - Logica Semplificata
+    const balanceData = memberNames.map(name => {
+        const totalExpenses = data.expenses.reduce((sum, e) => sum + e.amount, 0);
+        const individualExpensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + e.amount, 0);
+        const shareOfTotalExpense = (totalExpenses + data.fixedExpenses.reduce((sum, f) => sum + f.amount, 0)) / members.length;
+        
+        return individualExpensesPaid - shareOfTotalExpense; 
+    });
+    const balanceColors = balanceData.map(b => b >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'); // Verde o Rosso
+    if(document.getElementById('balancesChart')) {
+        balancesChart = createBarChart('balancesChart', 'Bilanci (Netto)', balanceData, memberNames, balanceColors);
+    }
+};
+
+const updateDashboardView = () => { 
+    // Aggiorna i totali basati sullo stato corrente
+    const totalVar = variableExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const totalFix = fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const totalInc = incomeEntries.reduce((sum, i) => sum + i.amount, 0);
+    
+    // Aggiorna gli elementi del DOM
+    const totalVariableEl = document.getElementById('total-variable-expense');
+    const totalFixedEl = document.getElementById('total-fixed-expense');
+    const totalIncomeEl = document.getElementById('total-income');
+    const memberCountEl = document.getElementById('member-count');
+    const perPersonShareEl = document.getElementById('per-person-share');
+    const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
+
+    if (totalVariableEl) totalVariableEl.textContent = `€${totalVar.toFixed(2)}`;
+    if (totalFixedEl) totalFixedEl.textContent = `€${totalFix.toFixed(2)}`;
+    if (totalIncomeEl) totalIncomeEl.textContent = `€${totalInc.toFixed(2)}`;
+    
+    if (memberCountEl) memberCountEl.textContent = members.length;
+    if (perPersonShareEl && members.length > 0) perPersonShareEl.textContent = `€${((totalVar + totalFix) / members.length).toFixed(2)}`;
+    if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${cassaComune.balance.toFixed(2)}`;
+
+    // Aggiorna i grafici e ricalcola il conguaglio
+    initializeCharts(); 
+    calculateAndRenderSettlement(true); 
+};
+
+
+const getCalculationData = (selectedMonth = 'all') => {
+    // Questa funzione serve a filtrare i dati per il mese selezionato (o tutti)
+    const filterData = (data) => {
+        if (selectedMonth === 'all') return data;
+        return data.filter(item => {
+            const itemDate = new Date(item.date || item.dueDate);
+            return `${itemDate.getFullYear()}-${String(itemDate.getMonth() + 1).padStart(2, '0')}` === selectedMonth;
+        });
+    };
+
+    // Filtra tutte le collezioni
+    const filteredExpenses = filterData(variableExpenses);
+    const filteredIncome = filterData(incomeEntries);
+    
+    return {
+        members: members,
+        expenses: filteredExpenses,
+        fixedExpenses: fixedExpenses, // Le spese fisse non vengono filtrate per mese qui, ma vengono considerate in getCalculationData
+        income: filteredIncome
+    };
+};
+
+const calculateAndRenderSettlement = (forExport = false) => {
+    // 1. Preparazione dei dati e filtro
+    const monthFilter = document.getElementById('month-filter');
+    const selectedMonth = monthFilter ? monthFilter.value : 'all';
+    const data = getCalculationData(selectedMonth);
+
+    const memberNames = data.members.map(m => m.name);
+    if (memberNames.length === 0) return;
+
+    // 2. Calcolo dei debiti/crediti totali
+    const balances = {};
+    memberNames.forEach(name => balances[name] = 0);
+
+    const allExpenses = [...data.expenses, ...data.fixedExpenses];
+    const totalMembers = memberNames.length;
+
+    // A. Distribuzione delle spese (Variabili + Fisse)
+    allExpenses.forEach(e => {
+        const costPerPerson = e.amount / totalMembers;
+        memberNames.forEach(name => {
+            if (e.payer === name) {
+                // Se ha pagato, è a credito per l'importo pagato - la sua quota
+                balances[name] += e.amount - costPerPerson;
+            } else {
+                // Se non ha pagato, è a debito per la sua quota
+                balances[name] -= costPerPerson;
+            }
+        });
+    });
+
+    // B. Distribuzione delle entrate
+    data.income.forEach(i => {
+        const valuePerPerson = i.amount / i.members.length;
+        i.members.forEach(name => {
+            // Se ha ricevuto l'entrata, è a credito per la sua quota
+            balances[name] += valuePerPerson;
+        });
+    });
+
+    // 3. Algoritmo di conguaglio (Minimizzazione dei movimenti)
+    const creditors = [];
+    const debtors = [];
+
+    for (const name in balances) {
+        if (balances[name] > 0.01) { // A credito
+            creditors.push({ name, amount: balances[name] });
+        } else if (balances[name] < -0.01) { // A debito
+            debtors.push({ name, amount: Math.abs(balances[name]) });
+        }
+    }
+
+    const settlements = [];
+    let i = 0; // creditor index
+    let j = 0; // debtor index
+
+    while (i < creditors.length && j < debtors.length) {
+        const creditor = creditors[i];
+        const debtor = debtors[j];
+
+        const transferAmount = Math.min(creditor.amount, debtor.amount);
+        
+        settlements.push({
+            payer: debtor.name,
+            recipient: creditor.name,
+            amount: transferAmount
+        });
+
+        creditor.amount -= transferAmount;
+        debtor.amount -= transferAmount;
+
+        if (creditor.amount < 0.01) {
+            i++;
+        }
+
+        if (debtor.amount < 0.01) {
+            j++;
+        }
+    }
+
+    // 4. Rendering/Export
+    if (forExport) return settlements;
+
+    const settlementList = document.getElementById('settlement-list');
+    const settlementContainer = document.getElementById('settlement-container');
+    if (!settlementList || !settlementContainer) return;
+
+    settlementList.innerHTML = '';
+
+    if (settlements.length === 0) {
+        settlementList.innerHTML = '<li class="text-green-500 font-semibold">Tutto in pari!</li>';
+    } else {
+        settlements.forEach(s => {
+            const li = document.createElement('li');
+            li.className = 'text-gray-700 font-medium';
+            li.innerHTML = `<span class="text-red-500">${s.payer}</span> deve dare <span class="font-bold text-lg text-indigo-600">€${s.amount.toFixed(2)}</span> a <span class="text-green-500">${s.recipient}</span>`;
+            settlementList.appendChild(li);
+        });
+    }
+
+    settlementContainer.classList.remove('hidden');
+    return settlements;
+};
+
+// --- Funzioni CRUD e di gestione form ---
+
+const openEditModal = (id, type) => { 
+    const item = getItemFromStore(type, id);
+    if (!item) return;
+
     const editModal = document.getElementById('edit-modal');
     const editModalTitle = document.getElementById('edit-modal-title');
     const editModalFormContainer = document.getElementById('edit-modal-form-container');
     const editModalActions = document.getElementById('edit-modal-actions');
-    const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
-    const cashMovementTypeSelect = document.getElementById('cash-movement-type');
-    const cashMovementMemberSelect = document.getElementById('cash-movement-member');
-    const cashMovementAmountInput = document.getElementById('cash-movement-amount');
-    const cashMovementDateInput = document.getElementById('cash-movement-date');
-    const cashMovementDescriptionInput = document.getElementById('cash-movement-description');
-    const addCashMovementBtn = document.getElementById('add-cash-movement-btn');
-    const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
+    const isMember = type === 'member';
 
-    // Riferimenti Firebase
-    const membersRef = ref(database, 'members');
-    const varExpensesRef = ref(database, 'variableExpenses');
-    const fixedExpensesRef = ref(database, 'fixedExpenses');
-    const incomeRef = ref(database, 'incomeEntries');
-    const wishlistRef = ref(database, 'wishlist');
-    const futureMovementsRef = ref(database, 'futureMovements');
-    const pendingPaymentsRef = ref(database, 'pendingPayments');
-    const cassaComuneRef = ref(database, 'cassaComune');
-    const expenseRequestsRef = ref(database, 'expenseRequests');
+    editModalTitle.textContent = `Modifica ${type}`;
+    editModalFormContainer.innerHTML = '';
+    editModalActions.innerHTML = '';
 
-    // Stato locale
-    let members = [], variableExpenses = [], fixedExpenses = [], incomeEntries = [], wishlist = [], futureMovements = [], pendingPayments = [];
-    let cassaComune = { balance: 0, movements: [] };
-    let tempWishlistLinks = [];
-    let membersContributionsChart, membersIncomeChart, categoriesChart, balancesChart;
+    let formHtml = `<form id="edit-form" data-id="${id}" data-type="${type}" class="space-y-4">`;
+    let deleteBtnHtml = '';
 
-    const sections = {
-        summary: document.getElementById('summary-section'),
-        cashBalance: document.getElementById('cash-balance-section'),
-        expensesList: document.getElementById('expenses-list-section'),
-        incomeList: document.getElementById('income-list-section'),
-        wishlist: document.getElementById('wishlist-section'),
-        futureMovements: document.getElementById('future-movements-section'),
-        pendingPayments: document.getElementById('pending-payments-section'),
-        quickActions: document.getElementById('quick-actions-section'),
-    };
+    // Aggiungi campi del form in base al tipo
+    for (const key in item) {
+        if (key === 'id' || (isMember && key === 'contributions')) continue;
 
-    // Funzioni (incolla qui tutte le funzioni del file precedente, da saveDataToFirebase a exportToExcel)
-    // ... (tutto il blocco di funzioni da populateMonthFilter a exportToExcel, nessuna modifica necessaria)
-    function saveDataToFirebase() {
-        set(membersRef, members);
-        set(varExpensesRef, variableExpenses);
-        set(fixedExpensesRef, fixedExpenses);
-        set(incomeRef, incomeEntries);
-        set(wishlistRef, wishlist);
-        set(futureMovementsRef, futureMovements);
-        set(pendingPaymentsRef, pendingPayments);
-        set(cassaComuneRef, cassaComune);
-    }
-    
-    function loadDataFromFirebase() {
-        onValue(membersRef, (snapshot) => {
-            members = snapshot.val() || [];
-            renderMembers();
-            toggleSectionsVisibility();
-            updateDashboardView();
-        });
-        onValue(varExpensesRef, (snapshot) => {
-            variableExpenses = snapshot.val() || [];
-            renderVariableExpenses();
-            updateDashboardView();
-            populateMonthFilter();
-        });
-        onValue(fixedExpensesRef, (snapshot) => {
-            fixedExpenses = snapshot.val() || [];
-            renderFixedExpenses();
-            updateDashboardView();
-        });
-        onValue(incomeRef, (snapshot) => {
-            incomeEntries = snapshot.val() || [];
-            renderIncomeEntries();
-            updateDashboardView();
-            populateMonthFilter();
-        });
-        onValue(wishlistRef, (snapshot) => {
-            wishlist = snapshot.val() || [];
-            renderWishlist();
-        });
-        onValue(futureMovementsRef, (snapshot) => {
-            futureMovements = snapshot.val() || [];
-            renderFutureMovements();
-        });
-        onValue(pendingPaymentsRef, (snapshot) => {
-            pendingPayments = snapshot.val() || [];
-            renderPendingPayments();
-        });
-        onValue(cassaComuneRef, (snapshot) => {
-            cassaComune = snapshot.val() || { balance: 0, movements: [] };
-            renderCassaComune();
-            updateDashboardView();
-        });
-    }
-    const populateMonthFilter = () => {
-        const months = new Set();
-        [...variableExpenses, ...incomeEntries, ...(cassaComune.movements || [])].forEach(item => {
-            if (item.date) {
-                const date = new Date(item.date);
-                if (!isNaN(date)) {
-                    const month = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-                    months.add(month);
-                }
-            }
-        });
-        const currentSelection = monthFilter.value;
-        monthFilter.innerHTML = '<option value="all">Globale</option>';
-        const sortedMonths = Array.from(months).sort().reverse();
-        sortedMonths.forEach(month => {
-            const [year, monthNum] = month.split('-');
-            const date = new Date(year, monthNum - 1);
-            const optionText = date.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
-            const option = document.createElement('option');
-            option.value = month;
-            option.textContent = optionText.charAt(0).toUpperCase() + optionText.slice(1);
-            monthFilter.appendChild(option);
-        });
-        if (Array.from(monthFilter.options).some(opt => opt.value === currentSelection)) {
-            monthFilter.value = currentSelection;
-        }
-    };
-    const toggleSectionsVisibility = () => {
-        const hasMembers = members.length > 0;
-        Object.values(sections).forEach(section => {
-            if(section) {
-                section.classList.toggle('hidden', !hasMembers);
-            }
-        });
-    };
-    const formatDate = (dateString) => {
-        if (!dateString) return '';
-        try {
-            const date = new Date(dateString);
-            const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-            return new Date(date.getTime() + userTimezoneOffset).toISOString().split('T')[0];
-        } catch (e) {
-            return dateString;
-        }
-    };
-    const displayDate = (dateString) => {
-         if (!dateString) return 'N/A';
-         const date = new Date(dateString);
-         if (isNaN(date)) return 'Data non valida';
-         const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-         return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    }
-    const renderMembers = () => {
-        membersListEl.innerHTML = '';
-        payerSelect.innerHTML = '';
-        pendingPaymentMemberSelect.innerHTML = '';
-        incomeMembersCheckboxes.innerHTML = '';
-        cashMovementMemberSelect.innerHTML = '<option value="">Nessuno</option>';
-        memberCountEl.textContent = members.length;
-        const cassaOption = document.createElement('option');
-        cassaOption.value = "Cassa Comune";
-        cassaOption.textContent = "Cassa Comune";
-        payerSelect.appendChild(cassaOption);
-        members.forEach((member, index) => {
-            const tag = document.createElement('div');
-            tag.className = 'flex items-center bg-indigo-100 text-indigo-800 text-sm font-medium px-3 py-1 rounded-full';
-            tag.innerHTML = `<span>${member}</span><button data-index="${index}" class="remove-member-btn ml-2 text-indigo-500 hover:text-indigo-800 font-bold">&times;</button>`;
-            membersListEl.appendChild(tag);
-            const option = document.createElement('option');
-            option.value = member;
-            option.textContent = member;
-            payerSelect.appendChild(option.cloneNode(true));
-            pendingPaymentMemberSelect.appendChild(option.cloneNode(true));
-            cashMovementMemberSelect.appendChild(option.cloneNode(true));
-            const checkboxDiv = document.createElement('div');
-            checkboxDiv.className = 'flex items-center';
-            checkboxDiv.innerHTML = `<input id="income-member-${index}" type="checkbox" value="${member}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                                   <label for="income-member-${index}" class="ml-2 block text-sm text-gray-900">${member}</label>`;
-            incomeMembersCheckboxes.appendChild(checkboxDiv);
-        });
-    };
-    const renderCassaComune = () => {
-        cashBalanceAmountEl.textContent = `€${(cassaComune.balance || 0).toFixed(2)}`;
-        cashMovementsHistoryEl.innerHTML = '';
-        if(!cassaComune.movements || cassaComune.movements.length === 0){
-            cashMovementsHistoryEl.innerHTML = '<p class="text-gray-500 text-sm">Nessun movimento registrato.</p>';
-            return;
-        }
-        const sortedMovements = [...(Object.values(cassaComune.movements || {}))].sort((a, b) => new Date(b.date) - new Date(a.date));
-        sortedMovements.forEach(mov => {
-            const isDeposit = mov.type === 'deposit';
-            const el = document.createElement('div');
-            el.className = `text-sm p-2 rounded-lg flex justify-between items-center ${isDeposit ? 'bg-green-50' : 'bg-red-50'}`;
-            el.innerHTML = `
+        const value = item[key];
+        const label = key.replace(/([A-Z])/g, ' $1').replace('_', ' ').toLowerCase();
+
+        if (key === 'payer' || key === 'member') {
+            formHtml += `
                 <div>
-                    <p class="font-medium">${mov.description}</p>
-                    <p class="text-xs text-gray-500">${displayDate(mov.date)} ${mov.member ? `(${mov.member})` : ''}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                     <p class="font-bold ${isDeposit ? 'text-green-600' : 'text-red-600'}">
-                        ${isDeposit ? '+' : '-'}€${mov.amount.toFixed(2)}
-                     </p>
-                     <div>
-                        <button data-id="${mov.id}" data-type="cashMovement" class="edit-btn text-blue-500 hover:text-blue-700 p-1">&#9998;</button>
-                        <button data-id="${mov.id}" class="remove-cash-movement-btn text-red-500 hover:text-red-700 font-bold" ${mov.linkedExpenseId ? 'disabled title="Annulla la spesa collegata per rimuovere questo movimento"' : ''}>&times;</button>
-                     </div>
-                </div>
-            `;
-            cashMovementsHistoryEl.appendChild(el);
-        });
-    };
-    const renderPendingPayments = () => {
-        pendingPaymentsContainer.innerHTML = '';
-        if (!pendingPayments || pendingPayments.length === 0) {
-            pendingPaymentsContainer.innerHTML = '<p class="text-gray-500">Nessuna quota da versare.</p>';
-            return;
-        }
-        pendingPayments.sort((a,b) => b.dateAdded - a.dateAdded);
-        pendingPayments.forEach(payment => {
-            const paymentEl = document.createElement('div');
-            paymentEl.className = 'fade-in flex justify-between items-center bg-yellow-50 p-3 rounded-lg border border-yellow-200';
-            paymentEl.innerHTML = `
-                <div>
-                    <p class="font-semibold text-yellow-800">${payment.description}</p>
-                    <p class="text-sm text-gray-600">
-                        Da: <span class="font-medium">${payment.member}</span>
-                        <span class="text-gray-400 mx-2">|</span>
-                        Registrato il: ${displayDate(new Date(payment.dateAdded))}
-                    </p>
-                </div>
-                <div class="text-right flex items-center gap-3 ml-2">
-                     <p class="font-bold text-lg text-red-600">€${parseFloat(payment.amount).toFixed(2)}</p>
-                     <div class="flex flex-col gap-1">
-                        <button data-id="${payment.id}" class="confirm-pending-payment-btn text-xs bg-green-500 text-white font-semibold py-1 px-3 rounded-lg hover:bg-green-600">Salda</button>
-                        <div>
-                            <button data-id="${payment.id}" data-type="pendingPayment" class="edit-btn text-blue-500 hover:text-blue-700 p-1">&#9998;</button>
-                            <button data-id="${payment.id}" class="remove-pending-payment-btn text-red-500 hover:text-red-700 p-1 font-bold">&times;</button>
-                        </div>
-                     </div>
-                </div>
-            `;
-            pendingPaymentsContainer.appendChild(paymentEl);
-        });
-    };
-    const renderFutureMovements = () => {
-        futureMovementsContainer.innerHTML = '';
-         if (!futureMovements || futureMovements.length === 0) {
-            futureMovementsContainer.innerHTML = '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
-            return;
-        }
-        futureMovements.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-        futureMovements.forEach(mov => {
-            const movEl = document.createElement('div');
-            movEl.className = 'fade-in bg-cyan-50 p-4 rounded-lg border border-cyan-200';
-            const isExpanded = mov.isExpanded || false;
-            const currentSharesSum = (mov.shares || []).reduce((sum, s) => sum + s.amount, 0);
-            const difference = mov.totalCost - currentSharesSum;
-            const differenceColor = Math.abs(difference) < 0.01 ? 'text-green-600' : 'text-red-600';
-            let sharesHtml = '';
-            if (isExpanded) {
-                sharesHtml = `<div class="mt-3 pt-3 border-t border-cyan-200 space-y-2">`;
-                (mov.shares || []).forEach(share => {
-                    const isPaid = share.paid || false;
-                    sharesHtml += `
-                        <div class="flex items-center justify-between text-sm gap-2">
-                            <div class="flex items-center gap-2">
-                                <input type="checkbox" id="paid-${mov.id}-${share.member}" 
-                                       class="paid-checkbox h-4 w-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" 
-                                       data-movement-id="${mov.id}" data-member-name="${share.member}" ${isPaid ? 'checked' : ''}>
-                                <label for="paid-${mov.id}-${share.member}" class="font-medium ${isPaid ? 'line-through text-gray-500' : ''}">${share.member}</label>
+                    <label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label>
+                    <select id="edit-${key}" name="${key}" class="w-full p-3 border rounded-lg">
+                        ${members.map(m => `<option value="${m.name}" ${m.name === value ? 'selected' : ''}>${m.name}</option>`).join('')}
+                    </select>
+                </div>`;
+        } else if (key === 'links' && type === 'wishlistItem') {
+            // Gestione dei link
+            formHtml += `
+                <div class="border p-3 rounded-lg">
+                    <label class="block text-sm font-medium">Link Associati</label>
+                    <div id="edit-links-container" class="space-y-2 mt-2">
+                        ${(value || []).map(link => `
+                            <div class="flex items-center space-x-2">
+                                <input type="text" class="w-full p-1 border rounded-md" value="${link}">
+                                <button type="button" class="remove-edit-link-btn text-red-500">&times;</button>
                             </div>
-                            <div class="flex items-center gap-1">
-                                <input type="number" step="0.01" id="share-${mov.id}-${share.member}" 
-                                    data-movement-id="${mov.id}" data-member-name="${share.member}"
-                                    class="share-input w-24 p-1 border rounded-md text-right" value="${share.amount.toFixed(2)}">
-                                ${share.edited ? `<button class="reset-share-btn text-xs text-blue-500" data-movement-id="${mov.id}" data-member-name="${share.member}">&#x21BA;</button>` : `<span class="w-4"></span>`}
+                        `).join('')}
+                    </div>
+                    <div class="flex mt-3">
+                        <input type="url" id="new-edit-link" placeholder="Aggiungi nuovo link" class="w-full p-2 border rounded-l-lg">
+                        <button type="button" id="add-edit-link-btn" class="bg-indigo-500 text-white p-2 rounded-r-lg">+</button>
+                    </div>
+                </div>`;
+        } else if (key === 'members' && type === 'incomeEntry') {
+            formHtml += `
+                <div class="border p-3 rounded-lg">
+                    <label class="block text-sm font-medium">Membri che hanno ricevuto</label>
+                    <div id="edit-income-members-checkboxes" class="grid grid-cols-2 gap-2 mt-2">
+                        ${members.map(m => `
+                            <div class="flex items-center">
+                                <input type="checkbox" id="edit-income-member-${m.id}" name="members" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600" ${value.includes(m.name) ? 'checked' : ''}>
+                                <label for="edit-income-member-${m.id}" class="ml-2 text-sm">${m.name}</label>
                             </div>
-                        </div>
-                    `;
-                });
-                sharesHtml += `
-                    <div class="flex justify-between items-center mt-3 pt-2 border-t text-sm">
-                        <div>
-                            <span class="font-bold">Totale Quote:</span>
-                            <span class="font-mono ${differenceColor}">€${currentSharesSum.toFixed(2)}</span>
-                            <span class="text-xs ${differenceColor}"> (${difference >= 0 ? '+' : ''}${difference.toFixed(2)})</span>
-                        </div>
-                        <button data-id="${mov.id}" class="recalculate-shares-btn text-xs bg-blue-500 text-white font-semibold py-1 px-2 rounded-md hover:bg-blue-600">Pareggia Quote</button>
+                        `).join('')}
                     </div>
-                `;
-                sharesHtml += `</div>`;
-            }
-            movEl.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
-                        <p class="font-semibold text-cyan-800">${mov.description}</p>
-                        <p class="text-sm text-gray-600">
-                            Scadenza: <span class="font-medium">${displayDate(mov.dueDate)}</span>
-                        </p>
-                    </div>
-                    <div class="text-right">
-                        <p class="font-bold text-xl text-cyan-600">€${mov.totalCost.toFixed(2)}</p>
-                        <p class="text-xs text-gray-500">€${(members.length > 0 ? mov.totalCost / members.length : 0).toFixed(2)} / persona</p>
-                    </div>
-                </div>
-                ${sharesHtml}
-                <div class="flex items-center gap-2 mt-4">
-                    <button data-id="${mov.id}" class="confirm-payment-btn flex-1 text-sm bg-green-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-green-600">Conferma Pagamento</button>
-                    <button data-id="${mov.id}" class="manage-shares-btn flex-1 text-sm bg-gray-200 text-gray-800 font-semibold py-2 px-3 rounded-lg hover:bg-gray-300">${isExpanded ? 'Chiudi Quote' : 'Gestisci Quote'}</button>
-                    <div class="flex">
-                        <button data-id="${mov.id}" data-type="futureMovement" class="edit-btn text-blue-500 hover:text-blue-700 p-1">&#9998;</button>
-                        <button data-id="${mov.id}" class="remove-future-movement-btn text-red-500 hover:text-red-700 font-bold p-1">&times;</button>
-                    </div>
-                </div>
-            `;
-            futureMovementsContainer.appendChild(movEl);
-        });
-    };
-    const renderWishlist = () => {
-        wishlistContainer.innerHTML = '';
-        if (!wishlist || wishlist.length === 0) {
-            wishlistContainer.innerHTML = '<p class="text-gray-500">Nessun articolo nella lista desideri.</p>';
-            return;
-        }
-        const priorityMap = {
-            '3-Alta': { text: 'Alta', color: 'bg-red-100 text-red-800' },
-            '2-Media': { text: 'Media', color: 'bg-yellow-100 text-yellow-800' },
-            '1-Bassa': { text: 'Bassa', color: 'bg-green-100 text-green-800' }
-        };
-        wishlist.sort((a, b) => b.priority.localeCompare(a.priority));
-        wishlist.forEach(item => {
-            const itemEl = document.createElement('div');
-            itemEl.className = 'fade-in flex justify-between items-center bg-gray-50 p-3 rounded-lg border';
-            const priorityInfo = priorityMap[item.priority];
-            let linksHtml = (item.links || []).map((link, index) => {
-                 try {
-                    const url = new URL(link.startsWith('http') ? link : `https://${link}`);
-                    return `<a href="${url.href}" target="_blank" class="text-indigo-500 hover:underline">[Link ${index+1}]</a>`;
-                } catch (e) {
-                    return `<span class="text-gray-400">[Link ${index+1} non valido]</span>`;
-                }
-            }).join('<span class="mx-1">,</span> ');
-            itemEl.innerHTML = `
-                <div class="flex-grow">
-                    <p class="font-semibold">${item.name}</p>
-                     <p class="text-sm text-gray-600">
-                        Costo: <span class="font-medium">€${parseFloat(item.cost).toFixed(2)}</span>
-                        <span class="text-gray-400 mx-2">|</span>
-                        Priorità: <span class="text-xs font-medium px-2 py-0.5 rounded-full ${priorityInfo.color}">${priorityInfo.text}</span>
-                    </p>
-                    <div class="text-xs mt-1">${linksHtml}</div>
-                </div>
-                <div class="flex items-center gap-2 ml-2">
-                     <button data-id="${item.id}" class="mark-purchased-btn text-xs bg-green-500 text-white font-semibold py-1 px-3 rounded-lg hover:bg-green-600">Acquistato</button>
-                     <div>
-                         <button data-id="${item.id}" data-type="wishlistItem" class="edit-btn text-blue-500 hover:text-blue-700 p-1">&#9998;</button>
-                         <button data-id="${item.id}" class="remove-wishlist-item-btn text-red-500 hover:text-red-700 p-1 font-bold">&times;</button>
-                     </div>
-                </div>
-            `;
-            wishlistContainer.appendChild(itemEl);
-        });
-    };
-    const renderIncomeEntries = () => {
-        incomeListContainer.innerHTML = '';
-        if (!incomeEntries || incomeEntries.length === 0) {
-            incomeListContainer.innerHTML = '<p class="text-gray-500">Nessuna entrata registrata.</p>';
-            return;
-        }
-        incomeEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
-        incomeEntries.forEach(income => {
-            const incomeEl = document.createElement('div');
-            incomeEl.className = 'fade-in flex justify-between items-start bg-green-50 p-3 rounded-lg border border-green-200';
-            incomeEl.innerHTML = `
+                </div>`;
+        } else if (typeof value === 'boolean') {
+            formHtml += `
+                <div class="flex items-center">
+                    <input type="checkbox" id="edit-${key}" name="${key}" class="form-checkbox h-5 w-5 text-indigo-600" ${value ? 'checked' : ''}>
+                    <label for="edit-${key}" class="ml-2 text-sm capitalize">${label}</label>
+                </div>`;
+        } else if (key.includes('date') || key.includes('dueDate')) {
+            formHtml += `
                 <div>
-                    <p class="font-semibold">${income.description}</p>
-                    <p class="text-sm text-gray-600">
-                        Membri: <span class="font-medium text-teal-700">${(income.membersInvolved || []).join(', ')}</span>
-                        <span class="text-gray-400 mx-2">|</span>
-                        ${displayDate(income.date)}
-                    </p>
-                </div>
-                <div class="text-right flex-shrink-0 ml-4">
-                     <p class="font-bold text-lg text-green-600">+€${parseFloat(income.amount).toFixed(2)}</p>
-                     <div>
-                        <button data-id="${income.id}" data-type="incomeEntry" class="edit-btn text-blue-500 hover:text-blue-700 p-1">&#9998;</button>
-                        <button data-id="${income.id}" class="remove-income-btn text-red-500 hover:text-red-700 p-1 font-bold">&times;</button>
-                     </div>
-                </div>
-            `;
-            incomeListContainer.appendChild(incomeEl);
-        });
-    };
-    const renderVariableExpenses = () => {
-        expensesListContainer.innerHTML = '';
-        if (!variableExpenses || variableExpenses.length === 0) {
-            expensesListContainer.innerHTML = '<p class="text-gray-500">Nessuna spesa registrata.</p>';
-            return;
-        }
-        variableExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
-        variableExpenses.forEach(expense => {
-            const isFromCash = expense.payer === 'Cassa Comune';
-            const expenseEl = document.createElement('div');
-            expenseEl.className = `fade-in flex justify-between items-center p-3 rounded-lg border ${isFromCash ? 'bg-blue-50' : 'bg-gray-50'}`;
-            expenseEl.innerHTML = `
+                    <label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label>
+                    <input type="date" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg">
+                </div>`;
+        } else if (typeof value === 'number') {
+            formHtml += `
                 <div>
-                    <p class="font-semibold">${expense.description} <span class="text-xs font-normal text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">${expense.category}</span></p>
-                    <p class="text-sm text-gray-600">
-                        Pagato da: <span class="font-medium ${isFromCash ? 'text-blue-600' : 'text-indigo-600'}">${expense.payer}</span>
-                        <span class="text-gray-400 mx-2">|</span>
-                        ${displayDate(expense.date)}
-                    </p>
-                </div>
-                <div class="text-right">
-                     <p class="font-bold text-lg">€${parseFloat(expense.amount).toFixed(2)}</p>
-                     <div>
-                         <button data-id="${expense.id}" data-type="variableExpense" class="edit-btn text-blue-500 hover:text-blue-700 p-1">&#9998;</button>
-                         <button data-id="${expense.id}" class="remove-expense-btn text-red-500 hover:text-red-700 p-1 font-bold">&times;</button>
-                    </div>
-                </div>
-            `;
-            expensesListContainer.appendChild(expenseEl);
-        });
-    };
-    const renderFixedExpenses = () => {
-        fixedExpensesListEl.innerHTML = '';
-        if(!fixedExpenses || fixedExpenses.length === 0) {
-            fixedExpensesListEl.innerHTML = '<p class="text-gray-500 text-sm">Nessuna spesa fissa aggiunta.</p>';
-        }
-        fixedExpenses.forEach(expense => {
-            const el = document.createElement('div');
-            el.className = 'flex justify-between items-center bg-orange-50 p-2 rounded-lg text-sm';
-            el.innerHTML = `
-                <span>${expense.description}</span>
-                <div class="flex items-center gap-2">
-                    <span class="font-bold">€${parseFloat(expense.amount).toFixed(2)}</span>
-                    <button data-id="${expense.id}" data-type="fixedExpense" class="edit-btn text-blue-500 hover:text-blue-700 p-1">&#9998;</button>
-                    <button data-id="${expense.id}" class="remove-fixed-expense-btn text-red-500 hover:text-red-700 font-bold">&times;</button>
-                </div>
-            `;
-            fixedExpensesListEl.appendChild(el);
-        });
-    }
-    const createBarChart = (canvasId, label) => new Chart(document.getElementById(canvasId).getContext('2d'), {
-        type: 'bar', data: { labels: [], datasets: [{ label, data: [], backgroundColor: [] }] },
-        options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
-    });
-    const initializeCharts = () => {
-        if (document.getElementById('membersContributionsChart')) {
-            if (membersContributionsChart) membersContributionsChart.destroy();
-            membersContributionsChart = createBarChart('membersContributionsChart', 'Contributi Versati (€)');
-            membersContributionsChart.data.datasets[0].backgroundColor = 'rgba(79, 70, 229, 0.8)';
-        }
-        if (document.getElementById('membersIncomeChart')) {
-            if (membersIncomeChart) membersIncomeChart.destroy();
-            membersIncomeChart = createBarChart('membersIncomeChart', 'Entrate Generate (€)');
-            membersIncomeChart.data.datasets[0].backgroundColor = 'rgba(13, 148, 136, 0.8)';
-        }
-        if (document.getElementById('categoriesChart')) {
-            if (categoriesChart) categoriesChart.destroy();
-            categoriesChart = new Chart(document.getElementById('categoriesChart').getContext('2d'), {
-                type: 'doughnut', data: { labels: [], datasets: [{ data: [], backgroundColor: ['#4f46e5', '#10b981', '#ef4444', '#f97316', '#3b82f6', '#eab308', '#8b5cf6'] }] },
-                options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'top' } } }
-            });
-        }
-        if (document.getElementById('balancesChart')) {
-            if (balancesChart) balancesChart.destroy();
-            balancesChart = createBarChart('balancesChart', 'Saldo per Membro (€)');
-        }
-    };
-    const getCalculationData = (selectedMonth = 'all') => {
-        let filteredVarExpenses = variableExpenses || [];
-        let filteredIncome = incomeEntries || [];
-        let filteredCashMovements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-        let applicableFixedExpenses = fixedExpenses || [];
-        if (selectedMonth !== 'all') {
-            filteredVarExpenses = filteredVarExpenses.filter(exp => exp.date && exp.date.startsWith(selectedMonth));
-            filteredIncome = filteredIncome.filter(inc => inc.date && inc.date.startsWith(selectedMonth));
-            filteredCashMovements = filteredCashMovements.filter(mov => mov.date && mov.date.startsWith(selectedMonth));
-        }
-        const totalVar = filteredVarExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-        const totalFix = applicableFixedExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
-        const totalExpenseForShare = totalVar + totalFix;
-        const totalIncome = filteredIncome.reduce((sum, inc) => sum + parseFloat(inc.amount), 0);
-        const perPersonShare = members.length > 0 ? totalExpenseForShare / members.length : 0;
-        const memberContributions = members.map(member => {
-            const paidExpenses = filteredVarExpenses
-                .filter(exp => exp.payer === member)
-                .reduce((sum, exp) => sum + exp.amount, 0);
-            const deposits = filteredCashMovements
-                .filter(mov => mov.type === 'deposit' && mov.member === member)
-                .reduce((sum, mov) => sum + mov.amount, 0);
-            return paidExpenses + deposits;
-        });
-        const memberIncomes = members.map(member => {
-            return filteredIncome.reduce((sum, income) => {
-                if ((income.membersInvolved || []).includes(member)) {
-                    return sum + (parseFloat(income.amount) / income.membersInvolved.length);
-                }
-                return sum;
-            }, 0);
-        });
-        const expenseBalances = members.map((member, index) => ({
-            name: member,
-            balance: memberContributions[index] - perPersonShare
-        }));
-        const categoryTotals = filteredVarExpenses.reduce((acc, exp) => {
-            const category = exp.category || 'Non categorizzato';
-            acc[category] = (acc[category] || 0) + parseFloat(exp.amount);
-            return acc;
-        }, {});
-        return { totalVar, totalFix, totalIncome, perPersonShare, memberContributions, memberIncomes, expenseBalances, categoryTotals };
-    };
-    const calculateAndRenderSettlement = (forExport = false) => {
-        if (members.length === 0) return [];
-        const selectedMonth = monthFilter.value;
-        const { expenseBalances, totalVar, totalFix } = getCalculationData(selectedMonth);
-        const totalExpense = totalVar + totalFix;
-        let debtors = expenseBalances.filter(p => p.balance < 0).map(p => ({ ...p, balance: -p.balance }));
-        let creditors = expenseBalances.filter(p => p.balance > 0);
-        const transactions = [];
-        debtors.sort((a,b) => b.balance - a.balance);
-        creditors.sort((a,b) => b.balance - a.balance);
-        let d_ptr = 0;
-        let c_ptr = 0;
-        while (d_ptr < debtors.length && c_ptr < creditors.length) {
-            const amount = Math.min(debtors[d_ptr].balance, creditors[c_ptr].balance);
-            if (amount > 0.01) {
-                transactions.push({ from: debtors[d_ptr].name, to: creditors[c_ptr].name, amount });
-                debtors[d_ptr].balance -= amount;
-                creditors[c_ptr].balance -= amount;
-            }
-            if (debtors[d_ptr].balance < 0.01) d_ptr++;
-            if (creditors[c_ptr].balance < 0.01) c_ptr++;
-        }
-        if (forExport) {
-            return transactions;
-        }
-        settlementList.innerHTML = '';
-        if (transactions.length === 0 && totalExpense > 0) {
-            settlementList.innerHTML = '<p class="text-center text-green-600 font-semibold p-3 bg-green-50 rounded-lg">Tutti i conti sono in pari!</p>';
-        } else if (transactions.length > 0) {
-            transactions.forEach(({ from, to, amount }) => {
-                const li = document.createElement('div');
-                li.className = 'bg-blue-50 p-3 rounded-lg flex items-center gap-3 flex-wrap';
-                li.innerHTML = `
-                    <span class="font-bold text-red-600">${from}</span>
-                    <span class="text-gray-500">→</span>
-                    <span class="font-bold text-green-600">${to}</span>
-                    <span class="ml-auto font-bold text-xl text-blue-800">€${amount.toFixed(2)}</span>
-                `;
-                settlementList.appendChild(li);
-            });
+                    <label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label>
+                    <input type="number" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg">
+                </div>`;
         } else {
-             settlementList.innerHTML = '<p class="text-center text-gray-500">Nessuna transazione necessaria.</p>';
+            formHtml += `
+                <div>
+                    <label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label>
+                    <input type="text" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg">
+                </div>`;
         }
-        if(settlementContainer) settlementContainer.classList.remove('hidden');
-    };
-    const handleExportData = () => {
-        const dataToExport = { members, variableExpenses, fixedExpenses, incomeEntries, wishlist, futureMovements, pendingPayments, cassaComune };
-        const dataStr = JSON.stringify(dataToExport, null, 2);
-        const dataBlob = new Blob([dataStr], {type: "application/json"});
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.download = 'gateradio_data.json';
-        link.href = url;
-        link.click();
-        URL.revokeObjectURL(url);
-    };
-    const handleImportData = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-                if (confirm("Sei sicuro? Questa azione sovrascriverà i dati esistenti.")) {
-                    members = data.members || [];
-                    variableExpenses = data.variableExpenses || [];
-                    fixedExpenses = data.fixedExpenses || [];
-                    incomeEntries = data.incomeEntries || [];
-                    wishlist = (data.wishlist || []).map(item => {
-                        if (item.link && !item.links) {
-                            item.links = [item.link];
-                            delete item.link;
-                        }
-                        return item;
-                    });
-                    futureMovements = data.futureMovements || [];
-                    pendingPayments = data.pendingPayments || [];
-                    cassaComune = data.cassaComune || { balance: 0, movements: [] };
-                    saveDataToFirebase();
-                    alert("Dati importati con successo!");
-                }
-            } catch (error) {
-                alert("Errore durante la lettura del file. Assicurati che sia un file di backup valido.");
-            } finally {
-                if (importFileInput) importFileInput.value = '';
+    }
+    formHtml += `</form>`;
+
+    deleteBtnHtml = `<button type="button" id="delete-edit-btn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600">Elimina</button>`;
+    
+    editModalFormContainer.innerHTML = formHtml;
+    editModalActions.innerHTML = `
+        <div class="flex justify-end gap-3 mt-4">
+            ${deleteBtnHtml}
+            <button type="button" id="cancel-edit-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Annulla</button>
+            <button type="submit" form="edit-form" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Salva Modifiche</button>
+        </div>`;
+
+    editModal.classList.remove('hidden');
+
+    // Aggiungi listener per i link (interno alla modale)
+    const addLinkBtn = document.getElementById('add-edit-link-btn');
+    if (addLinkBtn) {
+        addLinkBtn.addEventListener('click', () => {
+            const input = document.getElementById('new-edit-link');
+            const container = document.getElementById('edit-links-container');
+            if (input.value.trim() && container) {
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-2';
+                div.innerHTML = `<input type="text" class="w-full p-1 border rounded-md" value="${input.value.trim()}"><button type="button" class="remove-edit-link-btn text-red-500 hover:text-red-700">&times;</button>`;
+                container.appendChild(div);
+                input.value = '';
             }
-        };
-        reader.readAsText(file);
-    };
-    const exportToExcel = async () => {};
-    const updateDashboardView = () => {
-        if (!totalVariableEl) return;
-        const selectedMonth = monthFilter.value;
-        const calculationData = getCalculationData(selectedMonth);
-        totalVariableEl.textContent = `€${calculationData.totalVar.toFixed(2)}`;
-        totalFixedEl.textContent = `€${calculationData.totalFix.toFixed(2)}`;
-        totalIncomeEl.textContent = `€${calculationData.totalIncome.toFixed(2)}`;
-        perPersonShareEl.textContent = `€${calculationData.perPersonShare.toFixed(2)}`;
-        const { memberContributions, memberIncomes, expenseBalances, categoryTotals } = calculationData;
-         const updateChartData = (chart, labels, data) => {
-            if (!chart) return;
-            chart.data.labels = labels;
-            chart.data.datasets[0].data = data;
-            chart.update();
-        };
-        updateChartData(membersContributionsChart, members, memberContributions);
-        updateChartData(membersIncomeChart, members, memberIncomes);
-        updateChartData(categoriesChart, Object.keys(categoryTotals), Object.values(categoryTotals));
-        const balancesChartEl = document.getElementById('balancesChart');
-        if (balancesChartEl && balancesChart) {
-             balancesChartEl.parentElement.classList.remove('hidden');
-             balancesChart.data.labels = members;
-             balancesChart.data.datasets[0].data = expenseBalances.map(b => b.balance);
-             balancesChart.data.datasets[0].backgroundColor = expenseBalances.map(b => b.balance < 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(16, 185, 129, 0.8)');
-             balancesChart.update();
+        });
+    }
+
+    document.getElementById('delete-edit-btn').addEventListener('click', () => {
+        if (confirm(`Sei sicuro di voler eliminare questo elemento (${type})?`)) {
+            let store;
+            switch (type) {
+                case 'variableExpense': store = variableExpenses; break;
+                case 'fixedExpense': store = fixedExpenses; break;
+                case 'incomeEntry': store = incomeEntries; break;
+                case 'wishlistItem': store = wishlist; break;
+                case 'futureMovement': store = futureMovements; break;
+                case 'pendingPayment': store = pendingPayments; break;
+                case 'member': store = members; break;
+            }
+            const index = store.findIndex(i => i.id === id);
+            if (index !== -1) {
+                store.splice(index, 1);
+                saveDataToFirebase();
+                updateDashboardView();
+                closeEditModal();
+            }
         }
-        if (settlementContainer) settlementContainer.classList.add('hidden');
-    };
-    const getItemFromStore = (type, id) => {
+    });
+
+    document.getElementById('edit-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const updatedItem = {};
+        
+        // Estrai tutti i valori del form
+        for (const [key, value] of formData.entries()) {
+            if (key === 'members') {
+                // Gestione checkbox multiple
+                if (!updatedItem.members) updatedItem.members = [];
+                updatedItem.members.push(value);
+            } else if (!isMember && (key.includes('amount') || key.includes('cost'))) {
+                updatedItem[key] = parseFloat(value);
+            } else {
+                updatedItem[key] = value;
+            }
+        }
+        
+        // Gestione dei link custom per wishlist (prendi i valori dai campi di input dinamici)
+        if (type === 'wishlistItem') {
+            const linkInputs = document.querySelectorAll('#edit-links-container input[type="text"]');
+            updatedItem.links = Array.from(linkInputs).map(input => input.value.trim()).filter(val => val);
+        }
+        
+        // Applica le modifiche allo store corretto
         let store;
         switch (type) {
             case 'variableExpense': store = variableExpenses; break;
             case 'fixedExpense': store = fixedExpenses; break;
             case 'incomeEntry': store = incomeEntries; break;
-            case 'pendingPayment': store = pendingPayments; break;
             case 'wishlistItem': store = wishlist; break;
             case 'futureMovement': store = futureMovements; break;
-            case 'cashMovement':
-                return (Object.values(cassaComune.movements || {})).find(i => i.id === id);
-            default: return null;
+            case 'pendingPayment': store = pendingPayments; break;
+            case 'member': store = members; break;
         }
-        return store.find(i => i.id === id);
-    }
-    const openEditModal = (id, type) => {
-        const item = getItemFromStore(type, id);
-        if (!item) {
-            console.error(`Item with id ${id} and type ${type} not found.`);
-            return;
-        }
-        let formHtml = '';
-        let title = 'Modifica Elemento';
-        const createInput = (label, id, type, value, placeholder = '') => `<div><label for="${id}" class="block text-sm font-medium">${label}</label><input type="${type}" id="${id}" value="${value}" placeholder="${placeholder}" class="w-full p-2 border rounded-lg mt-1"></div>`;
-        const createSelect = (label, id, options, selectedValue) => {
-            let optionsHtml = options.map(opt => `<option value="${opt}" ${opt === selectedValue ? 'selected' : ''}>${opt}</option>`).join('');
-            return `<div><label for="${id}" class="block text-sm font-medium">${label}</label><select id="${id}" class="w-full p-2 border rounded-lg mt-1">${optionsHtml}</select></div>`;
-        }
-        switch (type) {
-            case 'cashMovement':
-                title = 'Modifica Movimento Cassa';
-                let memberOptions = [''].concat(members);
-                formHtml =
-                    createSelect('Tipo Movimento', 'edit-cash-type', ['deposit', 'withdrawal'], item.type) +
-                    createSelect('Membro (opzionale)', 'edit-cash-member', memberOptions, item.member) +
-                    createInput('Data', 'edit-cash-date', 'date', formatDate(item.date)) +
-                    createInput('Importo (€)', 'edit-cash-amount', 'number', item.amount) +
-                    createInput('Descrizione', 'edit-cash-description', 'text', item.description);
-                break;
-            case 'variableExpense':
-                title = 'Modifica Spesa';
-                formHtml =
-                    createSelect('Pagato da', 'edit-payer', ['Cassa Comune', ...members], item.payer) +
-                    createInput('Data Spesa', 'edit-expense-date', 'date', formatDate(item.date)) +
-                    createInput('Importo (€)', 'edit-amount', 'number', item.amount) +
-                    createInput('Categoria', 'edit-category', 'text', item.category, 'Es. Bollette') +
-                    createInput('Descrizione', 'edit-description', 'text', item.description);
-                break;
-            case 'fixedExpense':
-                title = 'Modifica Spesa Fissa';
-                formHtml =
-                    createInput('Descrizione', 'edit-fixed-desc', 'text', item.description) +
-                    createInput('Importo (€)', 'edit-fixed-amount', 'number', item.amount);
-                break;
-            case 'incomeEntry':
-                title = 'Modifica Entrata';
-                let membersCheckboxes = members.map((m, i) => `
-                    <div class="flex items-center">
-                        <input id="edit-income-member-${i}" type="checkbox" value="${m}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" ${(item.membersInvolved || []).includes(m) ? 'checked' : ''}>
-                        <label for="edit-income-member-${i}" class="ml-2 block text-sm text-gray-900">${m}</label>
-                    </div>`).join('');
-                formHtml =
-                    createInput('Data Entrata', 'edit-income-date', 'date', formatDate(item.date)) +
-                    createInput('Importo (€)', 'edit-income-amount', 'number', item.amount) +
-                    createInput('Descrizione', 'edit-income-description', 'text', item.description) +
-                    `<div><label class="block text-sm font-medium text-gray-700 mb-1">Membri Coinvolti</label><div id="edit-income-members-checkboxes" class="p-3 border rounded-lg max-h-32 overflow-y-auto space-y-2">${membersCheckboxes}</div></div>`;
-                break;
-            case 'pendingPayment':
-                 title = 'Modifica Quota da Versare';
-                 formHtml =
-                     createSelect('Membro', 'edit-pending-member', members, item.member) +
-                     createInput('Importo (€)', 'edit-pending-amount', 'number', item.amount) +
-                     createInput('Descrizione', 'edit-pending-description', 'text', item.description);
-                 break;
-            case 'wishlistItem':
-                title = 'Modifica Desiderio';
-                let linksHtml = (item.links || []).map((link, i) => `<div class="flex items-center gap-2" data-link-index="${i}"><input type="text" class="w-full p-1 border rounded-md" value="${link}"><button type="button" class="remove-edit-link-btn text-red-500">&times;</button></div>`).join('');
-                formHtml =
-                    createInput('Oggetto/Descrizione', 'edit-wishlist-name', 'text', item.name) +
-                    createInput('Costo Stimato (€)', 'edit-wishlist-cost', 'number', item.cost) +
-                     createSelect('Priorità', 'edit-wishlist-priority', ['3-Alta', '2-Media', '1-Bassa'], item.priority) +
-                    `<div><label class="block text-sm font-medium">Link</label><div id="edit-wishlist-links-container" class="space-y-2 mt-1">${linksHtml}</div><div class="flex gap-2 mt-2"><input type="text" id="add-edit-link-input" class="w-full p-1 border rounded-md" placeholder="Aggiungi nuovo link..."><button id="add-edit-link-btn" type="button" class="text-sm bg-blue-500 text-white px-2 rounded-md hover:bg-blue-600">+</button></div></div>`;
-                break;
-            case 'futureMovement':
-                title = 'Modifica Movimento Futuro';
-                formHtml =
-                    createInput('Descrizione', 'edit-future-desc', 'text', item.description) +
-                    createInput('Costo Totale (€)', 'edit-future-cost', 'number', item.totalCost) +
-                    createInput('Data Scadenza', 'edit-future-due-date', 'date', formatDate(item.dueDate));
-                break;
-        }
-        editModalTitle.textContent = title;
-        editModalFormContainer.innerHTML = formHtml;
-        editModalActions.innerHTML = `<button id="cancel-edit-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Annulla</button>
-                                  <button id="save-changes-btn" data-id="${id}" data-type="${type}" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Salva Modifiche</button>`;
-        editModal.classList.remove('hidden');
-    };
-    const closeEditModal = () => {
-        editModal.classList.add('hidden');
-        editModalFormContainer.innerHTML = '';
-        editModalActions.innerHTML = '';
-    };
-    
-    // --- LOGICA DI AGGIUNTA SPESA BASATA SUI RUOLI ---
-    function setupExpenseButton() {
-        if (!addExpenseBtn) return;
-        if (currentUser.role !== 'admin') {
-            addExpenseBtn.textContent = 'Invia Richiesta Spesa';
-        }
-        addExpenseBtn.addEventListener('click', () => {
-            if (currentUser.role === 'admin') {
-                addExpenseAsAdmin();
-            } else {
-                submitExpenseRequest();
-            }
-        });
-    }
-    function addExpenseAsAdmin(expenseData = null) {
-        const expense = expenseData || {
-            date: expenseDateInput.value || new Date().toISOString().split('T')[0],
-            payer: payerSelect.value,
-            amount: parseFloat(amountInput.value),
-            description: descriptionInput.value.trim(),
-            category: categoryInput.value.trim()
-        };
-        if (!expense.payer || isNaN(expense.amount) || expense.amount <= 0 || !expense.description || !expense.category) {
-            alert('Per favore, compila tutti i campi della spesa.');
-            return;
-        }
-        const success = createLinkedExpense(expense.payer, expense.date, expense.amount, expense.description, expense.category);
-        if (success) {
-            alert('Spesa aggiunta con successo!');
-            if (!expenseData) {
-                [expenseDateInput, amountInput, descriptionInput, categoryInput].forEach(i => i.value = '');
-            }
-        }
-    }
-    function submitExpenseRequest() {
-        const newRequest = {
-            requesterId: currentUser.uid,
-            requesterName: currentUser.displayName,
-            status: 'pending',
-            requestedAt: new Date().toISOString(),
-            date: expenseDateInput.value || new Date().toISOString().split('T')[0],
-            payer: payerSelect.value,
-            amount: parseFloat(amountInput.value),
-            description: descriptionInput.value.trim(),
-            category: categoryInput.value.trim(),
-        };
-        if (!newRequest.payer || isNaN(newRequest.amount) || newRequest.amount <= 0 || !newRequest.description || !newRequest.category) {
-            alert('Per favore, compila tutti i campi della richiesta di spesa.');
-            return;
-        }
-        const newRequestRef = push(expenseRequestsRef);
-        set(newRequestRef, newRequest);
-        alert('Richiesta di spesa inviata per approvazione!');
-        [expenseDateInput, amountInput, descriptionInput, categoryInput].forEach(i => i.value = '');
-    }
-    function createLinkedExpense(payer, date, amount, description, category) {
-        const newExpenseId = Date.now().toString();
-        if (payer === 'Cassa Comune' && amount > cassaComune.balance) {
-            alert('Fondi insufficienti nella cassa comune per questa spesa.');
-            return false;
-        }
-        variableExpenses.push({
-            id: newExpenseId,
-            date, payer, amount, description, category
-        });
-        if (payer === 'Cassa Comune') {
-            cassaComune.balance -= amount;
-            const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-            movements.push({
-                id: (Date.now() + 1).toString(),
-                date,
-                type: 'withdrawal',
-                amount,
-                description: `Spesa: ${description}`,
-                member: '',
-                linkedExpenseId: newExpenseId
-            });
-            cassaComune.movements = movements;
-        }
-        saveDataToFirebase();
-        return true;
-    }
-    
-    // --- EVENT LISTENERS ---
-    // (incolla qui tutti gli event listener del file precedente, da monthFilter.addEventListener in poi)
-    // ...
-    if (monthFilter) monthFilter.addEventListener('change', updateDashboardView);
-    if (addMemberBtn) addMemberBtn.addEventListener('click', () => {
-        const name = newMemberNameInput.value.trim();
-        if (name && !members.includes(name)) {
-            members.push(name);
-            newMemberNameInput.value = '';
+
+        const index = store.findIndex(i => i.id === id);
+        if (index !== -1) {
+            // Aggiorna solo le proprietà modificate, mantenendo l'ID e altre proprietà non modificate
+            store[index] = { ...store[index], ...updatedItem, id: id };
             saveDataToFirebase();
+            updateDashboardView();
+            closeEditModal();
         }
     });
-    if (addCashMovementBtn) addCashMovementBtn.addEventListener('click', () => {
-        const type = cashMovementTypeSelect.value;
-        const amount = parseFloat(cashMovementAmountInput.value);
-        const date = cashMovementDateInput.value;
-        const description = cashMovementDescriptionInput.value.trim();
-        const member = cashMovementMemberSelect.value;
-        if(isNaN(amount) || amount <= 0 || !description || !date){
-            alert("Per favore, inserisci data, importo e descrizione validi.");
+};
+
+
+const closeEditModal = () => {
+    const editModal = document.getElementById('edit-modal');
+    if (editModal) editModal.classList.add('hidden');
+};
+
+function handleAddMovement() {
+    const movementType = document.getElementById('cash-movement-type').value;
+    const member = document.getElementById('cash-movement-member').value || 'Cassa';
+    const amount = parseFloat(document.getElementById('cash-movement-amount').value);
+    const date = document.getElementById('cash-movement-date').value || today;
+    const description = document.getElementById('cash-movement-description').value.trim();
+
+    if (isNaN(amount) || amount <= 0 || !description) {
+        alert("Inserisci un importo e una descrizione validi.");
+        return;
+    }
+
+    if (movementType === 'withdrawal' && cassaComune.balance < amount) {
+        alert("Errore: Prelievo superiore al saldo disponibile in cassa.");
+        return;
+    }
+
+    const newBalance = movementType === 'deposit' ? cassaComune.balance + amount : cassaComune.balance - amount;
+
+    cassaComune.balance = newBalance;
+    cassaComune.movements.push({
+        id: Date.now().toString(),
+        type: movementType,
+        amount: amount,
+        member: member,
+        date: date,
+        description: description
+    });
+
+    saveDataToFirebase();
+    alert(`Movimento di ${movementType} registrato. Nuovo saldo: €${newBalance.toFixed(2)}`);
+    // Chiudi il form
+    document.getElementById('cash-form-section').classList.add('hidden');
+};
+
+function addExpenseAsAdmin(expenseData = null) {
+    const isRequest = !!expenseData;
+    let newExpense;
+
+    if (isRequest) {
+        newExpense = {
+            id: Date.now().toString(),
+            date: expenseData.date,
+            payer: expenseData.payer,
+            amount: expenseData.amount,
+            category: expenseData.category,
+            description: expenseData.description
+        };
+    } else {
+        const payer = document.getElementById('payer').value;
+        const date = document.getElementById('expense-date').value;
+        const amount = parseFloat(document.getElementById('amount').value);
+        const category = document.getElementById('category').value;
+        const description = document.getElementById('description').value;
+
+        if (!payer || !date || isNaN(amount) || amount <= 0 || !category || !description) {
+            alert("Compila tutti i campi obbligatori per la spesa.");
             return;
         }
-        if(type === 'withdrawal' && amount > cassaComune.balance) {
-            alert("Fondi insufficienti nella cassa comune per questo prelievo.");
-            return;
-        }
-        const newMovement = {
+
+        newExpense = {
             id: Date.now().toString(),
             date: date,
-            type, amount, description, member
+            payer: payer,
+            amount: amount,
+            category: category,
+            description: description
         };
-        const newMovementRef = push(ref(database, 'cassaComune/movements'));
-        set(newMovementRef, newMovement);
+    }
+
+    variableExpenses.push(newExpense);
+    saveDataToFirebase();
+    alert(`Spesa ${isRequest ? 'approvata e ' : ''}aggiunta con successo.`);
+    if (!isRequest) document.getElementById('expense-form-section').classList.add('hidden');
+};
+
+function submitExpenseRequest() {
+    const payer = document.getElementById('payer').value;
+    const date = document.getElementById('expense-date').value;
+    const amount = parseFloat(document.getElementById('amount').value);
+    const category = document.getElementById('category').value;
+    const description = document.getElementById('description').value;
+
+    if (!payer || !date || isNaN(amount) || amount <= 0 || !category || !description) {
+        alert("Compila tutti i campi obbligatori per la richiesta di spesa.");
+        return;
+    }
+
+    const newRequest = {
+        id: Date.now().toString(),
+        requesterUid: currentUser.uid,
+        requesterName: currentUser.email.split('@')[0], // Nome utente semplificato
+        date: date,
+        payer: payer,
+        amount: amount,
+        category: category,
+        description: description,
+        status: 'pending'
+    };
+
+    const newKey = push(expenseRequestsRef).key;
+    expenseRequests[newKey] = newRequest;
+
+    saveDataToFirebase();
+    alert("Richiesta di spesa inviata all'amministratore per approvazione.");
+    document.getElementById('expense-form-section').classList.add('hidden');
+};
+
+function createLinkedExpense(payer, date, amount, description, category) {
+    const newExpense = {
+        id: Date.now().toString(),
+        date: date,
+        payer: payer,
+        amount: amount,
+        category: category,
+        description: description
+    };
+    variableExpenses.push(newExpense);
+    saveDataToFirebase();
+};
+
+function handleExportData() { 
+    const dataToExport = {
+        members: members,
+        variableExpenses: variableExpenses,
+        fixedExpenses: fixedExpenses,
+        incomeEntries: incomeEntries,
+        wishlist: wishlist,
+        futureMovements: futureMovements,
+        pendingPayments: pendingPayments,
+        cassaComune: cassaComune,
+        expenseRequests: expenseRequests
+    };
+    const dataStr = JSON.stringify(dataToExport, null, 4);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `gateradio_finanze_backup_${formatDate(new Date().toISOString())}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    alert("Dati esportati con successo!");
+}
+
+function handleImportData(event) { 
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if (!confirm("Sei sicuro di voler SOVRASCRIVERE i dati attuali con questo backup? Questa azione è irreversibile!")) return;
+            
+            // Sovrascrivi tutti gli store globali con i dati importati
+            members = importedData.members || [];
+            variableExpenses = importedData.variableExpenses || [];
+            fixedExpenses = importedData.fixedExpenses || [];
+            incomeEntries = importedData.incomeEntries || [];
+            wishlist = importedData.wishlist || [];
+            futureMovements = importedData.futureMovements || [];
+            pendingPayments = importedData.pendingPayments || [];
+            cassaComune = importedData.cassaComune || { balance: 0, movements: [] };
+            expenseRequests = importedData.expenseRequests || {};
+
+            saveDataToFirebase();
+            alert("Dati importati con successo e salvati su Firebase! La pagina verrà aggiornata.");
+        } catch (error) {
+            console.error("Errore durante l'importazione del file JSON:", error);
+            alert("Errore nell'importazione: file non valido o corrotto.");
+        }
+    };
+    reader.readAsText(file);
+}
+
+function exportToExcel() { 
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Riepilogo Finanze');
     
-        let newBalance = cassaComune.balance || 0;
-        if (type === 'deposit') {
-            newBalance += amount;
-        } else {
-            newBalance -= amount;
-        }
-        update(cassaComuneRef, { balance: newBalance });
-        
-        cashMovementAmountInput.value = '';
-        cashMovementDateInput.value = '';
-        cashMovementDescriptionInput.value = '';
-        cashMovementMemberSelect.value = '';
+    // Aggiungi logica di esportazione...
+    alert("Esportazione Excel avviata. Controlla il download del file.");
+
+    const settlements = calculateAndRenderSettlement(true);
+    const settlementSheet = workbook.addWorksheet('Conguaglio');
+    settlementSheet.addRow(['Chi paga', 'Chi riceve', 'Importo (€)']);
+    settlements.forEach(s => settlementSheet.addRow([s.payer, s.recipient, s.amount.toFixed(2)]));
+
+    workbook.xlsx.writeBuffer().then(buffer => {
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gateradio_conguaglio_${formatDate(new Date().toISOString())}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     });
-    if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
-        const member = pendingPaymentMemberSelect.value;
-        const amount = parseFloat(pendingPaymentAmountInput.value);
-        const description = pendingPaymentDescriptionInput.value.trim();
-        if (!member || isNaN(amount) || amount <= 0 || !description) {
-            alert("Per favore, compila tutti i campi.");
-            return;
-        }
-        pendingPayments.push({
-            id: Date.now().toString(),
-            member,
-            amount,
-            description,
-            dateAdded: Date.now()
-        });
-        [pendingPaymentAmountInput, pendingPaymentDescriptionInput].forEach(i => i.value = '');
+}
+
+
+// --- Riferimenti DOM (Per gli Event Listeners) ---
+
+const newMemberNameInput = document.getElementById('new-member-name');
+const addMemberBtn = document.getElementById('add-member-btn');
+const cashMovementAmountInput = document.getElementById('cash-movement-amount');
+const addCashMovementBtn = document.getElementById('add-cash-movement-btn');
+const addPendingPaymentBtn = document.getElementById('add-pending-payment-btn');
+const addFutureMovementBtn = document.getElementById('add-future-movement-btn');
+const wishlistNewLinkInput = document.getElementById('wishlist-new-link-input');
+const addWishlistLinkBtn = document.getElementById('add-wishlist-link-btn');
+const wishlistLinksContainer = document.getElementById('wishlist-links-container');
+const addWishlistItemBtn = document.getElementById('add-wishlist-item-btn');
+const addIncomeBtn = document.getElementById('add-income-btn');
+const addExpenseBtn = document.getElementById('add-expense-btn');
+const addFixedExpenseBtn = document.getElementById('add-fixed-expense-btn');
+const quickActionsContainer = document.getElementById('quick-actions-section');
+const editModal = document.getElementById('edit-modal');
+const closeEditModalBtn = document.getElementById('close-edit-modal-btn');
+const calculateBtn = document.getElementById('calculate-btn');
+const exportExcelBtn = document.getElementById('export-excel-btn');
+const exportDataBtn = document.getElementById('export-data-btn');
+const importDataBtn = document.getElementById('import-data-btn');
+const importFileInput = document.getElementById('import-file-input');
+const monthFilter = document.getElementById('month-filter');
+const expenseDateInput = document.getElementById('expense-date');
+const incomeDateInput = document.getElementById('income-date');
+const futureMovementDueDateInput = document.getElementById('future-movement-due-date');
+
+// Imposta le date di default
+const today = new Date().toISOString().split('T')[0];
+if (expenseDateInput) expenseDateInput.value = today;
+if (incomeDateInput) incomeDateInput.value = today;
+if (futureMovementDueDateInput) futureMovementDueDateInput.value = today;
+
+
+// --- Event Listeners ---
+
+if (monthFilter) monthFilter.addEventListener('change', updateDashboardView);
+
+if (addMemberBtn) addMemberBtn.addEventListener('click', () => {
+    const name = newMemberNameInput.value.trim();
+    if (name && !members.some(m => m.name === name)) {
+        members.push({ id: Date.now().toString(), name: name });
         saveDataToFirebase();
-    });
-    if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
-        const description = futureMovementDescriptionInput.value.trim();
-        const totalCost = parseFloat(futureMovementCostInput.value);
-        const dueDate = futureMovementDueDateInput.value;
-        if (!description || isNaN(totalCost) || totalCost <= 0 || !dueDate) {
-            alert('Per favore, compila tutti i campi del movimento futuro.');
-            return;
-        }
-        const share = members.length > 0 ? totalCost / members.length : 0;
-        const shares = members.map(member => ({ member, amount: share, edited: false, paid: false }));
-        futureMovements.push({
-            id: Date.now().toString(),
-            description, totalCost, dueDate, shares
-        });
-        [futureMovementDescriptionInput, futureMovementCostInput, futureMovementDueDateInput].forEach(i => i.value = '');
-        saveDataToFirebase();
-    });
-    if (addWishlistLinkBtn) addWishlistLinkBtn.addEventListener('click', () => {
-        const link = wishlistNewLinkInput.value.trim();
-        if (link) {
-            tempWishlistLinks.push(link);
-            wishlistNewLinkInput.value = '';
-            renderTempWishlistLinks();
-        }
-    });
-    if (wishlistLinksContainer) wishlistLinksContainer.addEventListener('click', (e) => {
-        if (e.target.matches('.remove-temp-link-btn')) {
-            const index = parseInt(e.target.dataset.index);
-            tempWishlistLinks.splice(index, 1);
-            renderTempWishlistLinks();
-        }
-    });
-    const renderTempWishlistLinks = () => {
-         if (!wishlistLinksContainer) return;
-         wishlistLinksContainer.innerHTML = tempWishlistLinks.map((link, index) => `
-            <div class="flex items-center justify-between bg-gray-100 p-1 rounded-md">
-                <a href="${link.startsWith('http') ? link : 'https://' + link}" target="_blank" class="truncate hover:underline">${link}</a>
-                <button data-index="${index}" class="remove-temp-link-btn text-red-500 font-bold ml-2">&times;</button>
-            </div>
-        `).join('');
+        newMemberNameInput.value = '';
+    } else if (name) {
+        alert("Membro già esistente.");
     }
-    if (addWishlistItemBtn) addWishlistItemBtn.addEventListener('click', () => {
-        const name = wishlistItemNameInput.value.trim();
-        const cost = parseFloat(wishlistItemCostInput.value);
-        const priority = wishlistItemPriorityInput.value;
-        if (!name || isNaN(cost) || cost <= 0) {
-            alert('Per favor, inserisci un nome e un costo validi per l\'articolo.');
-            return;
-        }
-        wishlist.push({ id: Date.now().toString(), name, cost, links: tempWishlistLinks, priority });
-        [wishlistItemNameInput, wishlistItemCostInput].forEach(i => i.value = '');
-        wishlistItemPriorityInput.value = '2-Media';
-        tempWishlistLinks = [];
-        renderTempWishlistLinks();
-        saveDataToFirebase();
-    });
-    if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
-        const date = incomeDateInput.value;
-        const amount = parseFloat(incomeAmountInput.value);
-        const description = incomeDescriptionInput.value.trim();
-        const membersInvolved = Array.from(incomeMembersCheckboxes.querySelectorAll('input:checked')).map(cb => cb.value);
-        if (isNaN(amount) || amount <= 0 || !description || membersInvolved.length === 0) {
-            alert('Per favore, compila tutti i campi dell\'entrata e seleziona almeno un membro.');
-            return;
-        }
-        incomeEntries.push({
-            id: Date.now().toString(),
-            date: date || new Date().toISOString().split('T')[0],
-            amount, description, membersInvolved
-        });
-        [incomeDateInput, incomeAmountInput, incomeDescriptionInput].forEach(i => i.value = '');
-        incomeMembersCheckboxes.querySelectorAll('input:checked').forEach(cb => cb.checked = false);
-        saveDataToFirebase();
-    });
-    if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
-        const description = fixedDescInput.value.trim();
-        const amount = parseFloat(fixedAmountInput.value);
-        if (!description || isNaN(amount) || amount <= 0) {
-            alert('Inserisci una descrizione e un importo validi per la spesa fissa.');
-            return;
-        }
-        fixedExpenses.push({ id: Date.now().toString(), description, amount });
-        fixedDescInput.value = '';
-        fixedAmountInput.value = '';
-        saveDataToFirebase();
-    });
-    if (quickActionsContainer) quickActionsContainer.addEventListener('click', (e) => {
-        const actionBtn = e.target.closest('.action-btn');
-        if (!actionBtn) return;
-        const formId = actionBtn.dataset.formId;
-        const targetPanel = document.getElementById(formId);
-        if (actionBtn.classList.contains('active')) {
-            actionBtn.classList.remove('active');
-            if (targetPanel) targetPanel.classList.add('hidden');
-            return;
-        }
-        quickActionsContainer.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('active'));
-        actionForms.forEach(panel => panel.classList.add('hidden'));
-        if (targetPanel) {
-            targetPanel.classList.remove('hidden');
-            actionBtn.classList.add('active');
-            targetPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-    });
-    if (document.body) {
-        document.body.addEventListener('change', (e) => {
-            if (e.target.matches('.share-input')) {
-                const movementId = e.target.dataset.movementId;
-                const memberName = e.target.dataset.memberName;
-                const newAmount = parseFloat(e.target.value);
-                const movement = futureMovements.find(m => m.id === movementId);
-                if (!movement || isNaN(newAmount)) return;
-                const editedMemberShare = (movement.shares || []).find(s => s.member === memberName);
-                if(editedMemberShare) {
-                    editedMemberShare.amount = newAmount;
-                    editedMemberShare.edited = true;
-                }
-                renderFutureMovements();
-            }
-            if (e.target.matches('.paid-checkbox')) {
-                const movementId = e.target.dataset.movementId;
-                const memberName = e.target.dataset.memberName;
-                const isChecked = e.target.checked;
-                const movement = futureMovements.find(m => m.id === movementId);
-                if (movement) {
-                    const share = (movement.shares || []).find(s => s.member === memberName);
-                    if (share) {
-                        share.paid = isChecked;
-                        saveDataToFirebase();
-                        renderFutureMovements();
-                    }
-                }
-            }
-        });
-        document.body.addEventListener('click', (e) => {
-            const target = e.target.closest('button');
-            if (!target) return;
-            if (target.matches('.close-form-btn')) {
-                const formPanel = target.closest('.action-form');
-                if(formPanel) {
-                    formPanel.classList.add('hidden');
-                    quickActionsContainer.querySelectorAll('.action-btn').forEach(btn => btn.classList.remove('active'));
-                }
-            }
-            if (target.matches('.edit-btn')) {
-                openEditModal(target.dataset.id, target.dataset.type);
-            }
-            if (target.matches('.recalculate-shares-btn')) {
-                const movementId = target.dataset.id;
-                const movement = futureMovements.find(m => m.id === movementId);
-                if (!movement) return;
-                const editedShares = (movement.shares || []).filter(s => s.edited);
-                const uneditedShares = (movement.shares || []).filter(s => !s.edited);
-                const sumOfEdited = editedShares.reduce((sum, s) => sum + s.amount, 0);
-                const remainingAmount = movement.totalCost - sumOfEdited;
-                if (uneditedShares.length > 0) {
-                    const newShareAmount = remainingAmount / uneditedShares.length;
-                    uneditedShares.forEach(s => s.amount = newShareAmount);
-                } else if (Math.abs(movement.totalCost - sumOfEdited) > 0.01) {
-                    alert('Tutte le quote sono state modificate manualmente, ma la somma non corrisponde al totale. Per favore, correggi i valori.');
-                }
-                saveDataToFirebase();
-            }
-            if (target.matches('.reset-share-btn')) {
-                const movementId = target.dataset.movementId;
-                const memberName = target.dataset.memberName;
-                const movement = futureMovements.find(m => m.id === movementId);
-                if (movement) {
-                    const shareToReset = (movement.shares || []).find(s => s.member === memberName);
-                    if(shareToReset) shareToReset.edited = false;
-                    target.closest('.fade-in').querySelector('.recalculate-shares-btn').click();
-                }
-            }
-            if (target.matches('.remove-member-btn')) {
-                const index = parseInt(target.dataset.index);
-                const memberName = members[index];
-                if (confirm(`Sei sicuro di voler rimuovere ${memberName}? Verranno rimosse anche tutte le sue spese, entrate e pagamenti in sospeso.`)) {
-                    members.splice(index, 1);
-                    variableExpenses = variableExpenses.filter(exp => exp.payer !== memberName);
-                    incomeEntries.forEach(inc => {
-                        inc.membersInvolved = (inc.membersInvolved || []).filter(m => m !== memberName);
-                    });
-                    incomeEntries = incomeEntries.filter(inc => (inc.membersInvolved || []).length > 0);
-                    pendingPayments = pendingPayments.filter(p => p.member !== memberName);
-                    cassaComune.movements = (cassaComune.movements ? Object.values(cassaComune.movements) : []).filter(m => m.member !== memberName);
-                    saveDataToFirebase();
-                }
-            }
-            if (target.matches('.remove-expense-btn')) {
-                const expenseId = target.dataset.id;
-                const expenseIndex = variableExpenses.findIndex(exp => exp.id === expenseId);
-                if (expenseIndex === -1) return;
-                const expenseToRemove = variableExpenses[expenseIndex];
-                if (confirm(`Sei sicuro di voler eliminare la spesa "${expenseToRemove.description}"? L'azione è irreversibile.`)) {
-                    if (expenseToRemove.payer === 'Cassa Comune') {
-                        const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-                        const linkedMovementIndex = movements.findIndex(mov => mov.linkedExpenseId === expenseId);
-                        if (linkedMovementIndex > -1) {
-                            const movementToUndo = movements[linkedMovementIndex];
-                            cassaComune.balance += movementToUndo.amount;
-                            movements.splice(linkedMovementIndex, 1);
-                            cassaComune.movements = movements;
-                        }
-                    }
-                    variableExpenses.splice(expenseIndex, 1);
-                    saveDataToFirebase();
-                }
-            }
-            if (target.matches('.remove-income-btn')) {
-                incomeEntries = incomeEntries.filter(inc => inc.id !== target.dataset.id);
-                saveDataToFirebase();
-            }
-            if (target.matches('.remove-fixed-expense-btn')) {
-                fixedExpenses = fixedExpenses.filter(exp => exp.id !== target.dataset.id);
-                saveDataToFirebase();
-            }
-            if (target.matches('.remove-wishlist-item-btn')) {
-                wishlist = wishlist.filter(item => item.id !== target.dataset.id);
-                saveDataToFirebase();
-            }
-            if (target.matches('.remove-pending-payment-btn')) {
-                if(confirm("Sei sicuro di voler rimuovere questa richiesta di quota?")) {
-                   pendingPayments = pendingPayments.filter(p => p.id !== target.dataset.id);
-                   saveDataToFirebase();
-                }
-            }
-            if (target.matches('.remove-cash-movement-btn')) {
-                const movementId = target.dataset.id;
-                const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-                const movementIndex = movements.findIndex(m => m.id === movementId);
-                if (movementIndex > -1) {
-                    const movement = movements[movementIndex];
-                    if(movement.linkedExpenseId){
-                        alert("Questo movimento è collegato a una spesa. Per rimuoverlo, devi prima eliminare la spesa corrispondente dall'elenco delle spese variabili.");
-                        return;
-                    }
-                    if (confirm("Sei sicuro di voler annullare questo movimento? L'azione è irreversibile e modificherà il saldo della cassa.")) {
-                        if (movement.type === 'deposit') {
-                            cassaComune.balance -= movement.amount;
-                        } else {
-                            cassaComune.balance += movement.amount;
-                        }
-                        movements.splice(movementIndex, 1);
-                        cassaComune.movements = movements;
-                        saveDataToFirebase();
-                    }
-                }
-            }
-            if (target.matches('.confirm-pending-payment-btn')) {
-                const paymentId = target.dataset.id;
-                const payment = pendingPayments.find(p => p.id === paymentId);
-                if (payment) {
-                    const isForCash = confirm(`Il pagamento di ${payment.member} per €${payment.amount} è un versamento nella Cassa Comune?`);
-                    if (isForCash) {
-                         cassaComune.balance += payment.amount;
-                         const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-                         movements.push({
-                            id: Date.now().toString(),
-                            date: new Date().toISOString().split('T')[0],
-                            type: 'deposit',
-                            amount: payment.amount,
-                            description: `Versamento quota: ${payment.description}`,
-                            member: payment.member
-                        });
-                        cassaComune.movements = movements;
-                    } else {
-                        variableExpenses.push({
-                            id: Date.now().toString(),
-                            date: new Date().toISOString().split('T')[0],
-                            payer: payment.member,
-                            amount: payment.amount,
-                            description: `[Pagamento Salato] ${payment.description}`,
-                            category: "Saldo Personale"
-                        });
-                    }
-                    pendingPayments = pendingPayments.filter(p => p.id !== paymentId);
-                    saveDataToFirebase();
-                    alert(`Pagamento di ${payment.member} per €${payment.amount} registrato!`);
-                }
-            }
-            if (target.matches('.mark-purchased-btn')) {
-                const itemId = target.dataset.id;
-                const item = wishlist.find(i => i.id === itemId);
-                if (item) {
-                    descriptionInput.value = item.name;
-                    amountInput.value = item.cost;
-                    categoryInput.value = "Attrezzatura";
-                    wishlist = wishlist.filter(i => i.id !== itemId);
-                    saveDataToFirebase();
-                    const expenseFormBtn = quickActionsContainer.querySelector('[data-form-id="expense-form-section"]');
-                    if (expenseFormBtn) expenseFormBtn.click();
-                    alert(`"${item.name}" spostato nelle spese. Seleziona chi ha pagato e conferma.`);
-                }
-            }
-            if (target.matches('.manage-shares-btn')) {
-                const movementId = target.dataset.id;
-                const movement = futureMovements.find(m => m.id === movementId);
-                if (movement) {
-                    movement.isExpanded = !movement.isExpanded;
-                    renderFutureMovements();
-                }
-            }
-            if (target.matches('.remove-future-movement-btn')) {
-                futureMovements = futureMovements.filter(m => m.id !== target.dataset.id);
-                saveDataToFirebase();
-            }
-            if (target.matches('.confirm-payment-btn')) {
-                const movementId = target.dataset.id;
-                const movement = futureMovements.find(m => m.id === movementId);
-                if (movement) {
-                     if (movement.totalCost > cassaComune.balance) {
-                        alert("Fondi insufficienti nella cassa comune per confermare questa spesa futura.");
-                        return;
-                    }
-                    variableExpenses.push({
-                        id: Date.now().toString(),
-                        date: movement.dueDate,
-                        payer: 'Cassa Comune',
-                        amount: movement.totalCost,
-                        description: movement.description,
-                        category: "Spesa Pianificata"
-                    });
-                    cassaComune.balance -= movement.totalCost;
-                    const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-                    movements.push({
-                        id: Date.now().toString(),
-                        date: movement.dueDate,
-                        type: 'withdrawal',
-                        amount: movement.totalCost,
-                        description: `Spesa pianificata: ${movement.description}`,
-                        member: ''
-                    });
-                    cassaComune.movements = movements;
-                    futureMovements = futureMovements.filter(m => m.id !== movementId);
-                    saveDataToFirebase();
-                    alert("Pagamento confermato e spesa registrata a carico della cassa comune!");
-                }
-            }
-        });
+});
+if (addCashMovementBtn) addCashMovementBtn.addEventListener('click', handleAddMovement);
+if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
+    const member = document.getElementById('pending-payment-member').value;
+    const amount = parseFloat(document.getElementById('pending-payment-amount').value);
+    const description = document.getElementById('pending-payment-description').value.trim();
+
+    if (!member || isNaN(amount) || amount <= 0 || !description) {
+        alert("Compila tutti i campi obbligatori.");
+        return;
     }
-    if (editModal) editModal.addEventListener('click', (e) => {
-        if (e.target.matches('#save-changes-btn')) {
-            const id = e.target.dataset.id;
-            const type = e.target.dataset.type;
-            const itemIndex = variableExpenses.findIndex(i => i.id === id);
-            let item;
-             if (type === 'variableExpense') {
-                item = variableExpenses[itemIndex];
-            } else {
-                item = getItemFromStore(type, id);
-            }
-            if (!item) return;
-            switch (type) {
-                case 'cashMovement':
-                    const oldCashAmount = item.amount;
-                    const oldCashType = item.type;
-                    item.type = document.getElementById('edit-cash-type').value;
-                    item.member = document.getElementById('edit-cash-member').value;
-                    item.date = document.getElementById('edit-cash-date').value;
-                    item.amount = parseFloat(document.getElementById('edit-cash-amount').value);
-                    item.description = document.getElementById('edit-cash-description').value;
-                    let balanceAdjustment = 0;
-                    if (oldCashType === 'deposit') balanceAdjustment -= oldCashAmount;
-                    else balanceAdjustment += oldCashAmount;
-                    if (item.type === 'deposit') balanceAdjustment += item.amount;
-                    else balanceAdjustment -= item.amount;
-                    cassaComune.balance += balanceAdjustment;
-                    break;
-                case 'variableExpense':
-                    const oldPayer = item.payer;
-                    const oldAmount = item.amount;
-                    const newPayer = document.getElementById('edit-payer').value;
-                    const newAmount = parseFloat(document.getElementById('edit-amount').value);
-                    item.payer = newPayer;
-                    item.date = document.getElementById('edit-expense-date').value;
-                    item.amount = newAmount;
-                    item.category = document.getElementById('edit-category').value;
-                    item.description = document.getElementById('edit-description').value;
-                    const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-                    const linkedMovementIndex = movements.findIndex(m => m.linkedExpenseId === id);
-                    if (oldPayer === 'Cassa Comune' && newPayer !== 'Cassa Comune') {
-                        cassaComune.balance += oldAmount;
-                        if (linkedMovementIndex > -1) movements.splice(linkedMovementIndex, 1);
-                    } else if (oldPayer !== 'Cassa Comune' && newPayer === 'Cassa Comune') {
-                        cassaComune.balance -= newAmount;
-                        movements.push({
-                             id: Date.now().toString(),
-                             date: item.date, type: 'withdrawal', amount: newAmount,
-                             description: `Spesa: ${item.description}`, member: '', linkedExpenseId: id
-                        });
-                    } else if (oldPayer === 'Cassa Comune' && newPayer === 'Cassa Comune') {
-                        const difference = oldAmount - newAmount;
-                        cassaComune.balance += difference;
-                        if (linkedMovementIndex > -1) {
-                            movements[linkedMovementIndex].amount = newAmount;
-                            movements[linkedMovementIndex].description = `Spesa: ${item.description}`;
-                        }
-                    }
-                    cassaComune.movements = movements;
-                    break;
-                case 'fixedExpense':
-                    item.description = document.getElementById('edit-fixed-desc').value;
-                    item.amount = parseFloat(document.getElementById('edit-fixed-amount').value);
-                    break;
-                case 'incomeEntry':
-                    item.date = document.getElementById('edit-income-date').value;
-                    item.amount = parseFloat(document.getElementById('edit-income-amount').value);
-                    item.description = document.getElementById('edit-income-description').value;
-                    item.membersInvolved = Array.from(document.querySelectorAll('#edit-income-members-checkboxes input:checked')).map(cb => cb.value);
-                    break;
-                case 'pendingPayment':
-                    item.member = document.getElementById('edit-pending-member').value;
-                    item.amount = parseFloat(document.getElementById('edit-pending-amount').value);
-                    item.description = document.getElementById('edit-pending-description').value;
-                    break;
-                case 'wishlistItem':
-                    item.name = document.getElementById('edit-wishlist-name').value;
-                    item.cost = parseFloat(document.getElementById('edit-wishlist-cost').value);
-                    item.priority = document.getElementById('edit-wishlist-priority').value;
-                    item.links = Array.from(document.querySelectorAll('#edit-wishlist-links-container input')).map(input => input.value.trim()).filter(link => link);
-                    break;
-                case 'futureMovement':
-                    const oldTotalCost = item.totalCost;
-                    item.description = document.getElementById('edit-future-desc').value;
-                    item.totalCost = parseFloat(document.getElementById('edit-future-cost').value);
-                    item.dueDate = document.getElementById('edit-future-due-date').value;
-                    if (item.totalCost !== oldTotalCost && confirm("Il costo totale è cambiato. Vuoi resettare le quote individuali per distribuirle equamente?")) {
-                        const share = members.length > 0 ? item.totalCost / members.length : 0;
-                        item.shares = members.map(member => ({ member, amount: share, edited: false, paid: false }));
-                    }
-                    break;
-            }
-            closeEditModal();
+
+    pendingPayments.push({
+        id: Date.now().toString(),
+        member: member,
+        amount: amount,
+        description: description,
+        date: today
+    });
+    saveDataToFirebase();
+    document.getElementById('pending-payment-form-section').classList.add('hidden');
+    alert("Richiesta quota aggiunta.");
+});
+
+if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
+    const description = document.getElementById('future-movement-description').value.trim();
+    const cost = parseFloat(document.getElementById('future-movement-cost').value);
+    const dueDate = document.getElementById('future-movement-due-date').value;
+
+    if (!description || isNaN(cost) || cost <= 0 || !dueDate) {
+        alert("Compila tutti i campi obbligatori.");
+        return;
+    }
+
+    futureMovements.push({
+        id: Date.now().toString(),
+        description: description,
+        cost: cost,
+        dueDate: dueDate
+    });
+    saveDataToFirebase();
+    document.getElementById('future-movement-form-section').classList.add('hidden');
+    alert("Movimento futuro pianificato.");
+});
+
+if (wishlistNewLinkInput && addWishlistLinkBtn) addWishlistLinkBtn.addEventListener('click', () => {
+    const input = wishlistNewLinkInput;
+    if(input.value.trim()){
+        if(wishlist.length === 0) wishlist.push({id: '1', name: "Articoli Generici", cost: 0, priority: "2-Media", links: []});
+        wishlist[0].links.push(input.value.trim());
+        input.value = '';
+        saveDataToFirebase();
+    }
+});
+if (wishlistLinksContainer) wishlistLinksContainer.addEventListener('click', (e) => {
+    if(e.target.matches('.remove-wishlist-link-btn')){
+        const linkToRemove = e.target.dataset.link;
+        if(wishlist.length > 0 && wishlist[0].links) {
+            wishlist[0].links = wishlist[0].links.filter(link => link !== linkToRemove);
             saveDataToFirebase();
         }
-        if (e.target.matches('#add-edit-link-btn')) {
-            const container = document.getElementById('edit-wishlist-links-container');
-            const input = document.getElementById('add-edit-link-input');
-            if (input.value.trim()) {
-                 const div = document.createElement('div');
-                 div.className = 'flex items-center gap-2';
-                 div.innerHTML = `<input type="text" class="w-full p-1 border rounded-md" value="${input.value.trim()}"><button type="button" class="remove-edit-link-btn text-red-500">&times;</button>`;
-                 container.appendChild(div);
-                 input.value = '';
-            }
-        }
-        if (e.target.matches('.remove-edit-link-btn')) {
-            e.target.parentElement.remove();
-        }
-        if (e.target === editModal || e.target.matches('#close-edit-modal-btn') || e.target.matches('#cancel-edit-btn')) {
-            closeEditModal();
-        }
-    });
-    if (calculateBtn) calculateBtn.addEventListener('click', () => calculateAndRenderSettlement(false));
-    if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportToExcel);
-    if (exportDataBtn) exportDataBtn.addEventListener('click', handleExportData);
-    if (importDataBtn) importDataBtn.addEventListener('click', () => importFileInput.click());
-    if (importFileInput) importFileInput.addEventListener('change', handleImportData);
-    
-    // --- INIZIALIZZAZIONE DELLA PAGINA ---
-    function initializePage() {
-        initializeCharts();
-        loadDataFromFirebase();
-        setupExpenseButton();
     }
-    
-    // Ascolta l'evento 'authReady' prima di inizializzare la pagina
-    document.addEventListener('authReady', () => {
-    initializePage();
-    loadDataFromFirebase();
-    initializeCharts();
-    updateDashboardView();
-    });
+});
 
-    // Fallback per il caso in cui lo script carichi dopo l'evento
-    if (currentUser && currentUser.uid) {
-        initializePage();
+
+if (addWishlistItemBtn) addWishlistItemBtn.addEventListener('click', () => {
+    const name = document.getElementById('wishlist-item-name').value.trim();
+    const cost = parseFloat(document.getElementById('wishlist-item-cost').value);
+    const priority = document.getElementById('wishlist-item-priority').value;
+
+    if (!name || isNaN(cost) || cost <= 0) {
+        alert("Compila nome e costo stimato.");
+        return;
     }
+
+    wishlist.push({
+        id: Date.now().toString(),
+        name: name,
+        cost: cost,
+        priority: priority,
+        links: []
+    });
+    saveDataToFirebase();
+    document.getElementById('wishlist-form-section').classList.add('hidden');
+    alert("Articolo aggiunto alla lista desideri.");
+});
+if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
+    const date = document.getElementById('income-date').value;
+    const amount = parseFloat(document.getElementById('income-amount').value);
+    const description = document.getElementById('income-description').value.trim();
+    const membersInvolved = Array.from(document.querySelectorAll('#income-members-checkboxes input:checked')).map(cb => cb.value);
+
+    if (!date || isNaN(amount) || amount <= 0 || !description || membersInvolved.length === 0) {
+        alert("Compila tutti i campi e seleziona almeno un membro.");
+        return;
+    }
+
+    incomeEntries.push({
+        id: Date.now().toString(),
+        date: date,
+        amount: amount,
+        description: description,
+        members: membersInvolved
+    });
+    saveDataToFirebase();
+    document.getElementById('income-form-section').classList.add('hidden');
+    alert("Entrata aggiunta.");
+});
+
+
+if (addExpenseBtn) {
+    if(currentUser.role !== 'admin'){
+        addExpenseBtn.textContent = 'Invia Richiesta Spesa';
+    }
+    addExpenseBtn.addEventListener('click', () => {
+        if (currentUser.role === 'admin') {
+            addExpenseAsAdmin();
+        } else {
+            submitExpenseRequest();
+        }
+    });
 }
+
+if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
+    const description = document.getElementById('fixed-desc').value.trim();
+    const amount = parseFloat(document.getElementById('fixed-amount').value);
+    // const payer = document.getElementById('fixed-payer').value; // Implementazione omessa nel form HTML, usa solo descrizione e importo
+
+    if (!description || isNaN(amount) || amount <= 0) {
+        alert("Compila descrizione e importo per la spesa fissa.");
+        return;
+    }
+
+    fixedExpenses.push({
+        id: Date.now().toString(),
+        description: description,
+        amount: amount,
+        payer: 'Tutti' // Default
+    });
+    saveDataToFirebase();
+    document.getElementById('fixed-expenses-section').classList.add('hidden');
+    alert("Spesa fissa aggiunta.");
+});
+
+if (quickActionsContainer) quickActionsContainer.addEventListener('click', (e) => {
+    if (e.target.matches('.action-btn')) {
+        const targetId = e.target.dataset.formId;
+        const targetForm = document.getElementById(targetId);
+        
+        // Chiudi tutti i form
+        document.querySelectorAll('.action-form').forEach(form => form.classList.add('hidden'));
+
+        // Apri il form selezionato
+        if (targetForm) {
+            targetForm.classList.remove('hidden');
+        }
+    }
+});
+
+document.addEventListener('click', (e) => {
+    if (e.target.matches('.open-edit-modal-btn')) {
+        const id = e.target.dataset.id;
+        const type = e.target.dataset.type;
+        openEditModal(id, type);
+    }
     
+    // Logica per approvare/rifiutare richieste (Admin)
+    if (e.target.matches('.approve-request-btn')) {
+        const key = e.target.dataset.key;
+        if(key && expenseRequests[key]){
+            const req = expenseRequests[key];
+            addExpenseAsAdmin({
+                payer: req.payer,
+                date: req.date,
+                amount: req.amount,
+                category: req.category,
+                description: `[RICHIESTA APPROVATA] ${req.description}`,
+            });
+            expenseRequests[key].status = 'approved';
+            saveDataToFirebase();
+            renderExpenseRequestsForAdmin();
+        }
+    }
+    if (e.target.matches('.reject-request-btn')) {
+        const key = e.target.dataset.key;
+        if(key && expenseRequests[key]){
+            expenseRequests[key].status = 'rejected';
+            saveDataToFirebase();
+            renderExpenseRequestsForAdmin();
+        }
+    }
+    
+    // Logica per chiudere i form
+    if (e.target.matches('.close-form-btn')) {
+        e.target.closest('.action-form').classList.add('hidden');
+    }
+
+    if (e.target.matches('.remove-edit-link-btn')) {
+        e.target.parentElement.remove();
+    }
+    
+    // Chiusura modale
+    if (e.target === editModal || e.target.matches('#close-edit-modal-btn') || e.target.matches('#cancel-edit-btn')) {
+        closeEditModal();
+    }
+    
+    if (e.target.matches('.complete-pending-btn')) {
+        const id = e.target.dataset.id;
+        if(confirm("Sei sicuro di voler contrassegnare questo pagamento come completato?")){
+            pendingPayments = pendingPayments.filter(p => p.id !== id);
+            saveDataToFirebase();
+        }
+    }
+});
+
+// Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
+
+if (calculateBtn) calculateBtn.addEventListener('click', () => calculateAndRenderSettlement(false));
+if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportToExcel);
+if (exportDataBtn) exportDataBtn.addEventListener('click', handleExportData);
+if (importDataBtn) importDataBtn.addEventListener('click', () => importFileInput.click());
+if (importFileInput) importFileInput.addEventListener('change', handleImportData);
 
 
+// --- App Initialization (PUNTO DI INNESTO DEL FIX) ---
+document.addEventListener('DOMContentLoaded', () => {
+    
+    if (document.getElementById('calendar-container')) {
+        // La logica per il calendario è in js/calendario.js
+    } else if (document.getElementById('kanban-board')) {
+        // La logica per le attività è in js/attivita.js
+    } else if (document.getElementById('member-count')) {
+        // FIX CRUCIALE: Usiamo onAuthReady per garantire che il ruolo sia caricato prima di tentare di leggere i dati
+        onAuthReady(user => {
+            if (user.uid) {
+                initializeCharts();
+                loadDataFromFirebase(); 
+            } else {
+                console.warn("Utente non autenticato. Caricamento dashboard interrotto.");
+            }
+        });
+    }
+});
