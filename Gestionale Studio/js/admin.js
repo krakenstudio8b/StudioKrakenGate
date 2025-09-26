@@ -1,7 +1,10 @@
+//js/admin.js SOSTITUIRE COMPLETAMENTE CON QUESTO
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-import { getDatabase, ref, onValue, get, set, push, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { getDatabase, ref, onValue, get, set, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
+// La configurazione di Firebase è ridondante se usi 'database' importato, ma la lasciamo per coerenza
 const firebaseConfig = {
     apiKey: "AIzaSyBtQZkX6r4F2W0BsIo6nsD27dUZHv3e8RU",
     authDomain: "studio-kraken-gate.firebaseapp.com",
@@ -24,7 +27,13 @@ const pendingEventsContainer = document.getElementById('pending-events-container
 const pendingFinanceContainer = document.getElementById('pending-finance-container');
 const usersListEl = document.getElementById('users-list');
 
-let allUsersData = {}; // Cache per i dati degli utenti (UID -> {email, role})
+// Riferimenti specifici ai nodi di Firebase
+const usersRef = ref(database, 'users');
+const expenseRequestsRef = ref(database, 'expenseRequests');
+const variableExpensesRef = ref(database, 'variableExpenses');
+const cassaComuneRef = ref(database, 'cassaComune');
+
+let allUsersData = {}; 
 
 const displayDate = (dateString) => {
      if (!dateString) return 'N/A';
@@ -32,140 +41,141 @@ const displayDate = (dateString) => {
      if (isNaN(date)) return 'Data non valida';
      const userTimezoneOffset = date.getTimezoneOffset() * 60000;
      return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+// --- LOGICA SPECIFICA PER APPROVAZIONE SPESE ---
+
+async function approveExpenseRequest(requestKey, requestData) {
+    if (!confirm(`Approvare la spesa di €${requestData.amount} per "${requestData.description}"?`)) {
+        return;
+    }
+
+    // 1. Leggi lo stato attuale della cassa comune
+    const cassaSnapshot = await get(cassaComuneRef);
+    const cassaComune = cassaSnapshot.val() || { balance: 0, movements: [] };
+
+    // 2. Controlla se ci sono fondi sufficienti se la spesa è dalla cassa
+    if (requestData.payer === 'Cassa Comune' && requestData.amount > cassaComune.balance) {
+        alert('Approvazione fallita: Fondi insufficienti nella cassa comune!');
+        return;
+    }
+
+    // 3. Crea la nuova spesa in `variableExpenses`
+    const newExpenseId = Date.now().toString();
+    const newExpense = {
+        id: newExpenseId,
+        date: requestData.date,
+        payer: requestData.payer,
+        amount: requestData.amount,
+        description: requestData.description,
+        category: requestData.category
+    };
+    await push(variableExpensesRef, newExpense);
+
+    // 4. Se necessario, aggiorna la cassa comune e crea il movimento collegato
+    if (requestData.payer === 'Cassa Comune') {
+        cassaComune.balance -= requestData.amount;
+        if (!cassaComune.movements) {
+            cassaComune.movements = [];
+        }
+        const newMovement = {
+            id: (Date.now() + 1).toString(),
+            date: requestData.date,
+            type: 'withdrawal',
+            amount: requestData.amount,
+            description: `Spesa: ${requestData.description}`,
+            member: '',
+            linkedExpenseId: newExpenseId // <-- Collegamento cruciale!
+        };
+        // Per evitare problemi di concorrenza, non usiamo push ma sovrascriviamo l'array
+        const movementsArray = cassaComune.movements ? Object.values(cassaComune.movements) : [];
+        movementsArray.push(newMovement);
+        cassaComune.movements = movementsArray;
+        
+        await set(cassaComuneRef, cassaComune);
+    }
+
+    // 5. Aggiorna lo stato della richiesta a "approved"
+    const requestToUpdateRef = ref(database, `expenseRequests/${requestKey}`);
+    await update(requestToUpdateRef, { status: 'approved' });
+
+    alert('Spesa approvata e registrata con successo!');
 }
 
-// Funzione per creare una card di approvazione generica
-const createApprovalCard = (id, title, details, onApprove, onReject) => {
-    const card = document.createElement('div');
-    card.className = 'bg-gray-50 p-3 rounded-lg border flex justify-between items-center flex-wrap gap-2';
-    
-    let detailsHtml = '';
-    for (const [key, value] of Object.entries(details)) {
-        detailsHtml += `<p class="text-xs text-gray-600 w-full md:w-auto"><span class="font-semibold">${key}:</span> ${value}</p>`;
-    }
-
-    card.innerHTML = `
-        <div class="flex-grow">
-            <p class="font-bold">${title}</p>
-            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                ${detailsHtml}
-            </div>
-        </div>
-        <div class="flex gap-2 flex-shrink-0">
-            <button class="approve-btn bg-green-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-green-600">Approva</button>
-            <button class="reject-btn bg-red-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-red-600">Rifiuta</button>
-        </div>
-    `;
-
-    card.querySelector('.approve-btn').addEventListener('click', onApprove);
-    card.querySelector('.reject-btn').addEventListener('click', onReject);
-    
-    return card;
-};
-
-// Funzioni generiche per approvare/rifiutare
-const approveRequest = async (mainNode, pendingNode, id, data) => {
-    try {
-        if (pendingNode === 'pendingCashMovements') {
-            const cassaRef = ref(database, 'cassaComune');
-            const snapshot = await get(cassaRef);
-            const cassa = snapshot.val() || { balance: 0, movements: [] };
-            let newBalance = cassa.balance;
-
-            if (data.type === 'deposit') {
-                newBalance += data.amount;
-            } else {
-                newBalance -= data.amount;
-            }
-            
-            const movements = cassa.movements || [];
-            movements.push(data);
-            await set(cassaRef, { balance: newBalance, movements: movements });
-
-        } else {
-            const mainRef = ref(database, mainNode);
-            const newEntryRef = push(mainRef);
-            await set(newEntryRef, data);
-        }
-        await remove(ref(database, `${pendingNode}/${id}`));
-        alert("Richiesta approvata con successo!");
-    } catch (err) {
-        console.error("Errore durante l'approvazione:", err);
-        alert("Si è verificato un errore durante l'approvazione.");
-    }
-};
-
-const rejectRequest = (pendingNode, id) => {
+async function rejectExpenseRequest(requestKey) {
     if (confirm("Sei sicuro di voler rifiutare questa richiesta? L'azione è irreversibile.")) {
-        remove(ref(database, `${pendingNode}/${id}`))
-            .then(() => alert("Richiesta rifiutata."))
-            .catch(err => console.error("Errore rifiuto:", err));
+        const requestToUpdateRef = ref(database, `expenseRequests/${requestKey}`);
+        await update(requestToUpdateRef, { status: 'rejected' });
+        alert('Richiesta rifiutata.');
     }
-};
+}
 
-// Funzione per caricare le richieste in sospeso
-const loadPendingItems = (container, nodeName, titleKey, detailsBuilder, mainNode) => {
-    const pendingRef = ref(database, nodeName);
-
-    onValue(pendingRef, (snapshot) => {
-        container.querySelectorAll(`[data-request-type="${nodeName}"]`).forEach(el => el.remove());
-        
-        let hasRequests = false;
+function renderPendingFinanceRequests() {
+    onValue(expenseRequestsRef, (snapshot) => {
+        pendingFinanceContainer.innerHTML = '';
+        let hasPendingRequests = false;
         if (snapshot.exists()) {
-            hasRequests = true;
-            const placeholder = container.querySelector('p');
-            if (placeholder) placeholder.remove();
-
             snapshot.forEach(childSnapshot => {
-                const id = childSnapshot.key;
-                const data = childSnapshot.val();
-                const card = createApprovalCard(id, data[titleKey] || "Senza Titolo", detailsBuilder(data),
-                    () => approveRequest(mainNode, nodeName, id, data),
-                    () => rejectRequest(nodeName, id)
-                );
-                card.dataset.requestType = nodeName;
-                container.appendChild(card);
+                const requestKey = childSnapshot.key;
+                const requestData = childSnapshot.val();
+
+                if (requestData.status === 'pending') {
+                    hasPendingRequests = true;
+                    const card = document.createElement('div');
+                    card.className = 'bg-gray-50 p-3 rounded-lg border flex justify-between items-center flex-wrap gap-2';
+                    card.innerHTML = `
+                        <div class="flex-grow">
+                            <p class="font-bold">${requestData.description} - <span class="font-normal text-gray-600">€${requestData.amount.toFixed(2)}</span></p>
+                            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-gray-600">
+                                <p><span class="font-semibold">Richiedente:</span> ${requestData.requesterName || 'N/D'}</p>
+                                <p><span class="font-semibold">Pagante:</span> ${requestData.payer}</p>
+                                <p><span class="font-semibold">Data:</span> ${displayDate(requestData.date)}</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 flex-shrink-0">
+                            <button data-key="${requestKey}" class="approve-expense-btn bg-green-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-green-600">Approva</button>
+                            <button data-key="${requestKey}" class="reject-expense-btn bg-red-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-red-600">Rifiuta</button>
+                        </div>
+                    `;
+                    pendingFinanceContainer.appendChild(card);
+                }
             });
         }
-        
-        if (!hasRequests && container.children.length === 0) {
-             container.innerHTML = '<p class="text-gray-500">Nessuna richiesta da approvare.</p>';
+
+        if (!hasPendingRequests) {
+            pendingFinanceContainer.innerHTML = '<p class="text-gray-500">Nessuna operazione finanziaria da approvare.</p>';
         }
     });
-};
+}
 
 
-// Funzione per la gestione utenti
+// --- GESTIONE UTENTI (invariata) ---
 const loadUsersForManagement = () => {
-    onValue(ref(database, 'users'), (snapshot) => {
+    onValue(usersRef, (snapshot) => {
         usersListEl.innerHTML = '';
         if (snapshot.exists()) {
             const usersData = snapshot.val();
-
+            allUsersData = usersData; // Aggiorniamo la cache utenti
             for (const uid in usersData) {
                 const user = usersData[uid];
                 const userEl = document.createElement('div');
                 userEl.className = 'flex justify-between items-center bg-gray-50 p-3 rounded-lg';
-                
-                // Usa l'email se esiste, altrimenti l'UID come fallback
                 const displayName = user.email || uid;
 
                 userEl.innerHTML = `
-                    <div>
-                        <p class="font-semibold text-sm">${displayName}</p>
-                    </div>
+                    <div><p class="font-semibold text-sm">${displayName}</p></div>
                     <div class="flex items-center gap-4">
                         <div class="flex items-center gap-2">
                             <label for="admin-role-${uid}" class="text-sm font-medium">Admin</label>
-                            <input type="radio" name="role-${uid}" id="admin-role-${uid}" value="admin" data-uid="${uid}" class="role-radio h-4 w-4" ${user.role === 'admin' ? 'checked' : ''}>
+                            <input type="radio" name="role-${uid}" value="admin" data-uid="${uid}" class="role-radio h-4 w-4" ${user.role === 'admin' ? 'checked' : ''}>
                         </div>
                         <div class="flex items-center gap-2">
                             <label for="calendar-role-${uid}" class="text-sm font-medium">Admin Calendario</label>
-                            <input type="radio" name="role-${uid}" id="calendar-role-${uid}" value="calendar_admin" data-uid="${uid}" class="role-radio h-4 w-4" ${user.role === 'calendar_admin' ? 'checked' : ''}>
+                            <input type="radio" name="role-${uid}" value="calendar_admin" data-uid="${uid}" class="role-radio h-4 w-4" ${user.role === 'calendar_admin' ? 'checked' : ''}>
                         </div>
                          <div class="flex items-center gap-2">
                             <label for="user-role-${uid}" class="text-sm font-medium">Utente</label>
-                            <input type="radio" name="role-${uid}" id="user-role-${uid}" value="user" data-uid="${uid}" class="role-radio h-4 w-4" ${!user.role || user.role === 'user' ? 'checked' : ''}>
+                            <input type="radio" name="role-${uid}" value="user" data-uid="${uid}" class="role-radio h-4 w-4" ${!user.role || user.role === 'user' ? 'checked' : ''}>
                         </div>
                     </div>
                 `;
@@ -177,64 +187,53 @@ const loadUsersForManagement = () => {
     });
 };
 
-// Listener per i radio button dei ruoli
+// --- INIZIALIZZAZIONE PAGINA ---
+const initializeAdminPanel = () => {
+    if (currentUser.role === 'admin') {
+        financeApprovalSection.classList.remove('hidden');
+        userManagementSection.classList.remove('hidden');
+        // Aggiungi qui altre sezioni per admin completi
+        
+        renderPendingFinanceRequests();
+        loadUsersForManagement();
+
+    } else if (currentUser.role === 'calendar_admin') {
+        // Logica per admin calendario
+    }
+    // Aggiungere logica per altri ruoli se necessario
+};
+
+
+// --- EVENT LISTENERS GLOBALI ---
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => { // Timeout per assicurarsi che currentUser sia popolato da auth-guard
+        initializeAdminPanel();
+    }, 500); 
+});
+
 document.addEventListener('change', (e) => {
     if (e.target.classList.contains('role-radio')) {
         const uid = e.target.dataset.uid;
         const newRole = e.target.value;
-        
         const userRoleRef = ref(database, `users/${uid}/role`);
-        
         set(userRoleRef, newRole)
-            .then(() => { 
-                const email = allUsersData[uid]?.email || uid;
-                alert(`Ruolo di ${email} aggiornato a ${newRole}.`);
-            })
+            .then(() => alert(`Ruolo aggiornato con successo.`))
             .catch(err => console.error(err));
     }
 });
 
-// Funzione principale di inizializzazione
-const initializeAdminPanel = async () => {
-    // 1. Carica prima tutti i dati degli utenti per avere le email a disposizione
-    const usersSnapshot = await get(ref(database, 'users'));
-    if (usersSnapshot.exists()) {
-        allUsersData = usersSnapshot.val();
+document.addEventListener('click', (e) => {
+    if (e.target.matches('.approve-expense-btn')) {
+        const key = e.target.dataset.key;
+        const requestRef = ref(database, `expenseRequests/${key}`);
+        get(requestRef).then(snapshot => {
+            if(snapshot.exists()) {
+                approveExpenseRequest(key, snapshot.val());
+            }
+        });
     }
-
-    // 2. Mostra le sezioni in base al ruolo
-    if (currentUser.role === 'admin') {
-        calendarApprovalSection.classList.remove('hidden');
-        financeApprovalSection.classList.remove('hidden');
-        userManagementSection.classList.remove('hidden');
-        
-        const getRequesterName = (data) => allUsersData[data.createdBy]?.email || data.createdBy;
-
-        loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
-            data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start), Richiesto_da: getRequesterName(data) }), 'calendarEvents');
-        
-        loadPendingItems(pendingFinanceContainer, 'pendingVariableExpenses', 'description', 
-            data => ({ Importo: `€${data.amount}`, Pagato_da: data.payer, Tipo: 'Spesa', Richiesto_da: getRequesterName(data) }), 'variableExpenses');
-            
-        loadPendingItems(pendingFinanceContainer, 'pendingIncomeEntries', 'description', 
-            data => ({ Importo: `+€${data.amount}`, Membri: (data.membersInvolved || []).join(', '), Tipo: 'Entrata', Richiesto_da: getRequesterName(data) }), 'incomeEntries');
-        
-        loadPendingItems(pendingFinanceContainer, 'pendingCashMovements', 'description', 
-            data => ({ Importo: `${data.type === 'deposit' ? '+' : '-'}€${data.amount}`, Membro: data.member || 'N/A', Tipo: 'Mov. Cassa', Richiesto_da: getRequesterName(data) }), 'cassaComune');
-
-        loadUsersForManagement();
-
-    } else if (currentUser.role === 'calendar_admin') {
-        calendarApprovalSection.classList.remove('hidden');
-        loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
-            data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start), Richiesto_da: allUsersData[data.createdBy]?.email || data.createdBy }), 'calendarEvents');
+    if (e.target.matches('.reject-expense-btn')) {
+        const key = e.target.dataset.key;
+        rejectExpenseRequest(key);
     }
-};
-
-// Inizializzazione della pagina
-document.addEventListener('DOMContentLoaded', () => {
-    // Usiamo un piccolo ritardo per assicurarci che currentUser da auth-guard.js sia stato valorizzato
-    setTimeout(() => {
-        initializeAdminPanel();
-    }, 500); 
 });
