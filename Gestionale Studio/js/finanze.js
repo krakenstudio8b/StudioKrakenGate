@@ -727,9 +727,7 @@ const handleImportData = (event) => {
 };
 
 // --- Excel Export ---
-const exportToExcel = async () => {
-    // Il codice completo per l'esportazione Excel va qui...
-};
+const exportToExcel = async () => { /* Il codice completo per l'esportazione Excel va qui */ };
 
 // --- Main View Update Function ---
 const updateDashboardView = () => {
@@ -913,9 +911,7 @@ if (addCashMovementBtn) addCashMovementBtn.addEventListener('click', () => {
         cassaComune.balance -= amount;
     }
     
-    if (!cassaComune.movements) {
-        cassaComune.movements = [];
-    }
+    if (!cassaComune.movements) cassaComune.movements = [];
 
     const newMovement = {
         id: Date.now().toString(),
@@ -1119,7 +1115,7 @@ if (document.body) {
                 if (share) {
                     share.paid = isChecked;
                     saveDataToFirebase();
-                    renderFutureMovements(); // Re-render to apply strikethrough style
+                    renderFutureMovements();
                 }
             }
         }
@@ -1308,6 +1304,15 @@ if (document.body) {
                     return;
                 }
                 
+                variableExpenses.push({
+                    id: Date.now().toString(),
+                    date: movement.dueDate,
+                    payer: 'Cassa Comune',
+                    amount: movement.totalCost,
+                    description: movement.description,
+                    category: "Spesa Pianificata"
+                });
+                
                 cassaComune.balance -= movement.totalCost;
                 if (!cassaComune.movements) cassaComune.movements = [];
                 cassaComune.movements.push({
@@ -1317,15 +1322,6 @@ if (document.body) {
                     amount: movement.totalCost, 
                     description: `Spesa pianificata: ${movement.description}`, 
                     member: ''
-                });
-                
-                variableExpenses.push({
-                    id: Date.now().toString(),
-                    date: movement.dueDate,
-                    payer: 'Cassa Comune',
-                    amount: movement.totalCost,
-                    description: movement.description,
-                    category: "Spesa Pianificata"
                 });
                 
                 futureMovements = futureMovements.filter(m => m.id !== movementId);
@@ -1443,7 +1439,6 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 
 // --- App Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Controlla su quale pagina ci si trova per inizializzare solo il codice necessario
     if (document.getElementById('calendar-container')) {
         // La logica per il calendario è in js/calendario.js
     } else if (document.getElementById('kanban-board')) {
