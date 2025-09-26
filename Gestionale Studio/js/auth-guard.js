@@ -1,44 +1,31 @@
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+// js/auth-guard.js
 
-// La configurazione di Firebase è necessaria anche qui per accedere al database
-const firebaseConfig = {
-    apiKey: "AIzaSyBtQZkX6r4F2W0BsIo6nsD27dUZHv3e8RU",
-    authDomain: "studio-kraken-gate.firebaseapp.com",
-    projectId: "studio-kraken-gate",
-    storageBucket: "studio-kraken-gate.firebasestorage.app",
-    messagingSenderId: "744360512833",
-    appId: "1:744360512833:web:ed0952f304c37bd5ee25c0",
-    measurementId: "G-39RLC549LJ",
-    databaseURL: "https://studio-kraken-gate-default-rtdb.firebaseio.com"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const database = getDatabase(app);
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+import { ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+// Importa le istanze centralizzate di auth e database
+import { auth, database } from './firebase-config.js';
 
 const logoutBtn = document.getElementById('logout-btn');
 const adminPanelLink = document.getElementById('admin-panel-link');
 
-// Esportiamo una variabile globale per sapere chi è l'utente e qual è il suo ruolo
 export let currentUser = {
     uid: null,
     email: null,
+    displayName: null,
     role: 'user' // Ruolo di default
 };
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
         // Se non c'è utente, torna al login
-        // Controlliamo di non essere già sulla pagina di login per evitare un loop infinito.
-        if (window.location.pathname.endsWith('login.html') === false) {
+        if (!window.location.pathname.endsWith('login.html')) {
             window.location.href = 'login.html';
         }
     } else {
         // Se c'è un utente loggato, popoliamo il nostro oggetto currentUser
         currentUser.uid = user.uid;
         currentUser.email = user.email;
+        currentUser.displayName = user.displayName || user.email.split('@')[0];
 
         // Ora controlliamo il suo ruolo nel database
         const userRef = ref(database, 'users/' + user.uid);
@@ -46,10 +33,12 @@ onAuthStateChanged(auth, async (user) => {
 
         if (snapshot.exists()) {
             currentUser.role = snapshot.val().role || 'user';
+            // Aggiorniamo anche il displayName se presente nel DB
+            currentUser.displayName = snapshot.val().displayName || currentUser.displayName;
         } else {
             currentUser.role = 'user'; // Se non ha un ruolo definito, è un utente normale
         }
-
+        
         console.log(`Accesso effettuato come: ${currentUser.email} (Ruolo: ${currentUser.role})`);
         
         // Mostra il link al pannello admin solo se si ha un ruolo speciale
@@ -60,6 +49,10 @@ onAuthStateChanged(auth, async (user) => {
                 adminPanelLink.classList.add('hidden');
             }
         }
+
+        // --- MODIFICA CHIAVE ---
+        // Invia un evento per notificare alle altre parti dell'app che l'autenticazione è completa
+        document.dispatchEvent(new CustomEvent('authReady', { detail: { user: currentUser } }));
     }
 });
 
