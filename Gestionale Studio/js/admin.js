@@ -25,26 +25,19 @@ const displayDate = (dateString) => {
      if (!dateString) return 'N/A';
      const date = new Date(dateString);
      if (isNaN(date)) return 'Data non valida';
-     // Aggiusta per il fuso orario per mostrare la data corretta
      const userTimezoneOffset = date.getTimezoneOffset() * 60000;
      return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
-
 // --- LOGICA PER APPROVAZIONE SPESE FINANZIARIE ---
-
 async function approveExpenseRequest(requestKey, requestData) {
-    if (!confirm(`Approvare la spesa di €${requestData.amount} per "${requestData.description}"?`)) {
-        return;
-    }
+    if (!confirm(`Approvare la spesa di €${requestData.amount} per "${requestData.description}"?`)) return;
     const cassaSnapshot = await get(cassaComuneRef);
     const cassaComune = cassaSnapshot.val() || { balance: 0, movements: [] };
-
     if (requestData.payer === 'Cassa Comune' && requestData.amount > cassaComune.balance) {
         alert('Approvazione fallita: Fondi insufficienti nella cassa comune!');
         return;
     }
-
     const newExpenseId = Date.now().toString();
     const newExpense = {
         id: newExpenseId,
@@ -56,7 +49,6 @@ async function approveExpenseRequest(requestKey, requestData) {
     };
     const newExpenseRef = push(variableExpensesRef);
     await set(newExpenseRef, newExpense);
-
     if (requestData.payer === 'Cassa Comune') {
         cassaComune.balance -= requestData.amount;
         const newMovement = {
@@ -72,12 +64,10 @@ async function approveExpenseRequest(requestKey, requestData) {
         await set(newMovementRef, newMovement);
         await update(cassaComuneRef, { balance: cassaComune.balance });
     }
-
     const requestToUpdateRef = ref(database, `expenseRequests/${requestKey}`);
     await update(requestToUpdateRef, { status: 'approved' });
     alert('Spesa approvata e registrata con successo!');
 }
-
 async function rejectExpenseRequest(requestKey) {
     if (confirm("Sei sicuro di voler rifiutare questa richiesta? L'azione è irreversibile.")) {
         const requestToUpdateRef = ref(database, `expenseRequests/${requestKey}`);
@@ -85,7 +75,6 @@ async function rejectExpenseRequest(requestKey) {
         alert('Richiesta rifiutata.');
     }
 }
-
 function renderPendingFinanceRequests() {
     onValue(expenseRequestsRef, (snapshot) => {
         pendingFinanceContainer.innerHTML = '';
@@ -122,9 +111,7 @@ function renderPendingFinanceRequests() {
     });
 }
 
-
 // --- LOGICA PER APPROVAZIONE EVENTI CALENDARIO ---
-
 async function approveCalendarEvent(eventKey, eventData) {
     if (!confirm(`Approvare l'evento "${eventData.title}"?`)) return;
     const newEventRef = push(calendarEventsRef);
@@ -132,14 +119,12 @@ async function approveCalendarEvent(eventKey, eventData) {
     await remove(ref(database, `pendingCalendarEvents/${eventKey}`));
     alert('Evento approvato e aggiunto al calendario.');
 }
-
 async function rejectCalendarEvent(eventKey) {
     if (confirm("Sei sicuro di voler rifiutare questo evento?")) {
         await remove(ref(database, `pendingCalendarEvents/${eventKey}`));
         alert('Richiesta di evento rifiutata.');
     }
 }
-
 function renderPendingCalendarEvents() {
     onValue(pendingCalendarEventsRef, (snapshot) => {
         pendingEventsContainer.innerHTML = '';
@@ -174,7 +159,6 @@ function renderPendingCalendarEvents() {
     });
 }
 
-
 // --- LOGICA PER GESTIONE UTENTI ---
 const loadUsersForManagement = () => {
     onValue(usersRef, (snapshot) => {
@@ -186,20 +170,19 @@ const loadUsersForManagement = () => {
                 const userEl = document.createElement('div');
                 userEl.className = 'flex justify-between items-center bg-gray-50 p-3 rounded-lg';
                 const displayName = user.email || uid;
-
                 userEl.innerHTML = `
                     <div><p class="font-semibold text-sm">${displayName}</p></div>
                     <div class="flex items-center gap-4 flex-wrap">
                         <div class="flex items-center gap-2">
-                            <label for="admin-role-${uid}" class="text-sm font-medium">Admin</label>
+                            <label class="text-sm font-medium">Admin</label>
                             <input type="radio" name="role-${uid}" value="admin" data-uid="${uid}" class="role-radio h-4 w-4" ${user.role === 'admin' ? 'checked' : ''}>
                         </div>
                         <div class="flex items-center gap-2">
-                            <label for="calendar-role-${uid}" class="text-sm font-medium">Admin Calendario</label>
+                            <label class="text-sm font-medium">Admin Calendario</label>
                             <input type="radio" name="role-${uid}" value="calendar_admin" data-uid="${uid}" class="role-radio h-4 w-4" ${user.role === 'calendar_admin' ? 'checked' : ''}>
                         </div>
                          <div class="flex items-center gap-2">
-                            <label for="user-role-${uid}" class="text-sm font-medium">Utente</label>
+                            <label class="text-sm font-medium">Utente</label>
                             <input type="radio" name="role-${uid}" value="user" data-uid="${uid}" class="role-radio h-4 w-4" ${!user.role || user.role === 'user' ? 'checked' : ''}>
                         </div>
                     </div>
@@ -212,34 +195,25 @@ const loadUsersForManagement = () => {
     });
 };
 
-
 // --- INIZIALIZZAZIONE PAGINA ---
 const initializeAdminPanel = () => {
-    // La logica si basa sul ruolo dell'utente loggato
     if (currentUser.role === 'admin') {
         calendarApprovalSection.classList.remove('hidden');
         financeApprovalSection.classList.remove('hidden');
         userManagementSection.classList.remove('hidden');
-        
         renderPendingCalendarEvents();
         renderPendingFinanceRequests();
         loadUsersForManagement();
-
     } else if (currentUser.role === 'calendar_admin') {
         calendarApprovalSection.classList.remove('hidden');
         renderPendingCalendarEvents();
     }
 };
 
-
-// --- EVENT LISTENERS GLOBALI ---
-
-// Ascolta l'evento 'authReady' da auth-guard.js per avviare la logica della pagina
+// --- EVENT LISTENERS ---
 document.addEventListener('authReady', () => {
     initializeAdminPanel();
 });
-
-// Listener per il cambio di ruolo degli utenti
 document.addEventListener('change', (e) => {
     if (e.target.classList.contains('role-radio')) {
         const uid = e.target.dataset.uid;
@@ -250,14 +224,10 @@ document.addEventListener('change', (e) => {
             .catch(err => console.error(err));
     }
 });
-
-// Listener unico per tutti i pulsanti di approvazione/rifiuto
 document.addEventListener('click', async (e) => {
     const target = e.target;
     const key = target.dataset.key;
     if (!key) return;
-
-    // Approva/Rifiuta Spesa
     if (target.matches('.approve-expense-btn')) {
         const snapshot = await get(ref(database, `expenseRequests/${key}`));
         if (snapshot.exists()) approveExpenseRequest(key, snapshot.val());
@@ -265,8 +235,6 @@ document.addEventListener('click', async (e) => {
     if (target.matches('.reject-expense-btn')) {
         rejectExpenseRequest(key);
     }
-
-    // Approva/Rifiuta Evento Calendario
     if (target.matches('.approve-calendar-btn')) {
         const snapshot = await get(ref(database, `pendingCalendarEvents/${key}`));
         if (snapshot.exists()) approveCalendarEvent(key, snapshot.val());
@@ -275,3 +243,8 @@ document.addEventListener('click', async (e) => {
         rejectCalendarEvent(key);
     }
 });
+
+// Fallback per sicurezza
+if (currentUser && currentUser.uid) {
+    initializeAdminPanel();
+}
