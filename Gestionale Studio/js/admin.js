@@ -1,5 +1,4 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 import { getDatabase, ref, onValue, get, set, push, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
@@ -24,6 +23,8 @@ const userManagementSection = document.getElementById('user-management-section')
 const pendingEventsContainer = document.getElementById('pending-events-container');
 const pendingFinanceContainer = document.getElementById('pending-finance-container');
 const usersListEl = document.getElementById('users-list');
+
+let allUsersData = {}; // Cache per i dati degli utenti (UID -> {email, role})
 
 const displayDate = (dateString) => {
      if (!dateString) return 'N/A';
@@ -65,7 +66,6 @@ const createApprovalCard = (id, title, details, onApprove, onReject) => {
 // Funzioni generiche per approvare/rifiutare
 const approveRequest = async (mainNode, pendingNode, id, data) => {
     try {
-        // Logica speciale per la cassa
         if (pendingNode === 'pendingCashMovements') {
             const cassaRef = ref(database, 'cassaComune');
             const snapshot = await get(cassaRef);
@@ -108,16 +108,11 @@ const loadPendingItems = (container, nodeName, titleKey, detailsBuilder, mainNod
     const pendingRef = ref(database, nodeName);
 
     onValue(pendingRef, (snapshot) => {
-        // Rimuove solo le card di questo tipo per evitare di cancellare altre richieste
         container.querySelectorAll(`[data-request-type="${nodeName}"]`).forEach(el => el.remove());
         
-        // Se non ci sono più richieste di nessun tipo, mostra il messaggio di default
-        if (container.children.length === 0) {
-             container.innerHTML = '<p class="text-gray-500">Nessuna richiesta da approvare.</p>';
-        }
-
+        let hasRequests = false;
         if (snapshot.exists()) {
-            // Se esiste almeno una richiesta, rimuoviamo il messaggio di default
+            hasRequests = true;
             const placeholder = container.querySelector('p');
             if (placeholder) placeholder.remove();
 
@@ -132,17 +127,17 @@ const loadPendingItems = (container, nodeName, titleKey, detailsBuilder, mainNod
                 container.appendChild(card);
             });
         }
+        
+        if (!hasRequests && container.children.length === 0) {
+             container.innerHTML = '<p class="text-gray-500">Nessuna richiesta da approvare.</p>';
+        }
     });
 };
 
 
 // Funzione per la gestione utenti
-const loadUsersForManagement = async () => {
-    const usersDbRef = ref(database, 'users');
-    // Nota: Per ottenere le email in un'app reale, si usano le Cloud Functions.
-    // Qui le lasceremo fuori per semplicità, mostrando solo l'UID.
-    
-    onValue(usersDbRef, (snapshot) => {
+const loadUsersForManagement = () => {
+    onValue(ref(database, 'users'), (snapshot) => {
         usersListEl.innerHTML = '';
         if (snapshot.exists()) {
             const usersData = snapshot.val();
@@ -152,9 +147,12 @@ const loadUsersForManagement = async () => {
                 const userEl = document.createElement('div');
                 userEl.className = 'flex justify-between items-center bg-gray-50 p-3 rounded-lg';
                 
+                // Usa l'email se esiste, altrimenti l'UID come fallback
+                const displayName = user.email || uid;
+
                 userEl.innerHTML = `
                     <div>
-                        <p class="font-semibold text-sm font-mono">${uid}</p>
+                        <p class="font-semibold text-sm">${displayName}</p>
                     </div>
                     <div class="flex items-center gap-4">
                         <div class="flex items-center gap-2">
@@ -188,38 +186,55 @@ document.addEventListener('change', (e) => {
         const userRoleRef = ref(database, `users/${uid}/role`);
         
         set(userRoleRef, newRole)
-            .then(() => alert(`Ruolo di ${uid} aggiornato a ${newRole}.`))
+            .then(() => { 
+                const email = allUsersData[uid]?.email || uid;
+                alert(`Ruolo di ${email} aggiornato a ${newRole}.`);
+            })
             .catch(err => console.error(err));
     }
 });
+
+// Funzione principale di inizializzazione
+const initializeAdminPanel = async () => {
+    // 1. Carica prima tutti i dati degli utenti per avere le email a disposizione
+    const usersSnapshot = await get(ref(database, 'users'));
+    if (usersSnapshot.exists()) {
+        allUsersData = usersSnapshot.val();
+    }
+
+    // 2. Mostra le sezioni in base al ruolo
+    if (currentUser.role === 'admin') {
+        calendarApprovalSection.classList.remove('hidden');
+        financeApprovalSection.classList.remove('hidden');
+        userManagementSection.classList.remove('hidden');
+        
+        const getRequesterName = (data) => allUsersData[data.createdBy]?.email || data.createdBy;
+
+        loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
+            data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start), Richiesto_da: getRequesterName(data) }), 'calendarEvents');
+        
+        loadPendingItems(pendingFinanceContainer, 'pendingVariableExpenses', 'description', 
+            data => ({ Importo: `€${data.amount}`, Pagato_da: data.payer, Tipo: 'Spesa', Richiesto_da: getRequesterName(data) }), 'variableExpenses');
+            
+        loadPendingItems(pendingFinanceContainer, 'pendingIncomeEntries', 'description', 
+            data => ({ Importo: `+€${data.amount}`, Membri: (data.membersInvolved || []).join(', '), Tipo: 'Entrata', Richiesto_da: getRequesterName(data) }), 'incomeEntries');
+        
+        loadPendingItems(pendingFinanceContainer, 'pendingCashMovements', 'description', 
+            data => ({ Importo: `${data.type === 'deposit' ? '+' : '-'}€${data.amount}`, Membro: data.member || 'N/A', Tipo: 'Mov. Cassa', Richiesto_da: getRequesterName(data) }), 'cassaComune');
+
+        loadUsersForManagement();
+
+    } else if (currentUser.role === 'calendar_admin') {
+        calendarApprovalSection.classList.remove('hidden');
+        loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
+            data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start), Richiesto_da: allUsersData[data.createdBy]?.email || data.createdBy }), 'calendarEvents');
+    }
+};
 
 // Inizializzazione della pagina
 document.addEventListener('DOMContentLoaded', () => {
     // Usiamo un piccolo ritardo per assicurarci che currentUser da auth-guard.js sia stato valorizzato
     setTimeout(() => {
-        if (currentUser.role === 'admin') {
-            calendarApprovalSection.classList.remove('hidden');
-            financeApprovalSection.classList.remove('hidden');
-            userManagementSection.classList.remove('hidden');
-            
-            loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
-                data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start), Richiesto_da: data.requesterEmail || data.createdBy }), 'calendarEvents');
-            
-            loadPendingItems(pendingFinanceContainer, 'pendingVariableExpenses', 'description', 
-                data => ({ Importo: `€${data.amount}`, Pagato_da: data.payer, Tipo: 'Spesa', Richiesto_da: data.requesterEmail || data.createdBy }), 'variableExpenses');
-                
-            loadPendingItems(pendingFinanceContainer, 'pendingIncomeEntries', 'description', 
-                data => ({ Importo: `+€${data.amount}`, Membri: (data.membersInvolved || []).join(', '), Tipo: 'Entrata', Richiesto_da: data.requesterEmail || data.createdBy }), 'incomeEntries');
-            
-            loadPendingItems(pendingFinanceContainer, 'pendingCashMovements', 'description', 
-                data => ({ Importo: `${data.type === 'deposit' ? '+' : '-'}€${data.amount}`, Membro: data.member || 'N/A', Tipo: 'Mov. Cassa', Richiesto_da: data.requesterEmail || data.createdBy }), 'cassaComune');
-
-            loadUsersForManagement();
-
-        } else if (currentUser.role === 'calendar_admin') {
-            calendarApprovalSection.classList.remove('hidden');
-            loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
-                data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start), Richiesto_da: data.requesterEmail || data.createdBy }), 'calendarEvents');
-        }
+        initializeAdminPanel();
     }, 500); 
 });
