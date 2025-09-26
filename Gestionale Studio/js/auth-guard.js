@@ -1,17 +1,36 @@
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
-
-// NOTA: Non serve initializeApp qui, perché lo prende dalla pagina principale (es. finanze.js)
+import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 
 const auth = getAuth();
+const database = getDatabase();
 const logoutBtn = document.getElementById('logout-btn');
+const adminPanelLink = document.getElementById('admin-panel-link');
 
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
     if (!user) {
         // Se non c'è utente, torna al login
         window.location.href = 'login.html';
     } else {
-        // L'utente è loggato, la pagina può essere visualizzata.
-        // Qui in futuro controlleremo anche il suo ruolo.
+        // L'utente è loggato, ora controlliamo il suo ruolo nel database
+        const userRef = ref(database, 'users/' + user.uid);
+        const snapshot = await get(userRef);
+
+        let userRole = null;
+        if (snapshot.exists()) {
+            userRole = snapshot.val().role;
+        }
+
+        if (userRole === 'admin') {
+            console.log("Accesso come Amministratore");
+            if (adminPanelLink) {
+                adminPanelLink.classList.remove('hidden'); // Mostra il link al pannello admin
+            }
+        } else {
+            console.log("Accesso come Utente Standard");
+            if (adminPanelLink) {
+                adminPanelLink.classList.add('hidden'); // Nasconde il link se non si è admin
+            }
+        }
     }
 });
 
