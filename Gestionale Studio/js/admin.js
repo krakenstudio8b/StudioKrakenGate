@@ -3,6 +3,7 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth
 import { getDatabase, ref, onValue, get, set, push, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
+// Riconfigura Firebase qui perché questo script è un punto di ingresso separato
 const firebaseConfig = {
     apiKey: "AIzaSyBtQZkX6r4F2W0BsIo6nsD27dUZHv3e8RU",
     authDomain: "studio-kraken-gate.firebaseapp.com",
@@ -25,7 +26,7 @@ const pendingEventsContainer = document.getElementById('pending-events-container
 const pendingFinanceContainer = document.getElementById('pending-finance-container');
 const usersListEl = document.getElementById('users-list');
 
-// Funzione per creare una card di approvazione
+// Funzione per creare una card di approvazione generica
 const createApprovalCard = (id, title, details, onApprove, onReject) => {
     const card = document.createElement('div');
     card.className = 'bg-gray-50 p-3 rounded-lg border flex justify-between items-center flex-wrap gap-2';
@@ -54,15 +55,19 @@ const createApprovalCard = (id, title, details, onApprove, onReject) => {
     return card;
 };
 
-// Funzioni per approvare/rifiutare
+// Funzioni generiche per approvare/rifiutare
 const approveRequest = async (mainNode, pendingNode, id, data) => {
+    // Logica speciale per la cassa
     if (pendingNode === 'pendingCashMovements') {
         const cassaRef = ref(database, 'cassaComune');
         const snapshot = await get(cassaRef);
         const cassa = snapshot.val() || { balance: 0, movements: [] };
         let newBalance = cassa.balance;
-        if (data.type === 'deposit') newBalance += data.amount;
-        else newBalance -= data.amount;
+        if (data.type === 'deposit') {
+            newBalance += data.amount;
+        } else {
+            newBalance -= data.amount;
+        }
         
         const movements = cassa.movements || [];
         movements.push(data);
@@ -80,10 +85,12 @@ const rejectRequest = (pendingNode, id) => {
 };
 
 // Funzione per caricare le richieste
-const loadPendingItems = (nodeName, container, titleKey, detailsBuilder, mainNode) => {
+const loadPendingItems = (container, nodeName, titleKey, detailsBuilder, mainNode) => {
     const pendingRef = ref(database, nodeName);
     onValue(pendingRef, (snapshot) => {
-        container.innerHTML = '';
+        // Rimuove solo le card di questo tipo, non svuota tutto il contenitore
+        container.querySelectorAll(`[data-request-type="${nodeName}"]`).forEach(el => el.remove());
+        
         if (snapshot.exists()) {
             snapshot.forEach(childSnapshot => {
                 const id = childSnapshot.key;
@@ -92,37 +99,37 @@ const loadPendingItems = (nodeName, container, titleKey, detailsBuilder, mainNod
                     () => approveRequest(mainNode, nodeName, id, data),
                     () => rejectRequest(nodeName, id)
                 );
+                card.dataset.requestType = nodeName; // Aggiunge un marcatore
                 container.appendChild(card);
             });
-        } else {
-            container.innerHTML = `<p class="text-gray-500">Nessuna richiesta da approvare.</p>`;
+        }
+        // Se non ci sono snapshot e il contenitore è vuoto, mostra il messaggio
+        if (container.children.length === 0) {
+             container.innerHTML = '<p class="text-gray-500">Nessuna richiesta da approvare.</p>';
         }
     });
 };
 
+
 // Funzione per la gestione utenti
 const loadUsersForManagement = async () => {
     const usersDbRef = ref(database, 'users');
-    const authUsersRef = ref(database, 'authUsers'); // Assumiamo esista un nodo con UID -> email
+    // Nota: Per ottenere le email in un'app reale, si usano le Cloud Functions.
+    // Qui le lasceremo fuori per semplicità, mostrando solo l'UID.
     
-    onValue(usersDbRef, async (snapshot) => {
+    onValue(usersDbRef, (snapshot) => {
         usersListEl.innerHTML = '';
         if (snapshot.exists()) {
             const usersData = snapshot.val();
-            const authUsersSnapshot = await get(authUsersRef);
-            const authUsers = authUsersSnapshot.exists() ? authUsersSnapshot.val() : {};
 
             for (const uid in usersData) {
                 const user = usersData[uid];
                 const userEl = document.createElement('div');
                 userEl.className = 'flex justify-between items-center bg-gray-50 p-3 rounded-lg';
                 
-                const email = authUsers[uid]?.email || 'Email non disponibile';
-
                 userEl.innerHTML = `
                     <div>
-                        <p class="font-semibold text-sm">${email}</p>
-                        <p class="text-xs text-gray-500 font-mono">${uid}</p>
+                        <p class="font-semibold text-sm font-mono">${uid}</p>
                     </div>
                     <div class="flex items-center gap-4">
                         <div class="flex items-center gap-2">
@@ -169,25 +176,24 @@ document.addEventListener('DOMContentLoaded', () => {
             financeApprovalSection.classList.remove('hidden');
             userManagementSection.classList.remove('hidden');
             
-            loadPendingItems('pendingCalendarEvents', pendingEventsContainer, 'title', 
+            loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
                 data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start) }), 'calendarEvents');
             
-            // Uniamo tutte le richieste finanziarie in un unico contenitore
-            loadPendingItems('pendingVariableExpenses', pendingFinanceContainer, 'description', 
-                data => ({ Importo: `€${data.amount}`, Pagato_da: data.payer, Tipo: 'Spesa Variabile' }), 'variableExpenses');
+            loadPendingItems(pendingFinanceContainer, 'pendingVariableExpenses', 'description', 
+                data => ({ Importo: `€${data.amount}`, Pagato_da: data.payer, Tipo: 'Spesa' }), 'variableExpenses');
                 
-            loadPendingItems('pendingIncomeEntries', pendingFinanceContainer, 'description', 
-                data => ({ Importo: `+€${data.amount}`, Membri: data.membersInvolved.join(', '), Tipo: 'Entrata' }), 'incomeEntries');
+            loadPendingItems(pendingFinanceContainer, 'pendingIncomeEntries', 'description', 
+                data => ({ Importo: `+€${data.amount}`, Membri: (data.membersInvolved || []).join(', '), Tipo: 'Entrata' }), 'incomeEntries');
             
-            loadPendingItems('pendingCashMovements', pendingFinanceContainer, 'description', 
-                data => ({ Importo: `${data.type === 'deposit' ? '+' : '-'}€${data.amount}`, Membro: data.member, Tipo: 'Mov. Cassa' }), 'cassaComune/movements');
+            loadPendingItems(pendingFinanceContainer, 'pendingCashMovements', 'description', 
+                data => ({ Importo: `${data.type === 'deposit' ? '+' : '-'}€${data.amount}`, Membro: data.member || 'N/A', Tipo: 'Mov. Cassa' }), 'cassaComune');
 
             loadUsersForManagement();
 
         } else if (currentUser.role === 'calendar_admin') {
             calendarApprovalSection.classList.remove('hidden');
-            loadPendingItems('pendingCalendarEvents', pendingEventsContainer, 'title', 
+            loadPendingItems(pendingEventsContainer, 'pendingCalendarEvents', 'title', 
                 data => ({ Sala: data.room || 'N/A', Data: displayDate(data.start) }), 'calendarEvents');
         }
-    }, 500);
+    }, 500); 
 });
