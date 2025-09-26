@@ -1,9 +1,15 @@
 // js/calendario.js - VERSIONE COMPLETA CON LISTENER 'authReady'
 
 import { database } from './firebase-config.js';
-import { ref, set, onValue, push, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, set, onValue, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
+// Aspetta il segnale da auth-guard.js prima di fare QUALSIASI COSA.
+document.addEventListener('authReady', () => {
+    if (document.getElementById('calendar')) {
+        initializeCalendar();
+    }
+});
 // --- FUNZIONE DI INIZIALIZZAZIONE ---
 // Spostiamo tutta la logica dentro una funzione che chiameremo solo quando l'utente è pronto.
 function initializeCalendar() {
@@ -256,3 +262,4 @@ document.addEventListener('authReady', () => {
 if (currentUser && currentUser.uid) {
     initializeCalendar();
 }
+
