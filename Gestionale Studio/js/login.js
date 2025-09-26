@@ -3,10 +3,9 @@
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 import { auth } from './firebase-config.js';
 
-// Controlla se l'utente è già loggato. Se sì, lo manda alla pagina principale.
+// L'unico redirect che fa questo file è se un utente GIA' LOGGATO finisce qui.
 onAuthStateChanged(auth, (user) => {
     if (user) {
-        // Se l'utente è loggato e siamo ancora sulla pagina di login, reindirizza alla pagina delle attività.
         if (window.location.pathname.endsWith('login.html')) {
             window.location.href = 'index.html';
         }
@@ -25,23 +24,11 @@ loginBtn.addEventListener('click', () => {
 
     signInWithEmailAndPassword(auth, email, password)
         .then((userCredential) => {
-            // Login riuscito. L'onAuthStateChanged gestirà il redirect.
-            console.log("Login effettuato con successo per:", userCredential.user.email);
+            console.log("Login riuscito per:", userCredential.user.email);
+            // Non facciamo nulla, onAuthStateChanged ci porterà alla pagina giusta.
         })
         .catch((error) => {
-            console.error("Errore durante il login:", error.code, error.message);
-            switch (error.code) {
-                case 'auth/user-not-found':
-                case 'auth/wrong-password':
-                case 'auth/invalid-credential':
-                    errorMessage.textContent = 'Email o password non corrette.';
-                    break;
-                case 'auth/operation-not-allowed':
-                    errorMessage.textContent = 'Metodo di login non abilitato su Firebase.';
-                    break;
-                default:
-                    errorMessage.textContent = 'Si è verificato un errore durante il login.';
-                    break;
-            }
+            console.error("Errore di login:", error.code);
+            errorMessage.textContent = 'Email o password non corrette.';
         });
 });
