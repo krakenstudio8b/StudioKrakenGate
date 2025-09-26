@@ -1,5 +1,6 @@
 import { database } from './firebase-config.js';
-import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { currentUser } from './auth-guard.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Riferimenti agli elementi del DOM
@@ -84,6 +85,12 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         eventClick: (info) => {
+            // Gli utenti normali non possono modificare gli eventi esistenti dal calendario
+            if (currentUser.role === 'user') {
+                alert("Non hai i permessi per modificare questo evento. Contatta un amministratore.");
+                return;
+            }
+
             modalTitle.textContent = 'Modifica Evento';
             const event = info.event;
             const extendedProps = event.extendedProps || {};
@@ -111,6 +118,11 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         eventDrop: (info) => {
+            if (currentUser.role === 'user') {
+                alert("Non hai i permessi per spostare questo evento. Contatta un amministratore.");
+                info.revert(); // Annulla lo spostamento
+                return;
+            }
             const event = info.event;
             const eventIndex = allEvents.findIndex(e => e.id === event.id);
             if (eventIndex !== -1) {
@@ -120,8 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         
-        // Questo metodo viene chiamato dopo che un evento è stato renderizzato
-        // Lo usiamo per personalizzare l'aspetto senza rompere i colori
         eventDidMount: (info) => {
             const room = info.event.extendedProps.room;
             if (room) {
@@ -161,7 +171,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Carica gli eventi da Firebase
     onValue(eventsRef, (snapshot) => {
-        allEvents = snapshot.val() || [];
+        allEvents = [];
+        if (snapshot.exists()) {
+            snapshot.forEach(child => {
+                allEvents.push({ id: child.key, ...child.val() });
+            });
+        }
         calendar.removeAllEvents();
         calendar.addEventSource(allEvents);
     });
@@ -184,30 +199,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const eventData = {
             title, start, end, room, participants, description,
-            color: color,
             backgroundColor: color,
-            borderColor: color
+            borderColor: color,
+            createdBy: currentUser.uid,
+            requesterEmail: currentUser.email
         };
 
-        if (currentEventInfo && currentEventInfo.isNew) {
-            eventData.id = Date.now().toString();
-            allEvents.push(eventData);
-        } else if (currentEventInfo && !currentEventInfo.isNew) {
-            const eventIndex = allEvents.findIndex(e => e.id === currentEventInfo.id);
-            if (eventIndex !== -1) {
-                eventData.id = currentEventInfo.id;
-                allEvents[eventIndex] = eventData;
+        if (currentUser.role === 'admin' || currentUser.role === 'calendar_admin') {
+            if (currentEventInfo && currentEventInfo.isNew) {
+                const newEventRef = push(eventsRef);
+                set(newEventRef, eventData);
+            } else if (currentEventInfo && !currentEventInfo.isNew) {
+                const eventToUpdateRef = ref(database, `calendarEvents/${currentEventInfo.id}`);
+                set(eventToUpdateRef, eventData);
             }
+            alert('Evento salvato con successo.');
+        } else {
+            if (currentEventInfo && !currentEventInfo.isNew) {
+                alert("Non hai i permessi per modificare un evento. Puoi solo crearne di nuovi.");
+                return;
+            }
+            const pendingRef = ref(database, 'pendingCalendarEvents');
+            const newPendingRef = push(pendingRef);
+            set(newPendingRef, eventData);
+            alert('Richiesta di evento inviata per approvazione!');
         }
         
-        saveDataToFirebase();
         closeModal();
     });
 
     deleteEventBtn.addEventListener('click', () => {
         if (currentEventInfo && !currentEventInfo.isNew && confirm("Sei sicuro di voler eliminare questo evento?")) {
-            allEvents = allEvents.filter(e => e.id !== currentEventInfo.id);
-            saveDataToFirebase();
+            const eventToDeleteRef = ref(database, `calendarEvents/${currentEventInfo.id}`);
+            remove(eventToDeleteRef);
             closeModal();
         }
     });
