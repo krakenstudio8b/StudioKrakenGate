@@ -51,6 +51,11 @@ onAuthStateChanged(auth, async (user) => {
 
 if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
-        signOut(auth).catch((error) => console.error("Errore durante il logout:", error));
+        signOut(auth)
+            .then(() => {
+                console.log('Logout effettuato con successo');
+                // Il redirect verrà gestito dall'onAuthStateChanged
+            })
+            .catch((error) => console.error("Errore durante il logout:", error));
     });
 }
