@@ -593,7 +593,7 @@ const getCalculationData = (selectedMonth = 'all') => {
     const memberContributions = members.map(member => {
         const paidExpenses = filteredVarExpenses
             .filter(exp => exp.payer === member)
-            .reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
+            .reduce((sum, exp) => sum + exp.amount, 0);
 
         const deposits = filteredCashMovements
             .filter(mov => mov.type === 'deposit' && mov.member === member)
@@ -1439,7 +1439,6 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 
 // --- App Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Controlla su quale pagina ci si trova per inizializzare solo il codice necessario
     if (document.getElementById('calendar-container')) {
         // La logica per il calendario è in js/calendario.js
     } else if (document.getElementById('kanban-board')) {
@@ -1450,4 +1449,3 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDataFromFirebase();
     }
 });
-
