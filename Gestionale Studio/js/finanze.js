@@ -2,14 +2,6 @@ import { database } from './firebase-config.js';
 import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
-// --- NUOVA LOGICA: GESTIONE RUOLI ---
-// PRESUPPOSTO: Assumiamo che il tuo file 'auth-guard.js' esporti un oggetto 'currentUser'
-// che contiene una proprietà 'role'. Esempio:
-// const currentUser = { uid: 'xyz', displayName: 'Mario', role: 'admin' };
-// const currentUser = { uid: 'abc', displayName: 'Luigi', role: 'base' };
-// Se l'oggetto currentUser non è strutturato così, dovrai adattare le condizioni `if (currentUser.role === 'admin')`.
-
-
 // Riferimenti ai nodi del tuo database
 const membersRef = ref(database, 'members');
 const varExpensesRef = ref(database, 'variableExpenses');
@@ -19,8 +11,7 @@ const wishlistRef = ref(database, 'wishlist');
 const futureMovementsRef = ref(database, 'futureMovements');
 const pendingPaymentsRef = ref(database, 'pendingPayments');
 const cassaComuneRef = ref(database, 'cassaComune');
-// --- NUOVO NODO PER LE RICHIESTE DI SPESA ---
-const expenseRequestsRef = ref(database, 'expenseRequests');
+const expenseRequestsRef = ref(database, 'expenseRequests'); // Usato solo per inviare nuove richieste
 
 
 // --- Data State (Firebase-synced) ---
@@ -32,11 +23,9 @@ let wishlist = [];
 let futureMovements = [];
 let pendingPayments = [];
 let cassaComune = { balance: 0, movements: [] };
-let expenseRequests = {}; // Usiamo un oggetto per gestire le chiavi univoche di Firebase
 
+// Funzione di salvataggio principale (non salva più le richieste da questo file)
 function saveDataToFirebase() {
-    // Nota: Con la nuova logica, 'push', 'update', e 'remove' sono spesso migliori di 'set' per
-    // evitare che utenti sovrascrivano dati a vicenda. Manteniamo 'set' per semplicità dove possibile.
     set(membersRef, members);
     set(varExpensesRef, variableExpenses);
     set(fixedExpensesRef, fixedExpenses);
@@ -45,9 +34,9 @@ function saveDataToFirebase() {
     set(futureMovementsRef, futureMovements);
     set(pendingPaymentsRef, pendingPayments);
     set(cassaComuneRef, cassaComune);
-    set(expenseRequestsRef, expenseRequests); // Salviamo anche le richieste
 }
 
+// Funzione per caricare tutti i dati necessari per la pagina finanze
 function loadDataFromFirebase() {
     onValue(membersRef, (snapshot) => {
         members = snapshot.val() || [];
@@ -96,16 +85,9 @@ function loadDataFromFirebase() {
         renderCassaComune();
         updateDashboardView();
     });
-
-    // --- NUOVO LISTENER PER LE RICHIESTE DI SPESA ---
-    onValue(expenseRequestsRef, (snapshot) => {
-        expenseRequests = snapshot.val() || {};
-        renderExpenseRequestsForAdmin();
-    });
 }
 
 // --- App Logic (DOM Elements) ---
-// (Nessuna modifica qui, tutti gli elementi DOM rimangono gli stessi)
 const monthFilter = document.getElementById('month-filter');
 const memberCountEl = document.getElementById('member-count');
 const membersListEl = document.getElementById('members-list');
@@ -185,13 +167,9 @@ const sections = {
     futureMovements: document.getElementById('future-movements-section'),
     pendingPayments: document.getElementById('pending-payments-section'),
     quickActions: document.getElementById('quick-actions-section'),
-    // --- NUOVO: Aggiungi l'ID della sezione admin nel tuo HTML ---
-    adminRequests: document.getElementById('admin-requests-section'),
 };
 
 // --- Funzioni Utility e di Rendering ---
-// (Le funzioni di utility e rendering come formatDate, renderMembers, etc. rimangono invariate)
-// ... (tutto il blocco di funzioni da populateMonthFilter a renderFixedExpenses)
 const populateMonthFilter = () => {
     const months = new Set();
     [...variableExpenses, ...incomeEntries, ...(cassaComune.movements || [])].forEach(item => {
@@ -227,14 +205,7 @@ const populateMonthFilter = () => {
 const toggleSectionsVisibility = () => {
     const hasMembers = members.length > 0;
     Object.values(sections).forEach(section => {
-        // La sezione admin si mostra solo se ci sono membri E l'utente è admin
-        if(section && section.id === 'admin-requests-section') {
-             if(currentUser.role === 'admin' && hasMembers){
-                 section.classList.remove('hidden');
-             } else {
-                 section.classList.add('hidden');
-             }
-        } else if(section) {
+        if(section) {
             section.classList.toggle('hidden', !hasMembers);
         }
     });
@@ -294,7 +265,7 @@ const renderMembers = () => {
 };
 
 const renderCassaComune = () => {
-    cashBalanceAmountEl.textContent = `€${cassaComune.balance.toFixed(2)}`;
+    cashBalanceAmountEl.textContent = `€${(cassaComune.balance || 0).toFixed(2)}`;
     cashMovementsHistoryEl.innerHTML = '';
     if(!cassaComune.movements || cassaComune.movements.length === 0){
         cashMovementsHistoryEl.innerHTML = '<p class="text-gray-500 text-sm">Nessun movimento registrato.</p>';
@@ -575,60 +546,8 @@ const renderFixedExpenses = () => {
         fixedExpensesListEl.appendChild(el);
     });
 }
-// --- NUOVA FUNZIONE DI RENDERING PER LE RICHIESTE ADMIN ---
-/**
- * Se l'utente è admin, mostra un pannello con le richieste di spesa in sospeso.
- * NECESSITA di un elemento nel DOM con id="admin-requests-section" e al suo interno
- * un div con id="admin-requests-container".
- * Esempio HTML:
- * <section id="admin-requests-section" class="hidden bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
- * <h2 class="text-xl font-bold mb-4 text-yellow-800">Richieste di Spesa in Sospeso</h2>
- * <div id="admin-requests-container" class="space-y-3"></div>
- * </section>
- */
-const renderExpenseRequestsForAdmin = () => {
-    const container = document.getElementById('admin-requests-container');
-    const section = document.getElementById('admin-requests-section');
-    if (!container || !section || currentUser.role !== 'admin') return;
-
-    const pendingRequests = Object.entries(expenseRequests).filter(([key, req]) => req.status === 'pending');
-    
-    section.classList.toggle('hidden', pendingRequests.length === 0);
-    container.innerHTML = '';
-
-    if (pendingRequests.length === 0) {
-        container.innerHTML = '<p class="text-gray-500">Nessuna richiesta in sospeso.</p>';
-        return;
-    }
-
-    pendingRequests.forEach(([key, req]) => {
-        const reqEl = document.createElement('div');
-        reqEl.className = 'bg-white p-3 rounded-lg border flex justify-between items-center';
-        reqEl.innerHTML = `
-            <div>
-                <p class="font-semibold">${req.description} <span class="font-normal text-gray-600">- ${req.category}</span></p>
-                <p class="text-sm text-gray-500">
-                    Richiedente: <span class="font-medium">${req.requesterName || 'N/A'}</span> | 
-                    Pagante: <span class="font-medium">${req.payer}</span> |
-                    Data: ${displayDate(req.date)}
-                </p>
-            </div>
-            <div class="flex items-center gap-3">
-                <p class="font-bold text-lg text-indigo-600">€${req.amount.toFixed(2)}</p>
-                <div class="flex flex-col gap-1">
-                    <button data-key="${key}" class="approve-request-btn text-xs bg-green-500 text-white font-semibold py-1 px-3 rounded-lg hover:bg-green-600">Approva</button>
-                    <button data-key="${key}" class="reject-request-btn text-xs bg-red-500 text-white font-semibold py-1 px-3 rounded-lg hover:bg-red-600">Rifiuta</button>
-                </div>
-            </div>
-        `;
-        container.appendChild(reqEl);
-    });
-}
-
 
 // --- Funzioni per i grafici e calcoli ---
-// (Queste rimangono invariate)
-// ... (tutto il blocco da createBarChart a calculateAndRenderSettlement)
 const createBarChart = (canvasId, label) => new Chart(document.getElementById(canvasId).getContext('2d'), {
     type: 'bar', data: { labels: [], datasets: [{ label, data: [], backgroundColor: [] }] },
     options: { responsive: true, maintainAspectRatio: true, scales: { y: { beginAtZero: true } } }
@@ -763,9 +682,8 @@ const calculateAndRenderSettlement = (forExport = false) => {
     }
     if(settlementContainer) settlementContainer.classList.remove('hidden');
 };
+
 // --- Funzioni di import/export e aggiornamento vista ---
-// (Queste rimangono invariate)
-// ... (tutto il blocco da handleExportData a updateDashboardView)
 const handleExportData = () => {
     const dataToExport = { members, variableExpenses, fixedExpenses, incomeEntries, wishlist, futureMovements, pendingPayments, cassaComune };
     const dataStr = JSON.stringify(dataToExport, null, 2);
@@ -849,8 +767,8 @@ const updateDashboardView = () => {
     
     if (settlementContainer) settlementContainer.classList.add('hidden');
 };
+
 // --- Logica del modale di modifica ---
-// (Invariata)
 const getItemFromStore = (type, id) => {
     let store;
     switch (type) {
@@ -960,8 +878,8 @@ const closeEditModal = () => {
     editModalFormContainer.innerHTML = '';
     editModalActions.innerHTML = '';
 };
-// --- Event Listeners (SEZIONE PRINCIPALE CON LE MODIFICHE) ---
 
+// --- Event Listeners ---
 if (monthFilter) monthFilter.addEventListener('change', updateDashboardView);
 
 if (addMemberBtn) addMemberBtn.addEventListener('click', () => {
@@ -973,7 +891,6 @@ if (addMemberBtn) addMemberBtn.addEventListener('click', () => {
     }
 });
 
-// (Handler per cassa, pagamenti, movimenti futuri etc. rimangono invariati)
 if (addCashMovementBtn) addCashMovementBtn.addEventListener('click', () => {
     const type = cashMovementTypeSelect.value;
     const amount = parseFloat(cashMovementAmountInput.value);
@@ -1114,14 +1031,14 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
     saveDataToFirebase();
 });
 
-
-// --- MODIFICA PROFONDA: GESTIONE AGGIUNTA SPESE E RICHIESTE ---
-
+// --- LOGICA DI AGGIUNTA SPESA BASATA SUI RUOLI ---
 if (addExpenseBtn) {
-    // Cambia il testo del bottone in base al ruolo dell'utente
-    if(currentUser.role !== 'admin'){
-        addExpenseBtn.textContent = 'Invia Richiesta Spesa';
-    }
+    // Il testo del pulsante viene cambiato dinamicamente in base al ruolo
+    setTimeout(() => { // Usiamo un timeout per assicurarci che currentUser sia valorizzato
+        if (currentUser && currentUser.role !== 'admin') {
+            addExpenseBtn.textContent = 'Invia Richiesta Spesa';
+        }
+    }, 500);
 
     addExpenseBtn.addEventListener('click', () => {
         if (currentUser.role === 'admin') {
@@ -1132,10 +1049,6 @@ if (addExpenseBtn) {
     });
 }
 
-/**
- * [SOLO ADMIN] Aggiunge direttamente una spesa o la crea in seguito all'approvazione di una richiesta.
- * @param {object} [expenseData=null] - Dati precompilati provenienti da una richiesta. Se null, li prende dal form.
- */
 function addExpenseAsAdmin(expenseData = null) {
     const expense = expenseData || {
         date: expenseDateInput.value || new Date().toISOString().split('T')[0],
@@ -1144,30 +1057,24 @@ function addExpenseAsAdmin(expenseData = null) {
         description: descriptionInput.value.trim(),
         category: categoryInput.value.trim()
     };
-
     if (!expense.payer || isNaN(expense.amount) || expense.amount <= 0 || !expense.description || !expense.category) {
         alert('Per favore, compila tutti i campi della spesa.');
         return;
     }
-    
     const success = createLinkedExpense(expense.payer, expense.date, expense.amount, expense.description, expense.category);
-    
     if (success) {
         alert('Spesa aggiunta con successo!');
-        if (!expenseData) { // Pulisce il form solo se l'admin ha inserito manualmente
+        if (!expenseData) {
             [expenseDateInput, amountInput, descriptionInput, categoryInput].forEach(i => i.value = '');
         }
     }
 }
 
-/**
- * [SOLO UTENTE BASE] Invia una richiesta di spesa che dovrà essere approvata da un admin.
- */
 function submitExpenseRequest() {
     const newRequest = {
         requesterId: currentUser.uid,
         requesterName: currentUser.displayName,
-        status: 'pending', // Stati: pending, approved, rejected
+        status: 'pending',
         requestedAt: new Date().toISOString(),
         date: expenseDateInput.value || new Date().toISOString().split('T')[0],
         payer: payerSelect.value,
@@ -1175,55 +1082,42 @@ function submitExpenseRequest() {
         description: descriptionInput.value.trim(),
         category: categoryInput.value.trim(),
     };
-
     if (!newRequest.payer || isNaN(newRequest.amount) || newRequest.amount <= 0 || !newRequest.description || !newRequest.category) {
         alert('Per favore, compila tutti i campi della richiesta di spesa.');
         return;
     }
-
-    const newRequestRef = push(expenseRequestsRef); // Firebase genera una chiave unica
+    const newRequestRef = push(expenseRequestsRef);
     set(newRequestRef, newRequest);
-
     alert('Richiesta di spesa inviata per approvazione!');
     [expenseDateInput, amountInput, descriptionInput, categoryInput].forEach(i => i.value = '');
 }
 
-
-/**
- * [LOGICA CENTRALE] Crea una spesa e, se pagata dalla cassa, il suo movimento collegato.
- * Restituisce true se l'operazione ha successo, false altrimenti.
- */
 function createLinkedExpense(payer, date, amount, description, category) {
     const newExpenseId = Date.now().toString();
-
-    // Se il pagamento è dalla cassa, controlla prima i fondi.
     if (payer === 'Cassa Comune' && amount > cassaComune.balance) {
         alert('Fondi insufficienti nella cassa comune per questa spesa.');
         return false;
     }
-    
     variableExpenses.push({
         id: newExpenseId,
         date, payer, amount, description, category
     });
-    
     if (payer === 'Cassa Comune') {
         cassaComune.balance -= amount;
         if (!cassaComune.movements) cassaComune.movements = [];
         cassaComune.movements.push({
-            id: (Date.now() + 1).toString(), // ID diverso per sicurezza
+            id: (Date.now() + 1).toString(),
             date,
             type: 'withdrawal',
             amount,
             description: `Spesa: ${description}`,
             member: '',
-            linkedExpenseId: newExpenseId // <-- Il collegamento cruciale!
+            linkedExpenseId: newExpenseId
         });
     }
     saveDataToFirebase();
     return true;
 }
-
 
 if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
     const description = fixedDescInput.value.trim();
@@ -1293,7 +1187,6 @@ if (document.body) {
         const target = e.target.closest('button');
         if (!target) return;
 
-        // ... (altri if per close-form-btn, edit-btn, etc. rimangono invariati)
         if (target.matches('.close-form-btn')) {
             const formPanel = target.closest('.action-form');
             if(formPanel) {
@@ -1350,7 +1243,6 @@ if (document.body) {
             }
         }
         
-        // --- MODIFICA PROFONDA: ELIMINAZIONE COLLEGATA ---
         if (target.matches('.remove-expense-btn')) {
             const expenseId = target.dataset.id;
             const expenseIndex = variableExpenses.findIndex(exp => exp.id === expenseId);
@@ -1359,23 +1251,20 @@ if (document.body) {
             const expenseToRemove = variableExpenses[expenseIndex];
 
             if (confirm(`Sei sicuro di voler eliminare la spesa "${expenseToRemove.description}"? L'azione è irreversibile.`)) {
-                // Se la spesa era pagata dalla cassa, trova e annulla il movimento collegato
                 if (expenseToRemove.payer === 'Cassa Comune') {
                     const linkedMovementIndex = (cassaComune.movements || []).findIndex(mov => mov.linkedExpenseId === expenseId);
                     
                     if (linkedMovementIndex > -1) {
                         const movementToUndo = cassaComune.movements[linkedMovementIndex];
-                        cassaComune.balance += movementToUndo.amount; // Rimborsa la cassa
-                        cassaComune.movements.splice(linkedMovementIndex, 1); // Rimuove il movimento
+                        cassaComune.balance += movementToUndo.amount;
+                        cassaComune.movements.splice(linkedMovementIndex, 1);
                     }
                 }
-                
-                variableExpenses.splice(expenseIndex, 1); // Rimuove la spesa
+                variableExpenses.splice(expenseIndex, 1);
                 saveDataToFirebase();
             }
         }
 
-        // ... (gli altri handler di rimozione rimangono invariati)
         if (target.matches('.remove-income-btn')) {
             incomeEntries = incomeEntries.filter(inc => inc.id !== target.dataset.id);
             saveDataToFirebase();
@@ -1419,36 +1308,6 @@ if (document.body) {
             }
         }
         
-        // --- NUOVI HANDLER PER GESTIRE LE RICHIESTE ---
-        if (target.matches('.approve-request-btn')) {
-            const requestKey = target.dataset.key;
-            const request = expenseRequests[requestKey];
-            if (request && currentUser.role === 'admin') {
-                if(confirm(`Approvare la spesa di €${request.amount} per "${request.description}"?`)){
-                    // 1. Crea la spesa effettiva usando i dati dalla richiesta
-                    const success = addExpenseAsAdmin({ ...request });
-
-                    // 2. Se la spesa è stata creata, aggiorna lo stato della richiesta
-                    if (success) {
-                        const requestRef = ref(database, `expenseRequests/${requestKey}`);
-                        update(requestRef, { status: 'approved' });
-                    }
-                }
-            }
-        }
-
-        if (target.matches('.reject-request-btn')) {
-            const requestKey = target.dataset.key;
-            const request = expenseRequests[requestKey];
-             if (request && currentUser.role === 'admin') {
-                 if(confirm(`Rifiutare la spesa di €${request.amount} per "${request.description}"?`)){
-                    const requestRef = ref(database, `expenseRequests/${requestKey}`);
-                    update(requestRef, { status: 'rejected' });
-                 }
-             }
-        }
-
-        // ... (gli altri handler per pagamenti, wishlist etc. rimangono invariati)
         if (target.matches('.confirm-pending-payment-btn')) {
             const paymentId = target.dataset.id;
             const payment = pendingPayments.find(p => p.id === paymentId);
@@ -1490,10 +1349,8 @@ if (document.body) {
                 categoryInput.value = "Attrezzatura";
                 wishlist = wishlist.filter(i => i.id !== itemId);
                 saveDataToFirebase();
-                
                 const expenseFormBtn = quickActionsContainer.querySelector('[data-form-id="expense-form-section"]');
                 if (expenseFormBtn) expenseFormBtn.click();
-                
                 alert(`"${item.name}" spostato nelle spese. Seleziona chi ha pagato e conferma.`);
             }
         }
@@ -1549,51 +1406,40 @@ if (document.body) {
     });
 }
 
-// --- MODIFICA PROFONDA: LOGICA DI SALVATAGGIO DEL MODALE DI EDITING ---
+// --- LOGICA DI SALVATAGGIO DEL MODALE DI EDITING ---
 if (editModal) editModal.addEventListener('click', (e) => {
     if (e.target.matches('#save-changes-btn')) {
         const id = e.target.dataset.id;
         const type = e.target.dataset.type;
         const itemIndex = variableExpenses.findIndex(i => i.id === id);
         let item;
-        // Troviamo l'item nel modo corretto per poterlo modificare per riferimento
          if (type === 'variableExpense') {
             item = variableExpenses[itemIndex];
         } else {
             item = getItemFromStore(type, id);
         }
-
         if (!item) return;
 
         switch (type) {
             case 'cashMovement':
-                // ... (logica invariata)
                 break;
             case 'variableExpense':
                 const oldPayer = item.payer;
                 const oldAmount = item.amount;
-                
                 const newPayer = document.getElementById('edit-payer').value;
                 const newAmount = parseFloat(document.getElementById('edit-amount').value);
-                
-                // Aggiorniamo i dati dell'item
                 item.payer = newPayer;
                 item.date = document.getElementById('edit-expense-date').value;
                 item.amount = newAmount;
                 item.category = document.getElementById('edit-category').value;
                 item.description = document.getElementById('edit-description').value;
-
-                // --- Logica di Sincronizzazione Cassa Comune ---
                 const linkedMovement = (cassaComune.movements || []).find(m => m.linkedExpenseId === id);
-
                 if (oldPayer === 'Cassa Comune' && newPayer !== 'Cassa Comune') {
-                    // La spesa non è più a carico della cassa -> RIMBORSA e RIMUOVI movimento
                     cassaComune.balance += oldAmount;
                     if (linkedMovement) {
                         cassaComune.movements = cassaComune.movements.filter(m => m.id !== linkedMovement.id);
                     }
                 } else if (oldPayer !== 'Cassa Comune' && newPayer === 'Cassa Comune') {
-                    // La spesa è ORA a carico della cassa -> PRELEVA e CREA movimento
                     cassaComune.balance -= newAmount;
                     if (!cassaComune.movements) cassaComune.movements = [];
                     cassaComune.movements.push({
@@ -1602,7 +1448,6 @@ if (editModal) editModal.addEventListener('click', (e) => {
                          description: `Spesa: ${item.description}`, member: '', linkedExpenseId: id
                     });
                 } else if (oldPayer === 'Cassa Comune' && newPayer === 'Cassa Comune') {
-                    // La spesa è ancora della cassa, ma l'importo è cambiato -> AGGIORNA
                     const difference = oldAmount - newAmount;
                     cassaComune.balance += difference;
                     if (linkedMovement) {
@@ -1611,7 +1456,6 @@ if (editModal) editModal.addEventListener('click', (e) => {
                     }
                 }
                 break;
-            // ... (altri case invariati)
             case 'fixedExpense':
                 item.description = document.getElementById('edit-fixed-desc').value;
                 item.amount = parseFloat(document.getElementById('edit-fixed-amount').value);
@@ -1668,7 +1512,6 @@ if (editModal) editModal.addEventListener('click', (e) => {
         closeEditModal();
     }
 });
-
 
 if (calculateBtn) calculateBtn.addEventListener('click', () => calculateAndRenderSettlement(false));
 if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportToExcel);
