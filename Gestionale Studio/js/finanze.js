@@ -134,7 +134,7 @@ const pendingPaymentAmountInput = document.getElementById('pending-payment-amoun
 const pendingPaymentDescriptionInput = document.getElementById('pending-payment-description');
 const addPendingPaymentBtn = document.getElementById('add-pending-payment-btn');
 const pendingPaymentsContainer = document.getElementById('pending-payments-container');
-const quickActionsContainer = document.getElementById('quick-actions-container');
+const quickActionsContainer = document.getElementById('quick-actions-section');
 const actionForms = document.querySelectorAll('.action-form');
 const editModal = document.getElementById('edit-modal');
 const editModalTitle = document.getElementById('edit-modal-title');
@@ -593,7 +593,7 @@ const getCalculationData = (selectedMonth = 'all') => {
     const memberContributions = members.map(member => {
         const paidExpenses = filteredVarExpenses
             .filter(exp => exp.payer === member)
-            .reduce((sum, exp) => sum + exp.amount, 0);
+            .reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
 
         const deposits = filteredCashMovements
             .filter(mov => mov.type === 'deposit' && mov.member === member)
@@ -1439,6 +1439,7 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 
 // --- App Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
+    // Controlla su quale pagina ci si trova per inizializzare solo il codice necessario
     if (document.getElementById('calendar-container')) {
         // La logica per il calendario è in js/calendario.js
     } else if (document.getElementById('kanban-board')) {
