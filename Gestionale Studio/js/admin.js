@@ -65,6 +65,7 @@ const createApprovalCard = (id, title, details, onApprove, onReject) => {
 // Funzioni generiche per approvare/rifiutare
 const approveRequest = async (mainNode, pendingNode, id, data) => {
     try {
+        // Logica speciale per la cassa
         if (pendingNode === 'pendingCashMovements') {
             const cassaRef = ref(database, 'cassaComune');
             const snapshot = await get(cassaRef);
@@ -138,6 +139,8 @@ const loadPendingItems = (container, nodeName, titleKey, detailsBuilder, mainNod
 // Funzione per la gestione utenti
 const loadUsersForManagement = async () => {
     const usersDbRef = ref(database, 'users');
+    // Nota: Per ottenere le email in un'app reale, si usano le Cloud Functions.
+    // Qui le lasceremo fuori per semplicità, mostrando solo l'UID.
     
     onValue(usersDbRef, (snapshot) => {
         usersListEl.innerHTML = '';
@@ -149,7 +152,6 @@ const loadUsersForManagement = async () => {
                 const userEl = document.createElement('div');
                 userEl.className = 'flex justify-between items-center bg-gray-50 p-3 rounded-lg';
                 
-                // Mostriamo l'UID come identificativo principale
                 userEl.innerHTML = `
                     <div>
                         <p class="font-semibold text-sm font-mono">${uid}</p>
