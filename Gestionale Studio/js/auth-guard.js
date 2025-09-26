@@ -6,29 +6,39 @@ const database = getDatabase();
 const logoutBtn = document.getElementById('logout-btn');
 const adminPanelLink = document.getElementById('admin-panel-link');
 
+// Esportiamo una variabile globale per sapere chi è l'utente
+export let currentUser = {
+    uid: null,
+    email: null,
+    role: 'user' // Ruolo di default
+};
+
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        // Se non c'è utente, torna al login
         window.location.href = 'login.html';
     } else {
-        // L'utente è loggato, ora controlliamo il suo ruolo nel database
+        currentUser.uid = user.uid;
+        currentUser.email = user.email;
+
         const userRef = ref(database, 'users/' + user.uid);
         const snapshot = await get(userRef);
 
-        let userRole = null;
         if (snapshot.exists()) {
-            userRole = snapshot.val().role;
+            currentUser.role = snapshot.val().role || 'user';
+        } else {
+            currentUser.role = 'user';
         }
 
-        if (userRole === 'admin') {
-            console.log("Accesso come Amministratore");
+        console.log(`Accesso come: ${currentUser.role}`);
+        
+        // Mostra il link al pannello admin solo se si ha un ruolo speciale
+        if (currentUser.role === 'admin' || currentUser.role === 'calendar_admin') {
             if (adminPanelLink) {
-                adminPanelLink.classList.remove('hidden'); // Mostra il link al pannello admin
+                adminPanelLink.classList.remove('hidden');
             }
         } else {
-            console.log("Accesso come Utente Standard");
             if (adminPanelLink) {
-                adminPanelLink.classList.add('hidden'); // Nasconde il link se non si è admin
+                adminPanelLink.classList.add('hidden');
             }
         }
     }
