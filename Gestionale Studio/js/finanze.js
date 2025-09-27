@@ -1073,31 +1073,7 @@ function exportToExcel() {
 
 // --- Riferimenti DOM (Per gli Event Listeners) ---
 
-const newMemberNameInput = document.getElementById('new-member-name');
-const addMemberBtn = document.getElementById('add-member-btn');
-const cashMovementAmountInput = document.getElementById('cash-movement-amount');
-const addCashMovementBtn = document.getElementById('add-cash-movement-btn');
-const addPendingPaymentBtn = document.getElementById('add-pending-payment-btn');
-const addFutureMovementBtn = document.getElementById('add-future-movement-btn');
-const wishlistNewLinkInput = document.getElementById('wishlist-new-link-input');
-const addWishlistLinkBtn = document.getElementById('add-wishlist-link-btn');
-const wishlistLinksContainer = document.getElementById('wishlist-links-container');
-const addWishlistItemBtn = document.getElementById('add-wishlist-item-btn');
-const addIncomeBtn = document.getElementById('add-income-btn');
-const addExpenseBtn = document.getElementById('add-expense-btn');
-const addFixedExpenseBtn = document.getElementById('add-fixed-expense-btn');
-const quickActionsContainer = document.getElementById('quick-actions-section');
-const editModal = document.getElementById('edit-modal');
-const closeEditModalBtn = document.getElementById('close-edit-modal-btn');
-const calculateBtn = document.getElementById('calculate-btn');
-const exportExcelBtn = document.getElementById('export-excel-btn');
-const exportDataBtn = document.getElementById('export-data-btn');
-const importDataBtn = document.getElementById('import-data-btn');
-const importFileInput = document.getElementById('import-file-input');
-const monthFilter = document.getElementById('month-filter');
-const expenseDateInput = document.getElementById('expense-date');
-const incomeDateInput = document.getElementById('income-date');
-const futureMovementDueDateInput = document.getElementById('future-movement-due-date');
+
 
 // Imposta le date di default
 const today = new Date().toISOString().split('T')[0];
@@ -1362,3 +1338,4 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
