@@ -1,7 +1,7 @@
 import { database } from './firebase-config.js';
 import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 // FIX: Aggiunto onAuthReady per risolvere il problema di timing
-import { currentUser, onAuthReady } from './auth-guard.js';
+import { currentUser } from './auth-guard.js';
 
 
 // --- Riferimenti ai nodi del tuo database ---
@@ -1338,4 +1338,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
 
