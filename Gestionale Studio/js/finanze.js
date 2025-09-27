@@ -488,7 +488,8 @@ const initializeCharts = () => {
     }
     
     // 2. Entrate per membro
-    const incomeData = memberNames.map(name => data.income.filter(i => i.members.includes(name)).reduce((sum, i) => sum + i.amount / i.members.length, 0));
+    // La riga corretta, con il controllo di sicurezza "i.members &&"
+    const incomeData = memberNames.map(name => data.income.filter(i => i.members && i.members.includes(name)).reduce((sum, i) => sum + i.amount / i.members.length, 0));
     if(document.getElementById('membersIncomeChart')) {
         membersIncomeChart = createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
     }
@@ -1328,6 +1329,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
