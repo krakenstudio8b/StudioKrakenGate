@@ -302,17 +302,29 @@ const renderMembers = () => {
 };
 
 
+// SOSTITUISCI L'INTERA FUNZIONE renderCassaComune
 const renderCassaComune = () => {
     const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
     const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
 
-    if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${cassaComune.balance.toFixed(2)}`;
+    if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${(cassaComune.balance || 0).toFixed(2)}`;
     
     if (cashMovementsHistoryEl) {
-        cashMovementsHistoryEl.innerHTML = cassaComune.movements.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10).map(m => `
-            <div class="flex justify-between items-center text-sm border-b pb-1 mb-1 ${m.type === 'deposit' ? 'text-green-700' : 'text-red-700'}">
-                <span class="font-medium">${m.description} (${m.member || 'Cassa'})</span>
-                <span class="font-bold">${m.type === 'deposit' ? '+' : '-'}€${m.amount.toFixed(2)}</span>
+        // Assicurati che cassaComune.movements sia un array
+        const movements = Array.isArray(cassaComune.movements) ? cassaComune.movements : [];
+        
+        cashMovementsHistoryEl.innerHTML = movements.sort((a, b) => new Date(b.date) - new Date(a.date)).map(m => `
+            <div class="flex justify-between items-center text-sm border-b pb-1 mb-1 group">
+                <div class="${m.type === 'deposit' ? 'text-green-700' : 'text-red-700'}">
+                    <span class="font-medium">${m.description} (${m.member || 'Cassa'})</span>
+                    <span class="font-bold block">${m.type === 'deposit' ? '+' : '-'}€${(m.amount || 0).toFixed(2)}</span>
+                </div>
+                ${currentUser.role === 'admin' ? `
+                <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button data-id="${m.id}" data-type="cashMovement" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800">Modifica</button>
+                    <button data-id="${m.id}" data-type="cashMovement" class="delete-item-btn text-xs text-red-600 hover:text-red-800">Elimina</button>
+                </div>
+                ` : ''}
             </div>
         `).join('') || '<p class="text-gray-500">Nessun movimento recente.</p>';
     }
@@ -1183,9 +1195,12 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
 
 
 // SOSTITUISCI IL VECCHIO BLOCCO if (addExpenseBtn) CON QUESTO
+// SOSTITUISCI DI NUOVO L'INTERO BLOCCO if (addExpenseBtn) CON QUESTA VERSIONE
 if (addExpenseBtn) {
-    // Cambia il testo del bottone in base al ruolo dell'utente
-    if (currentUser.role !== 'admin') {
+    // Il testo del bottone viene deciso in base al ruolo
+    if (currentUser.role === 'admin') {
+        addExpenseBtn.textContent = 'Aggiungi Spesa';
+    } else {
         addExpenseBtn.textContent = 'Invia Richiesta Spesa';
     }
 
@@ -1201,41 +1216,30 @@ if (addExpenseBtn) {
             return;
         }
 
+        // CONTROLLO STRINGENTE: Solo se il ruolo è ESATTAMENTE 'admin'
         if (currentUser.role === 'admin') {
-            // L'ADMIN AGGIUNGE LA SPESA DIRETTAMENTE
             const newExpense = {
-                id: Date.now().toString(),
-                date: date,
-                payer: payer,
-                amount: amount,
-                category: category,
-                description: description
+                id: Date.now().toString(), date, payer, amount, category, description
             };
             const newExpenseRef = push(varExpensesRef);
             set(newExpenseRef, newExpense);
-            alert(`Spesa aggiunta con successo.`);
+            alert('Spesa aggiunta con successo.');
         } else {
-            // L'UTENTE INVIA UNA RICHIESTA DI SPESA
+            // TUTTI GLI ALTRI RUOLI (incluso 'calendar_admin') inviano una richiesta
             const newRequest = {
                 requesterUid: currentUser.uid,
                 requesterName: currentUser.email.split('@')[0],
-                date: date,
-                payer: payer,
-                amount: amount,
-                category: category,
-                description: description,
-                status: 'pending' // Stato iniziale della richiesta
+                date, payer, amount, category, description,
+                status: 'pending'
             };
             const newRequestRef = push(expenseRequestsRef);
             set(newRequestRef, newRequest);
             alert("Richiesta di spesa inviata all'amministratore per approvazione.");
         }
         
-        // Chiudi il form in ogni caso
         document.getElementById('expense-form-section').classList.add('hidden');
     });
 }
-
 if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
     const description = document.getElementById('fixed-desc').value.trim();
     const amount = parseFloat(document.getElementById('fixed-amount').value);
@@ -1304,7 +1308,36 @@ document.addEventListener('click', (e) => {
             renderExpenseRequestsForAdmin();
         }
     }
-    
+    // DENTRO document.addEventListener('click', (e) => { ... })
+// Aggiungi questo nuovo blocco insieme agli altri "if"
+
+    // NUOVO BLOCCO - Logica per il pulsante Elimina generico
+    if (e.target.matches('.delete-item-btn')) {
+        const id = e.target.dataset.id;
+        const type = e.target.dataset.type;
+
+        if (!id || !type) return;
+
+        if (confirm(`Sei sicuro di voler eliminare questo elemento? L'azione è irreversibile.`)) {
+            if (type === 'cashMovement') {
+                // Logica specifica per i movimenti di cassa
+                const movementIndex = cassaComune.movements.findIndex(m => m.id === id);
+                if (movementIndex > -1) {
+                    const movement = cassaComune.movements[movementIndex];
+                    // Storna l'importo dal bilancio
+                    if (movement.type === 'deposit') {
+                        cassaComune.balance -= movement.amount;
+                    } else {
+                        cassaComune.balance += movement.amount;
+                    }
+                    cassaComune.movements.splice(movementIndex, 1);
+                    set(cassaComuneRef, cassaComune); // Salva le modifiche nel database
+                    alert('Movimento eliminato e bilancio ricalcolato.');
+                }
+            } 
+            // Qui in futuro si possono aggiungere 'else if' per altri tipi di eliminazione
+        }
+    }
     // Logica per chiudere i form
     if (e.target.matches('.close-form-btn')) {
         e.target.closest('.action-form').classList.add('hidden');
@@ -1346,6 +1379,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
