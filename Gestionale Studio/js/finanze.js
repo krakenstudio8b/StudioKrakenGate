@@ -1320,23 +1320,14 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 
 
 // --- App Initialization (PUNTO DI INNESTO DEL FIX) ---
-document.addEventListener('DOMContentLoaded', () => {
-    
-    if (document.getElementById('calendar-container')) {
-        // La logica per il calendario è in js/calendario.js
-    } else if (document.getElementById('kanban-board')) {
-        // La logica per le attività è in js/attivita.js
-    } else if (document.getElementById('member-count')) {
-        // FIX CRUCIALE: Usiamo onAuthReady per garantire che il ruolo sia caricato prima di tentare di leggere i dati
-        onAuthReady(user => {
-            if (user.uid) {
-                initializeCharts();
-                loadDataFromFirebase(); 
-            } else {
-                console.warn("Utente non autenticato. Caricamento dashboard interrotto.");
-            }
-        });
+document.addEventListener('authReady', () => {
+    // Controlla di essere effettivamente nella pagina delle finanze prima di eseguire il codice
+    if (document.getElementById('member-count')) {
+        console.log("Auth pronto, avvio la pagina finanze...");
+        initializeCharts();
+        loadDataFromFirebase(); 
     }
 });
+
 
 
