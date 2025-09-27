@@ -362,7 +362,7 @@ const renderIncomeEntries = () => {
         <div class="flex justify-between items-center bg-green-50 p-3 rounded-lg border-l-4 border-green-500">
             <div>
                 <span class="font-medium">${i.description}</span>
-                <span class="text-xs text-gray-500 block">Ricevuto da: ${i.members.join(', ')} il ${displayDate(i.date)}</span>
+                <span class="text-xs text-gray-500 block">Ricevuto da: ${(i.members || []).join(', ')} il ${displayDate(i.date)}</span>
             </div>
             <span class="font-bold text-green-700">€${i.amount.toFixed(2)}</span>
             <button data-id="${i.id}" data-type="incomeEntry" class="open-edit-modal-btn text-green-600 hover:text-green-800">Modifica</button>
@@ -1329,6 +1329,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
