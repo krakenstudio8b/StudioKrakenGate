@@ -691,108 +691,68 @@ const calculateAndRenderSettlement = (forExport = false) => {
 
 // --- Funzioni CRUD e di gestione form ---
 
-const openEditModal = (id, type) => { 
+// SOSTITUISCI L'INTERA FUNZIONE openEditModal CON QUESTA
+const openEditModal = (id, type) => {
     const item = getItemFromStore(type, id);
     if (!item) return;
 
+    // Se l'utente non è admin, impedisci la modifica di spese ed entrate
+    const isProtectedType = ['variableExpense', 'incomeEntry', 'fixedExpense'].includes(type);
+    if (currentUser.role !== 'admin' && isProtectedType) {
+        alert("Non hai i permessi per modificare questo elemento. Contatta un amministratore.");
+        return;
+    }
+
+    // Il resto della funzione per aprire la modale rimane quasi invariato
     const editModal = document.getElementById('edit-modal');
     const editModalTitle = document.getElementById('edit-modal-title');
     const editModalFormContainer = document.getElementById('edit-modal-form-container');
     const editModalActions = document.getElementById('edit-modal-actions');
-    const isMember = type === 'member';
 
     editModalTitle.textContent = `Modifica ${type}`;
-    editModalFormContainer.innerHTML = '';
+    editModalFormContainer.innerHTML = ''; 
     editModalActions.innerHTML = '';
 
     let formHtml = `<form id="edit-form" data-id="${id}" data-type="${type}" class="space-y-4">`;
-    let deleteBtnHtml = '';
+    // ... (tutta la logica per generare i campi del form rimane la stessa)...
+    // La logica interna per creare i campi del form va bene, la ometto per brevità
 
-    // Aggiungi campi del form in base al tipo
     for (const key in item) {
-        if (key === 'id' || (isMember && key === 'contributions')) continue;
-
+        if (key === 'id' || key === 'contributions') continue;
         const value = item[key];
         const label = key.replace(/([A-Z])/g, ' $1').replace('_', ' ').toLowerCase();
-
         if (key === 'payer' || key === 'member') {
-            formHtml += `
-                <div>
-                    <label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label>
-                    <select id="edit-${key}" name="${key}" class="w-full p-3 border rounded-lg">
-                        ${members.map(m => `<option value="${m.name}" ${m.name === value ? 'selected' : ''}>${m.name}</option>`).join('')}
-                    </select>
-                </div>`;
+            formHtml += `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label><select id="edit-${key}" name="${key}" class="w-full p-3 border rounded-lg">${members.map(m => `<option value="${m.name}" ${m.name === value ? 'selected' : ''}>${m.name}</option>`).join('')}</select></div>`;
         } else if (key === 'links' && type === 'wishlistItem') {
-            // Gestione dei link
-            formHtml += `
-                <div class="border p-3 rounded-lg">
-                    <label class="block text-sm font-medium">Link Associati</label>
-                    <div id="edit-links-container" class="space-y-2 mt-2">
-                        ${(value || []).map(link => `
-                            <div class="flex items-center space-x-2">
-                                <input type="text" class="w-full p-1 border rounded-md" value="${link}">
-                                <button type="button" class="remove-edit-link-btn text-red-500">&times;</button>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <div class="flex mt-3">
-                        <input type="url" id="new-edit-link" placeholder="Aggiungi nuovo link" class="w-full p-2 border rounded-l-lg">
-                        <button type="button" id="add-edit-link-btn" class="bg-indigo-500 text-white p-2 rounded-r-lg">+</button>
-                    </div>
-                </div>`;
-        } else if (key === 'members' && type === 'incomeEntry') {
-            formHtml += `
-                <div class="border p-3 rounded-lg">
-                    <label class="block text-sm font-medium">Membri che hanno ricevuto</label>
-                    <div id="edit-income-members-checkboxes" class="grid grid-cols-2 gap-2 mt-2">
-                        ${members.map(m => `
-                            <div class="flex items-center">
-                                <input type="checkbox" id="edit-income-member-${m.id}" name="members" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600" ${value.includes(m.name) ? 'checked' : ''}>
-                                <label for="edit-income-member-${m.id}" class="ml-2 text-sm">${m.name}</label>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>`;
+            formHtml += `<div class="border p-3 rounded-lg"><label class="block text-sm font-medium">Link Associati</label><div id="edit-links-container" class="space-y-2 mt-2">${(value || []).map(link => `<div class="flex items-center space-x-2"><input type="text" class="w-full p-1 border rounded-md" value="${link}"><button type="button" class="remove-edit-link-btn text-red-500">&times;</button></div>`).join('')}</div><div class="flex mt-3"><input type="url" id="new-edit-link" placeholder="Aggiungi nuovo link" class="w-full p-2 border rounded-l-lg"><button type="button" id="add-edit-link-btn" class="bg-indigo-500 text-white p-2 rounded-r-lg">+</button></div></div>`;
+        } else if (key === 'membersInvolved' && type === 'incomeEntry') {
+            formHtml += `<div class="border p-3 rounded-lg"><label class="block text-sm font-medium">Membri che hanno ricevuto</label><div id="edit-income-members-checkboxes" class="grid grid-cols-2 gap-2 mt-2">${members.map(m => `<div class="flex items-center"><input type="checkbox" id="edit-income-member-${m.id}" name="membersInvolved" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600" ${value.includes(m.name) ? 'checked' : ''}><label for="edit-income-member-${m.id}" class="ml-2 text-sm">${m.name}</label></div>`).join('')}</div></div>`;
         } else if (typeof value === 'boolean') {
-            formHtml += `
-                <div class="flex items-center">
-                    <input type="checkbox" id="edit-${key}" name="${key}" class="form-checkbox h-5 w-5 text-indigo-600" ${value ? 'checked' : ''}>
-                    <label for="edit-${key}" class="ml-2 text-sm capitalize">${label}</label>
-                </div>`;
+            formHtml += `<div class="flex items-center"><input type="checkbox" id="edit-${key}" name="${key}" class="form-checkbox h-5 w-5 text-indigo-600" ${value ? 'checked' : ''}><label for="edit-${key}" class="ml-2 text-sm capitalize">${label}</label></div>`;
         } else if (key.includes('date') || key.includes('dueDate')) {
-            formHtml += `
-                <div>
-                    <label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label>
-                    <input type="date" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg">
-                </div>`;
+            formHtml += `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label><input type="date" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg"></div>`;
         } else if (typeof value === 'number') {
-            formHtml += `
-                <div>
-                    <label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label>
-                    <input type="number" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg">
-                </div>`;
+            formHtml += `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label><input type="number" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg"></div>`;
         } else {
-            formHtml += `
-                <div>
-                    <label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label>
-                    <input type="text" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg">
-                </div>`;
+            formHtml += `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label><input type="text" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg"></div>`;
         }
     }
     formHtml += `</form>`;
 
-    deleteBtnHtml = `<button type="button" id="delete-edit-btn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600">Elimina</button>`;
-    
-    editModalFormContainer.innerHTML = formHtml;
-    editModalActions.innerHTML = `
-        <div class="flex justify-end gap-3 mt-4">
-            ${deleteBtnHtml}
-            <button type="button" id="cancel-edit-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Annulla</button>
+    // Mostra i pulsanti di salvataggio/eliminazione SOLO all'admin
+    let actionsHtml = `<button type="button" id="cancel-edit-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Annulla</button>`;
+    if (currentUser.role === 'admin' || !isProtectedType) {
+        actionsHtml += `
+            <button type="button" id="delete-edit-btn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600">Elimina</button>
             <button type="submit" form="edit-form" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Salva Modifiche</button>
-        </div>`;
+        `;
+    }
 
+    editModalFormContainer.innerHTML = formHtml;
+    editModalActions.innerHTML = `<div class="flex justify-end gap-3 mt-4">${actionsHtml}</div>`;
     editModal.classList.remove('hidden');
+    // ... (il resto della funzione con i listener per i pulsanti va bene)
+};
 
     // Aggiungi listener per i link (interno alla modale)
     const addLinkBtn = document.getElementById('add-edit-link-btn');
@@ -1214,7 +1174,7 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
         date: date,
         amount: amount,
         description: description,
-        members: membersInvolved
+        membersInvolved: membersInvolved // <-- CORRETTO
     });
     saveDataToFirebase();
     document.getElementById('income-form-section').classList.add('hidden');
@@ -1222,16 +1182,57 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
 });
 
 
+// SOSTITUISCI IL VECCHIO BLOCCO if (addExpenseBtn) CON QUESTO
 if (addExpenseBtn) {
-    if(currentUser.role !== 'admin'){
+    // Cambia il testo del bottone in base al ruolo dell'utente
+    if (currentUser.role !== 'admin') {
         addExpenseBtn.textContent = 'Invia Richiesta Spesa';
     }
+
     addExpenseBtn.addEventListener('click', () => {
-        if (currentUser.role === 'admin') {
-            addExpenseAsAdmin();
-        } else {
-            submitExpenseRequest();
+        const payer = document.getElementById('payer').value;
+        const date = document.getElementById('expense-date').value;
+        const amount = parseFloat(document.getElementById('amount').value);
+        const category = document.getElementById('category').value;
+        const description = document.getElementById('description').value;
+
+        if (!payer || !date || isNaN(amount) || amount <= 0 || !category || !description) {
+            alert("Compila tutti i campi obbligatori per la spesa.");
+            return;
         }
+
+        if (currentUser.role === 'admin') {
+            // L'ADMIN AGGIUNGE LA SPESA DIRETTAMENTE
+            const newExpense = {
+                id: Date.now().toString(),
+                date: date,
+                payer: payer,
+                amount: amount,
+                category: category,
+                description: description
+            };
+            const newExpenseRef = push(varExpensesRef);
+            set(newExpenseRef, newExpense);
+            alert(`Spesa aggiunta con successo.`);
+        } else {
+            // L'UTENTE INVIA UNA RICHIESTA DI SPESA
+            const newRequest = {
+                requesterUid: currentUser.uid,
+                requesterName: currentUser.email.split('@')[0],
+                date: date,
+                payer: payer,
+                amount: amount,
+                category: category,
+                description: description,
+                status: 'pending' // Stato iniziale della richiesta
+            };
+            const newRequestRef = push(expenseRequestsRef);
+            set(newRequestRef, newRequest);
+            alert("Richiesta di spesa inviata all'amministratore per approvazione.");
+        }
+        
+        // Chiudi il form in ogni caso
+        document.getElementById('expense-form-section').classList.add('hidden');
     });
 }
 
@@ -1345,6 +1346,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
