@@ -323,7 +323,7 @@ const renderFutureMovements = () => {
     container.innerHTML = futureMovements.map(m => `
         <div class="flex justify-between items-center bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
             <span class="text-sm font-medium">${m.description} (Data prevista: ${displayDate(m.dueDate)})</span>
-            <span class="font-bold text-blue-700">€${m.cost.toFixed(2)}</span>
+            <span class="font-bold text-blue-700">€${(m.cost || 0).toFixed(2)}</span>
             <button data-id="${m.id}" data-type="futureMovement" class="open-edit-modal-btn text-blue-600 hover:text-blue-800">Modifica</button>
         </div>
     `).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
@@ -337,7 +337,7 @@ const renderWishlist = () => {
     container.innerHTML = wishlist.sort((a, b) => b.priority - a.priority).map(item => `
         <div class="flex justify-between items-center bg-indigo-50 p-3 rounded-lg border-l-4 border-indigo-500">
             <span class="text-sm font-medium">${item.name} (Priorità: ${item.priority})</span>
-            <span class="font-bold text-indigo-700">€${item.cost.toFixed(2)}</span>
+            <span class="font-bold text-indigo-700">€${(item.cost || 0).toFixed(2)}</span>
             <button data-id="${item.id}" data-type="wishlistItem" class="open-edit-modal-btn text-indigo-600 hover:text-indigo-800">Modifica</button>
         </div>
     `).join('') || '<p class="text-gray-500">Nessun articolo nella lista desideri.</p>';
@@ -602,11 +602,14 @@ const calculateAndRenderSettlement = (forExport = false) => {
 
     // B. Distribuzione delle entrate
     data.income.forEach(i => {
-        const valuePerPerson = i.amount / i.members.length;
-        i.members.forEach(name => {
-            // Se ha ricevuto l'entrata, è a credito per la sua quota
-            balances[name] += valuePerPerson;
-        });
+    // Aggiungiamo un controllo: esegui questo calcolo SOLO SE l'entrata ha una lista di membri valida
+        if (i.members && i.members.length > 0) { 
+            const valuePerPerson = i.amount / i.members.length;
+            i.members.forEach(name => {
+                // Se ha ricevuto l'entrata, è a credito per la sua quota
+                balances[name] += valuePerPerson;
+            });
+        }
     });
 
     // 3. Algoritmo di conguaglio (Minimizzazione dei movimenti)
@@ -1329,6 +1332,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
