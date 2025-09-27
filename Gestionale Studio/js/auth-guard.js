@@ -1,6 +1,8 @@
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+
+// Importa le istanze già inizializzate, invece di ricrearle
+import { auth, database } from './firebase-config.js';
 
 // La configurazione di Firebase è necessaria anche qui per accedere al database
 const firebaseConfig = {
