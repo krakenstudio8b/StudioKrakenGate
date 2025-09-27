@@ -303,6 +303,8 @@ const renderMembers = () => {
 
 
 // SOSTITUISCI L'INTERA FUNZIONE renderCassaComune
+// SOSTITUISCI L'INTERA FUNZIONE renderCassaComune CON QUESTA VERSIONE CORRETTA
+
 const renderCassaComune = () => {
     const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
     const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
@@ -310,23 +312,27 @@ const renderCassaComune = () => {
     if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${(cassaComune.balance || 0).toFixed(2)}`;
     
     if (cashMovementsHistoryEl) {
-        // Assicurati che cassaComune.movements sia un array
         const movements = Array.isArray(cassaComune.movements) ? cassaComune.movements : [];
         
-        cashMovementsHistoryEl.innerHTML = movements.sort((a, b) => new Date(b.date) - new Date(a.date)).map(m => `
-            <div class="flex justify-between items-center text-sm border-b pb-1 mb-1 group">
-                <div class="${m.type === 'deposit' ? 'text-green-700' : 'text-red-700'}">
-                    <span class="font-medium">${m.description} (${m.member || 'Cassa'})</span>
-                    <span class="font-bold block">${m.type === 'deposit' ? '+' : '-'}€${(m.amount || 0).toFixed(2)}</span>
-                </div>
-                ${currentUser.role === 'admin' ? `
+        cashMovementsHistoryEl.innerHTML = movements.sort((a, b) => new Date(b.date) - new Date(a.date)).map(m => {
+            // Definiamo i pulsanti di modifica/eliminazione in una variabile separata
+            const adminButtons = `
                 <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button data-id="${m.id}" data-type="cashMovement" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800">Modifica</button>
                     <button data-id="${m.id}" data-type="cashMovement" class="delete-item-btn text-xs text-red-600 hover:text-red-800">Elimina</button>
+                </div>`;
+
+            // Costruiamo l'HTML finale, includendo i pulsanti solo se l'utente è admin
+            return `
+                <div class="flex justify-between items-center text-sm border-b pb-1 mb-1 group">
+                    <div class="${m.type === 'deposit' ? 'text-green-700' : 'text-red-700'}">
+                        <span class="font-medium">${m.description} (${m.member || 'Cassa'})</span>
+                        <span class="font-bold block">${m.type === 'deposit' ? '+' : '-'}€${(m.amount || 0).toFixed(2)}</span>
+                    </div>
+                    ${currentUser.role === 'admin' ? adminButtons : ''}
                 </div>
-                ` : ''}
-            </div>
-        `).join('') || '<p class="text-gray-500">Nessun movimento recente.</p>';
+            `;
+        }).join('') || '<p class="text-gray-500">Nessun movimento recente.</p>';
     }
 };
 
@@ -1379,6 +1385,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
