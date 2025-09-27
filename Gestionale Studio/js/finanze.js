@@ -75,9 +75,22 @@ function saveDataToFirebase() {
     set(expenseRequestsRef, expenseRequests);
 }
 
+// Sostituisci la tua vecchia funzione loadDataFromFirebase con questa
+
 function loadDataFromFirebase() {
     onValue(membersRef, (snapshot) => {
-        members = snapshot.val() || [];
+        const rawData = snapshot.val() || [];
+
+        // Logica di normalizzazione: Controlla se i dati sono stringhe e li converte in oggetti
+        if (Array.isArray(rawData) && rawData.length > 0 && typeof rawData[0] === 'string') {
+            console.log("Dati dei membri trovati come stringhe. Normalizzazione in oggetti...");
+            // Converte l'array di stringhe in un array di oggetti che il resto della pagina si aspetta
+            members = rawData.map((name, index) => ({ id: String(index), name: name }));
+        } else {
+            // Se i dati sono già oggetti o la lista è vuota, li usa così come sono
+            members = rawData;
+        }
+
         renderMembers();
         toggleSectionsVisibility();
         updateDashboardView();
@@ -1332,6 +1345,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
