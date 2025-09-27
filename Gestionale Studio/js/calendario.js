@@ -5,11 +5,7 @@ import { ref, set, onValue, push, remove, update } from "https://www.gstatic.com
 import { currentUser } from './auth-guard.js';
 
 // Aspetta il segnale da auth-guard.js prima di fare QUALSIASI COSA.
-document.addEventListener('authReady', () => {
-    if (document.getElementById('calendar')) {
-        initializeCalendar();
-    }
-});
+
 // --- FUNZIONE DI INIZIALIZZAZIONE ---
 // Spostiamo tutta la logica dentro una funzione che chiameremo solo quando l'utente è pronto.
 function initializeCalendar() {
@@ -255,11 +251,11 @@ function initializeCalendar() {
 // --- PUNTO DI INGRESSO DELLO SCRIPT ---
 // Aspetta il segnale da auth-guard.js prima di inizializzare tutto.
 document.addEventListener('authReady', () => {
-    initializeCalendar();
+    // Aggiungi un controllo per assicurarti che l'elemento esista prima di procedere
+    if (document.getElementById('calendar')) {
+        initializeCalendar();
+    }
 });
 
-// Fallback nel caso in cui questo script carichi dopo che l'evento è già stato inviato
-if (currentUser && currentUser.uid) {
-    initializeCalendar();
-}
+
 
