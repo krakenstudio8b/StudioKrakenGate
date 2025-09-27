@@ -336,7 +336,7 @@ const renderFutureMovements = () => {
     container.innerHTML = futureMovements.map(m => `
         <div class="flex justify-between items-center bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
             <span class="text-sm font-medium">${m.description} (Data prevista: ${displayDate(m.dueDate)})</span>
-            <span class="font-bold text-blue-700">€${(m.cost || 0).toFixed(2)}</span>
+            <span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span>
             <button data-id="${m.id}" data-type="futureMovement" class="open-edit-modal-btn text-blue-600 hover:text-blue-800">Modifica</button>
         </div>
     `).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
@@ -375,7 +375,7 @@ const renderIncomeEntries = () => {
         <div class="flex justify-between items-center bg-green-50 p-3 rounded-lg border-l-4 border-green-500">
             <div>
                 <span class="font-medium">${i.description}</span>
-                <span class="text-xs text-gray-500 block">Ricevuto da: ${(i.members || []).join(', ')} il ${displayDate(i.date)}</span>
+                <span class="text-xs text-gray-500 block">Ricevuto da: ${(i.membersInvolved || []).join(', ')} il ${displayDate(i.date)}</span>
             </div>
             <span class="font-bold text-green-700">€${i.amount.toFixed(2)}</span>
             <button data-id="${i.id}" data-type="incomeEntry" class="open-edit-modal-btn text-green-600 hover:text-green-800">Modifica</button>
@@ -501,8 +501,8 @@ const initializeCharts = () => {
     }
     
     // 2. Entrate per membro
-    // La riga corretta, con il controllo di sicurezza "i.members &&"
-    const incomeData = memberNames.map(name => data.income.filter(i => i.members && i.members.includes(name)).reduce((sum, i) => sum + i.amount / i.members.length, 0));
+    // La riga corretta, con il controllo di sicurezza "i.membersInvolved &&"
+    const incomeData = memberNames.map(name => data.income.filter(i => i.membersInvolved && i.membersInvolved.includes(name)).reduce((sum, i) => sum + i.amount / i.membersInvolved.length, 0));
     if(document.getElementById('membersIncomeChart')) {
         membersIncomeChart = createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
     }
@@ -616,9 +616,9 @@ const calculateAndRenderSettlement = (forExport = false) => {
     // B. Distribuzione delle entrate
     data.income.forEach(i => {
     // Aggiungiamo un controllo: esegui questo calcolo SOLO SE l'entrata ha una lista di membri valida
-        if (i.members && i.members.length > 0) { 
-            const valuePerPerson = i.amount / i.members.length;
-            i.members.forEach(name => {
+        if (i.membersInvolved && i.membersInvolved.length > 0) { 
+            const valuePerPerson = i.amount / i.membersInvolved.length;
+            i.membersInvolved.forEach(name => {
                 // Se ha ricevuto l'entrata, è a credito per la sua quota
                 balances[name] += valuePerPerson;
             });
@@ -1345,6 +1345,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
