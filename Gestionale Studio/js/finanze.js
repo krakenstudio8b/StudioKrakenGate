@@ -772,7 +772,6 @@ const openEditModal = (id, type) => {
     editModalActions.innerHTML = `<div class="flex justify-end gap-3 mt-4">${actionsHtml}</div>`;
     editModal.classList.remove('hidden');
     // ... (il resto della funzione con i listener per i pulsanti va bene)
-};
 
     // Aggiungi listener per i link (interno alla modale)
     const addLinkBtn = document.getElementById('add-edit-link-btn');
@@ -1387,6 +1386,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
