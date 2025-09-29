@@ -305,6 +305,8 @@ const renderMembers = () => {
 // SOSTITUISCI L'INTERA FUNZIONE renderCassaComune
 // SOSTITUISCI L'INTERA FUNZIONE renderCassaComune CON QUESTA VERSIONE CORRETTA
 
+// SOSTITUISCI L'INTERA FUNZIONE renderCassaComune CON QUESTA VERSIONE CORRETTA
+
 const renderCassaComune = () => {
     const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
     const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
@@ -1385,6 +1387,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
