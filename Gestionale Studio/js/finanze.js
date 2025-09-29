@@ -511,6 +511,8 @@ const createBarChart = (canvasId, label, data, labels, color) => {
 
 // SOSTITUISCI L'INTERA FUNZIONE initializeCharts CON QUESTA
 
+// SOSTITUISCI L'INTERA FUNZIONE initializeCharts CON QUESTA VERSIONE FINALE
+
 const initializeCharts = () => {
     const data = getCalculationData();
     if (!data.members || data.members.length === 0) return;
@@ -518,48 +520,54 @@ const initializeCharts = () => {
     const memberNames = data.members.map(m => m.name);
     const memberColors = ['rgba(79, 70, 239, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(16, 185, 129, 0.6)', 'rgba(239, 68, 68, 0.6)'];
     
-    // --- INIZIO LOGICA MODIFICATA ---
-
-    // 1. Contributi per membro (Spese variabili + Depositi in cassa)
+    // Grafico 1: Contributi Totali (già corretto)
     const contributionsData = memberNames.map(name => {
-        // Somma delle spese variabili pagate direttamente dal membro
         const expensesPaid = data.expenses.reduce((sum, e) => sum + (e.payer === name ? (e.amount || 0) : 0), 0);
-
-        // Somma dei depositi fatti in cassa comune dal membro
         const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
             .filter(m => m.member === name && m.type === 'deposit')
             .reduce((sum, m) => sum + (m.amount || 0), 0);
-
-        // La contribuzione totale è la somma di entrambe
         return expensesPaid + cashDeposits;
     });
-    // Ho anche cambiato il titolo del grafico per essere più chiaro
     createBarChart('membersContributionsChart', 'Contributi Totali (Spese + Cassa)', contributionsData, memberNames, memberColors);
     
-    // --- FINE LOGICA MODIFICATA ---
-
-    // Il resto della funzione rimane quasi invariato, ma con controlli di sicurezza aggiuntivi
+    // Grafico 2: Ripartizione Entrate (corretto)
     const incomeData = memberNames.map(name => data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / i.membersInvolved.length) : 0), 0));
     createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
     
+    // Grafico 3: Spese per Categoria (corretto)
     const categoryMap = [...data.expenses, ...data.fixedExpenses].reduce((map, e) => {
-        if (e.category) { // Aggiunto controllo
+        if (e.category) {
             map.set(e.category, (map.get(e.category) || 0) + (e.amount || 0));
         }
         return map;
     }, new Map());
     createBarChart('categoriesChart', 'Spese per Categoria', Array.from(categoryMap.values()), Array.from(categoryMap.keys()), memberColors);
     
+    // --- INIZIO LOGICA MODIFICATA ---
+
+    // Grafico 4: Bilanci (Saldo Netto)
     const totalExpenses = data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalFixed = data.fixedExpenses.reduce((sum, f) => sum + (f.amount || 0), 0);
     if (data.members.length > 0) {
+        // La quota di spesa che ogni membro dovrebbe teoricamente pagare
         const shareOfTotalExpense = (totalExpenses + totalFixed) / data.members.length;
+
         const balanceData = memberNames.map(name => {
-            const individualExpensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + (e.amount || 0), 0);
-            return individualExpensesPaid - shareOfTotalExpense;
+            // Ricalcoliamo il contributo totale ESATTAMENTE come per il primo grafico
+            const expensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + (e.amount || 0), 0);
+            const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
+                .filter(m => m.member === name && m.type === 'deposit')
+                .reduce((sum, m) => sum + (m.amount || 0), 0);
+            
+            // Il totale versato dal membro (spese dirette + depositi in cassa)
+            const totalContributed = expensesPaid + cashDeposits;
+
+            // Il saldo è la differenza tra quanto ha versato e quanto avrebbe dovuto versare
+            return totalContributed - shareOfTotalExpense;
         });
         createBarChart('balancesChart', 'Bilanci (Netto)', balanceData, memberNames, balanceData.map(b => b >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'));
     }
+    // --- FINE LOGICA MODIFICATA ---
 };
 
 const updateDashboardView = () => { 
@@ -1395,6 +1403,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
