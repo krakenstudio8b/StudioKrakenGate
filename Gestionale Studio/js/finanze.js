@@ -509,47 +509,56 @@ const createBarChart = (canvasId, label, data, labels, color) => {
     return new Chart(ctx, chartConfig);
 };
 
+// SOSTITUISCI L'INTERA FUNZIONE initializeCharts CON QUESTA
+
 const initializeCharts = () => {
     const data = getCalculationData();
-    const memberNames = members.map(m => m.name);
-    const memberColors = ['rgba(79, 70, 239, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(16, 185, 129, 0.6)', 'rgba(239, 68, 68, 0.6)', 'rgba(99, 102, 241, 0.6)', 'rgba(251, 146, 60, 0.6)', 'rgba(52, 211, 153, 0.6)', 'rgba(248, 113, 113, 0.6)'];
+    if (!data.members || data.members.length === 0) return;
 
-    // 1. Contributi per membro (Spese variabili)
-    const contributionsData = memberNames.map(name => data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + e.amount, 0));
-    if(document.getElementById('membersContributionsChart')) {
-        membersContributionsChart = createBarChart('membersContributionsChart', 'Contributi Spese Variabili', contributionsData, memberNames, memberColors);
-    }
+    const memberNames = data.members.map(m => m.name);
+    const memberColors = ['rgba(79, 70, 239, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(16, 185, 129, 0.6)', 'rgba(239, 68, 68, 0.6)'];
     
-    // 2. Entrate per membro
-    // La riga corretta, con il controllo di sicurezza "i.membersInvolved &&"
-    const incomeData = memberNames.map(name => data.income.filter(i => i.membersInvolved && i.membersInvolved.includes(name)).reduce((sum, i) => sum + i.amount / i.membersInvolved.length, 0));
-    if(document.getElementById('membersIncomeChart')) {
-        membersIncomeChart = createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
-    }
+    // --- INIZIO LOGICA MODIFICATA ---
 
-    // 3. Spese per categoria
+    // 1. Contributi per membro (Spese variabili + Depositi in cassa)
+    const contributionsData = memberNames.map(name => {
+        // Somma delle spese variabili pagate direttamente dal membro
+        const expensesPaid = data.expenses.reduce((sum, e) => sum + (e.payer === name ? (e.amount || 0) : 0), 0);
+
+        // Somma dei depositi fatti in cassa comune dal membro
+        const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
+            .filter(m => m.member === name && m.type === 'deposit')
+            .reduce((sum, m) => sum + (m.amount || 0), 0);
+
+        // La contribuzione totale è la somma di entrambe
+        return expensesPaid + cashDeposits;
+    });
+    // Ho anche cambiato il titolo del grafico per essere più chiaro
+    createBarChart('membersContributionsChart', 'Contributi Totali (Spese + Cassa)', contributionsData, memberNames, memberColors);
+    
+    // --- FINE LOGICA MODIFICATA ---
+
+    // Il resto della funzione rimane quasi invariato, ma con controlli di sicurezza aggiuntivi
+    const incomeData = memberNames.map(name => data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / i.membersInvolved.length) : 0), 0));
+    createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
+    
     const categoryMap = [...data.expenses, ...data.fixedExpenses].reduce((map, e) => {
-        map.set(e.category, (map.get(e.category) || 0) + e.amount);
+        if (e.category) { // Aggiunto controllo
+            map.set(e.category, (map.get(e.category) || 0) + (e.amount || 0));
+        }
         return map;
     }, new Map());
-    const categoryLabels = Array.from(categoryMap.keys());
-    const categoryData = Array.from(categoryMap.values());
-    const categoryColors = categoryLabels.map((_, i) => memberColors[i % memberColors.length].replace('1', '0.6'));
-    if(document.getElementById('categoriesChart')) {
-        categoriesChart = createBarChart('categoriesChart', 'Spese per Categoria', categoryData, categoryLabels, categoryColors);
-    }
+    createBarChart('categoriesChart', 'Spese per Categoria', Array.from(categoryMap.values()), Array.from(categoryMap.keys()), memberColors);
     
-    // 4. Bilanci finali (Netto) - Logica Semplificata
-    const balanceData = memberNames.map(name => {
-        const totalExpenses = data.expenses.reduce((sum, e) => sum + e.amount, 0);
-        const individualExpensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + e.amount, 0);
-        const shareOfTotalExpense = (totalExpenses + data.fixedExpenses.reduce((sum, f) => sum + f.amount, 0)) / members.length;
-        
-        return individualExpensesPaid - shareOfTotalExpense; 
-    });
-    const balanceColors = balanceData.map(b => b >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'); // Verde o Rosso
-    if(document.getElementById('balancesChart')) {
-        balancesChart = createBarChart('balancesChart', 'Bilanci (Netto)', balanceData, memberNames, balanceColors);
+    const totalExpenses = data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalFixed = data.fixedExpenses.reduce((sum, f) => sum + (f.amount || 0), 0);
+    if (data.members.length > 0) {
+        const shareOfTotalExpense = (totalExpenses + totalFixed) / data.members.length;
+        const balanceData = memberNames.map(name => {
+            const individualExpensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + (e.amount || 0), 0);
+            return individualExpensesPaid - shareOfTotalExpense;
+        });
+        createBarChart('balancesChart', 'Bilanci (Netto)', balanceData, memberNames, balanceData.map(b => b >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'));
     }
 };
 
@@ -1386,6 +1395,7 @@ document.addEventListener('authReady', () => {
         loadDataFromFirebase(); 
     }
 });
+
 
 
 
