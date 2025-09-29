@@ -1414,75 +1414,15 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 // --- App Initialization (PUNTO DI INNESTO DEL FIX) ---
 // SOSTITUISCI TUTTI I VECCHI BLOCCHI document.addEventListener('click',...) CON QUESTO
 
-document.addEventListener('click', (e) => {
-    const target = e.target; // 'e' è definito qui e valido per tutto il blocco
-
-    // Logica per aprire la finestra di modifica
-    if (target.matches('.open-edit-modal-btn')) {
-        openEditModal(target.dataset.id, target.dataset.type);
-    }
-    
-    // Logica per approvare/rifiutare richieste (Admin)
-    else if (target.matches('.approve-request-btn')) {
-        const key = target.dataset.key;
-        const req = expenseRequests[key];
-        if (req) {
-            const newExpenseRef = push(varExpensesRef);
-            set(newExpenseRef, { id: newExpenseRef.key, payer: req.payer, date: req.date, amount: req.amount, category: req.category, description: `[RICHIESTA] ${req.description}` });
-            update(ref(database, `expenseRequests/${key}`), { status: 'approved' });
-        }
-    }
-    else if (target.matches('.reject-request-btn')) {
-        const key = target.dataset.key;
-        if (expenseRequests[key]) {
-            update(ref(database, `expenseRequests/${key}`), { status: 'rejected' });
-        }
-    }
-    
-    // Logica per il pulsante Elimina generico
-    else if (target.matches('.delete-item-btn')) {
-        const id = target.dataset.id;
-        const type = target.dataset.type;
-        if (confirm(`Sei sicuro di voler eliminare questo elemento?`)) {
-            if (type === 'cashMovement') {
-                let allMovements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-                const movementToDelete = allMovements.find(m => m.id === id);
-                if (movementToDelete) {
-                    const newBalance = cassaComune.balance + (movementToDelete.type === 'deposit' ? -movementToDelete.amount : movementToDelete.amount);
-                    const newMovements = allMovements.filter(m => m.id !== id);
-                    set(cassaComuneRef, {balance: newBalance, movements: newMovements});
-                    alert('Movimento eliminato e bilancio ricalcolato.');
-                }
-            }
-        }
-    }
-    
-    // Logica per chiudere i form
-    else if (target.matches('.close-form-btn')) {
-        target.closest('.action-form').classList.add('hidden');
-    }
-    
-    // Logica per la chiusura della modale
-    else if (target === editModal || target.matches('#close-edit-modal-btn') || target.matches('#cancel-edit-btn')) {
-        closeEditModal();
-    }
-    
-    // Logica per completare un pagamento
-    else if (target.matches('.complete-pending-btn')) {
-        const id = target.dataset.id;
-        if (confirm("Pagamento completato?")) {
-            remove(ref(database, `pendingPayments/${id}`));
-        }
-    }
-
-    // Logica di espansione dei movimenti futuri
-    const movementCard = target.closest('[data-movement-id]');
-    if (movementCard) {
-        const movementId = movementCard.dataset.movementId;
-        const sharesContainer = document.getElementById(`shares-${movementId}`);
-        if (sharesContainer) {
-            sharesContainer.classList.toggle('hidden');
-        }
+document.addEventListener('authReady', () => {
+    if (document.getElementById('member-count')) {
+        console.log("Auth pronto, avvio la pagina finanze...");
+        loadDataFromFirebase();
+        const expenseDateInput = document.getElementById('expense-date');
+        const incomeDateInput = document.getElementById('income-date');
+        const today = new Date().toISOString().split('T')[0];
+        if (expenseDateInput) expenseDateInput.value = today;
+        if (incomeDateInput) incomeDateInput.value = today;
     }
 });
 
