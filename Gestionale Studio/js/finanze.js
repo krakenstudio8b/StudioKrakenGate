@@ -263,41 +263,30 @@ const populateMonthFilter = () => {
     });
 };
 
+// SOSTITUISCI QUESTA FUNZIONE
 const renderMembers = () => {
-    const memberCountEl = document.getElementById('member-count');
-    const membersListEl = document.getElementById('members-list');
-    const payerSelect = document.getElementById('payer');
-    const fixedPayerSelect = document.getElementById('fixed-payer');
-    const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
-    const pendingPaymentMemberSelect = document.getElementById('pending-payment-member');
-    const cashMovementMemberSelect = document.getElementById('cash-movement-member');
-
     if (memberCountEl) memberCountEl.textContent = members.length;
-    if (membersListEl) membersListEl.innerHTML = members.map(m => `<li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-sm">${m.name}<button data-id="${m.id}" data-type="member" class="open-edit-modal-btn text-indigo-500 hover:text-indigo-700">Modifica</button></li>`).join('');
+    const membersListEl = document.getElementById('members-list');
+    
+    // --- MODIFICA QUI ---
+    // Ho rimosso il pulsante "Modifica" dalla lista dei membri.
+    if (membersListEl) {
+        membersListEl.innerHTML = members.map(m => 
+            `<li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-sm">${m.name}</li>`
+        ).join('');
+    }
+    // --- FINE MODIFICA ---
 
-    // Popola tutti i select dei membri
     const memberOptions = members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
-
-    if (payerSelect) {
-        payerSelect.innerHTML = `<option value="">Seleziona chi ha pagato</option>` + memberOptions;
-    }
-    if (fixedPayerSelect) {
-        fixedPayerSelect.innerHTML = `<option value="">Seleziona chi paga (default: Tutti)</option>` + memberOptions;
-    }
-    if (pendingPaymentMemberSelect) {
-        pendingPaymentMemberSelect.innerHTML = `<option value="">Seleziona membro</option>` + memberOptions;
-    }
-    if (cashMovementMemberSelect) {
-        cashMovementMemberSelect.innerHTML = `<option value="">Nessuno</option>` + memberOptions;
-    }
-
+    const payerSelect = document.getElementById('payer');
+    if (payerSelect) payerSelect.innerHTML = `<option value="">Seleziona chi ha pagato</option>` + memberOptions;
+    const pendingPaymentMemberSelect = document.getElementById('pending-payment-member');
+    if (pendingPaymentMemberSelect) pendingPaymentMemberSelect.innerHTML = `<option value="">Seleziona membro</option>` + memberOptions;
+    const cashMovementMemberSelect = document.getElementById('cash-movement-member');
+    if (cashMovementMemberSelect) cashMovementMemberSelect.innerHTML = `<option value="">Nessuno</option>` + memberOptions;
+    const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
     if (incomeMembersCheckboxes) {
-        incomeMembersCheckboxes.innerHTML = members.map(m => `
-            <div class="flex items-center">
-                <input type="checkbox" id="income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600">
-                <label for="income-member-${m.id}" class="ml-2 text-sm">${m.name}</label>
-            </div>
-        `).join('');
+        incomeMembersCheckboxes.innerHTML = members.map(m => `<div class="flex items-center"><input type="checkbox" id="income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600"><label for="income-member-${m.id}" class="ml-2 text-sm">${m.name}</label></div>`).join('');
     }
 };
 
@@ -350,16 +339,38 @@ const renderPendingPayments = () => {
     `).join('') || '<p class="text-gray-500">Nessun pagamento in sospeso.</p>';
 };
 
+// SOSTITUISCI QUESTA FUNZIONE
 const renderFutureMovements = () => {
     const container = document.getElementById('future-movements-container');
     if (!container) return;
-    container.innerHTML = futureMovements.map(m => `
-        <div class="flex justify-between items-center bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
-            <span class="text-sm font-medium">${m.description} (Data prevista: ${displayDate(m.dueDate)})</span>
-            <span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span>
-            <button data-id="${m.id}" data-type="futureMovement" class="open-edit-modal-btn text-blue-600 hover:text-blue-800">Modifica</button>
-        </div>
-    `).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
+
+    container.innerHTML = (futureMovements || []).map(m => {
+        // Logica per generare la lista delle quote
+        const sharesHtml = (m.shares && Array.isArray(m.shares))
+            ? m.shares.map(share => `
+                <div class="flex justify-between items-center text-xs py-1 ${share.paid ? 'text-gray-400 line-through' : ''}">
+                    <span>${share.member}</span>
+                    <span class="font-medium">€${(share.amount || 0).toFixed(2)} ${share.paid ? '✓' : ''}</span>
+                </div>
+            `).join('')
+            : '<p class="text-xs text-gray-500">Nessuna suddivisione specificata.</p>';
+
+        // HTML del contenitore a scomparsa
+        const sharesContainerHtml = `
+            <div id="shares-${m.id}" class="mt-2 pt-2 border-t border-blue-200 space-y-1 ${m.isExpanded ? '' : 'hidden'}">
+                ${sharesHtml}
+            </div>`;
+        
+        // HTML completo della card
+        return `
+            <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500 cursor-pointer" data-movement-id="${m.id}">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm font-medium">${m.description} (Scadenza: ${displayDate(m.dueDate)})</span>
+                    <span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span>
+                </div>
+                ${sharesContainerHtml}
+            </div>`;
+    }).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
 };
 
 const renderWishlist = () => {
@@ -518,9 +529,18 @@ const initializeCharts = () => {
     if (!data.members || data.members.length === 0) return;
 
     const memberNames = data.members.map(m => m.name);
-    const memberColors = ['rgba(79, 70, 239, 0.6)', 'rgba(249, 115, 22, 0.6)', 'rgba(16, 185, 129, 0.6)', 'rgba(239, 68, 68, 0.6)'];
     
-    // Grafico 1: Contributi Totali (già corretto)
+    // Lista di colori più ampia per assegnarli in modo univoco
+    const colorPalette = [
+        'rgba(75, 192, 192, 0.6)', 'rgba(255, 99, 132, 0.6)', 'rgba(255, 206, 86, 0.6)', 
+        'rgba(54, 162, 235, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)',
+        'rgba(199, 199, 199, 0.6)', 'rgba(83, 109, 254, 0.6)', 'rgba(0, 200, 83, 0.6)',
+        'rgba(255, 69, 0, 0.6)', 'rgba(46, 204, 113, 0.6)', 'rgba(52, 152, 219, 0.6)'
+    ];
+    // Assegna un colore a ogni membro. Se i membri sono più dei colori, i colori si ripeteranno.
+    const memberColors = memberNames.map((_, index) => colorPalette[index % colorPalette.length]);
+
+    // Grafico 1: Contributi Totali
     const contributionsData = memberNames.map(name => {
         const expensesPaid = data.expenses.reduce((sum, e) => sum + (e.payer === name ? (e.amount || 0) : 0), 0);
         const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
@@ -530,21 +550,19 @@ const initializeCharts = () => {
     });
     createBarChart('membersContributionsChart', 'Contributi Totali (Spese + Cassa)', contributionsData, memberNames, memberColors);
     
-    // Grafico 2: Ripartizione Entrate (corretto)
+    // Grafico 2: Ripartizione Entrate
     const incomeData = memberNames.map(name => data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / i.membersInvolved.length) : 0), 0));
     createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
     
-    // Grafico 3: Spese per Categoria (corretto)
+    // Grafico 3: Spese per Categoria
     const categoryMap = [...data.expenses, ...data.fixedExpenses].reduce((map, e) => {
         if (e.category) {
             map.set(e.category, (map.get(e.category) || 0) + (e.amount || 0));
         }
         return map;
     }, new Map());
-    createBarChart('categoriesChart', 'Spese per Categoria', Array.from(categoryMap.values()), Array.from(categoryMap.keys()), memberColors);
+    createBarChart('categoriesChart', 'Spese per Categoria', Array.from(categoryMap.values()), Array.from(categoryMap.keys()), colorPalette);
     
-    // --- INIZIO LOGICA MODIFICATA ---
-
     // Grafico 4: Bilanci (Saldo Netto)
     const totalExpenses = data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalFixed = data.fixedExpenses.reduce((sum, f) => sum + (f.amount || 0), 0);
@@ -567,7 +585,6 @@ const initializeCharts = () => {
         });
         createBarChart('balancesChart', 'Bilanci (Netto)', balanceData, memberNames, balanceData.map(b => b >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'));
     }
-    // --- FINE LOGICA MODIFICATA ---
 };
 
 const updateDashboardView = () => { 
@@ -1402,7 +1419,22 @@ document.addEventListener('authReady', () => {
         initializeCharts();
         loadDataFromFirebase(); 
     }
+    const movementCard = e.target.closest('[data-movement-id]');
+    if (movementCard) {
+        const movementId = movementCard.dataset.movementId;
+        const sharesContainer = document.getElementById(`shares-${movementId}`);
+        if (sharesContainer) {
+            sharesContainer.classList.toggle('hidden');
+            // Opzionale: salva lo stato di espansione nel database
+            const movement = futureMovements.find(m => m.id === movementId);
+            if(movement) {
+                movement.isExpanded = !sharesContainer.classList.contains('hidden');
+                // Potresti voler salvare questo stato su Firebase, ma per ora lo gestiamo solo visualmente
+            }
+        }
+    }
 });
+
 
 
 
