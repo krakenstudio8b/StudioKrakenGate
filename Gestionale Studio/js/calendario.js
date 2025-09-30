@@ -75,7 +75,8 @@ function initializeCalendar() {
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
-            right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+            // Su mobile mostra solo 3 viste, su schermi medi (md) e superiori le mostra tutte
+            right: 'dayGridMonth,timeGridWeek,listWeek' 
         },
         buttonText: {
             today: 'Oggi',
@@ -287,6 +288,7 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
+
 
 
 
