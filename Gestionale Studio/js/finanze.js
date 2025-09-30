@@ -737,6 +737,8 @@ const calculateAndRenderSettlement = (forExport = false) => {
 // SOSTITUISCI L'INTERA FUNZIONE openEditModal CON QUESTA
 // SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE
 
+// SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE
+
 const openEditModal = (id, type) => {
     const item = getItemFromStore(type, id);
     if (!item) return;
@@ -753,8 +755,6 @@ const openEditModal = (id, type) => {
     editModalTitle.textContent = `Modifica ${type}`;
     let formHtml = `<form id="edit-form" data-id="${id}" data-type="${type}" class="space-y-4">`;
 
-    // --- INIZIO LOGICA SPECIFICA ---
-    
     if (type === 'wishlistItem') {
         // Logica personalizzata per la Lista Desideri
         formHtml += `
@@ -774,24 +774,33 @@ const openEditModal = (id, type) => {
                     <option value="1-Bassa" ${item.priority === '1-Bassa' ? 'selected' : ''}>Bassa</option>
                 </select>
             </div>
+            
+            <div class="border p-3 rounded-lg">
+                <label class="block text-sm font-medium">Link di Acquisto</label>
+                <div id="edit-links-container" class="space-y-2 mt-2">
+                    ${(item.links || []).map(link => `
+                        <div class="flex items-center space-x-2">
+                            <input type="url" class="w-full p-1 border rounded-md edit-link-input" value="${link}">
+                            <button type="button" class="remove-edit-link-btn text-red-500 font-bold text-lg">&times;</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="flex mt-3 gap-2">
+                    <input type="url" id="new-edit-link-input" placeholder="Aggiungi nuovo link..." class="w-full p-2 border rounded-lg">
+                    <button type="button" id="add-edit-link-btn" class="bg-indigo-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-indigo-600">Aggiungi</button>
+                </div>
+            </div>
         `;
     } else {
         // Logica generica per tutti gli altri tipi di elementi
         formHtml += Object.entries(item).map(([key, value]) => {
-            if (key === 'id' || typeof value === 'object') return ''; // Ignora ID e oggetti complessi
-            
+            if (key === 'id' || typeof value === 'object') return '';
             let inputType = 'text';
             if (typeof value === 'number') inputType = 'number';
             if (key.includes('date') || key.includes('dueDate')) inputType = 'date';
-
-            return `<div>
-                        <label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label>
-                        <input type="${inputType}" id="edit-${key}" name="${key}" value="${value}" class="w-full p-2 border rounded-lg mt-1">
-                    </div>`;
+            return `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label><input type="${inputType}" id="edit-${key}" name="${key}" value="${value}" class="w-full p-2 border rounded-lg mt-1"></div>`;
         }).join('');
     }
-    
-    // --- FINE LOGICA SPECIFICA ---
 
     formHtml += `</form>`;
     editModalFormContainer.innerHTML = formHtml;
@@ -807,44 +816,80 @@ const openEditModal = (id, type) => {
 
     editModal.classList.remove('hidden');
 
-    // Associa gli eventi ai pulsanti DOPO aver creato la modale
+    // --- LISTENER INTERNI ALLA MODALE ---
+
+    // Aggiungi link
+    const addLinkBtn = document.getElementById('add-edit-link-btn');
+    if (addLinkBtn) {
+        addLinkBtn.addEventListener('click', () => {
+            const input = document.getElementById('new-edit-link-input');
+            const container = document.getElementById('edit-links-container');
+            if (input.value.trim() && container) {
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-2';
+                div.innerHTML = `<input type="url" class="w-full p-1 border rounded-md edit-link-input" value="${input.value.trim()}"><button type="button" class="remove-edit-link-btn text-red-500 font-bold text-lg">&times;</button>`;
+                container.appendChild(div);
+                input.value = '';
+            }
+        });
+    }
+
+    // Rimuovi link (usa event delegation)
+    const linksContainer = document.getElementById('edit-links-container');
+    if(linksContainer) {
+        linksContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-edit-link-btn')) {
+                e.target.parentElement.remove();
+            }
+        });
+    }
+
+    // Salva il form
     const editForm = document.getElementById('edit-form');
     if (editForm) {
         editForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const formData = new FormData(editForm);
-            const updatedData = { id: id }; // Mantiene l'ID originale
+            const updatedData = { id: id };
             
             for (const [key, value] of formData.entries()) {
                 const originalValue = item[key];
-                // Mantiene il tipo di dato originale (se numero, lo riconverte a numero)
                 updatedData[key] = (typeof originalValue === 'number' && !isNaN(originalValue)) ? parseFloat(value) : value;
             }
 
-            // Trova la chiave dell'oggetto da aggiornare nel database
-            let itemKey = null;
+            // Raccogli i link aggiornati
             if (type === 'wishlistItem') {
-                const itemIndex = wishlist.findIndex(i => i.id === id);
-                if (itemIndex > -1) {
-                    wishlist[itemIndex] = { ...wishlist[itemIndex], ...updatedData };
-                    // Per le liste salvate come array, l'indice è la chiave
-                    itemKey = itemIndex;
-                    update(ref(database, `${wishlistRef.key}/${itemKey}`), updatedData);
-                }
-            } 
-            // Aggiungere qui logica di salvataggio per altri tipi se necessario
+                const linkInputs = document.querySelectorAll('.edit-link-input');
+                updatedData.links = Array.from(linkInputs).map(input => input.value.trim()).filter(link => link);
+            }
 
+            // Trova la chiave/indice dell'oggetto da aggiornare
+            let itemKey = null;
+            const itemIndex = wishlist.findIndex(i => i.id === id);
+            if (itemIndex > -1) {
+                wishlist[itemIndex] = { ...wishlist[itemIndex], ...updatedData };
+                // Firebase usa gli indici dell'array come chiavi
+                itemKey = itemIndex; 
+                update(ref(database, `wishlist/${itemKey}`), updatedData);
+            }
+            
             alert('Modifiche salvate!');
             closeEditModal();
         });
     }
 
+    // Funzionalità del pulsante Elimina
     const deleteBtn = document.getElementById('delete-edit-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', () => {
              if (confirm(`Sei sicuro di voler eliminare questo elemento?`)) {
-                // Trovare la chiave/indice e rimuovere dal DB
-                alert('Funzionalità di eliminazione in sviluppo.');
+                const itemIndex = wishlist.findIndex(i => i.id === id);
+                if (itemIndex > -1) {
+                    // Per rimuovere un elemento da un array in Firebase, è più sicuro riscrivere l'intero array aggiornato
+                    const updatedWishlist = wishlist.filter(i => i.id !== id);
+                    set(ref(database, 'wishlist'), updatedWishlist);
+                }
+                alert('Elemento eliminato.');
                 closeEditModal();
              }
         });
@@ -1471,6 +1516,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
