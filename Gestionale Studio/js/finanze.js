@@ -341,6 +341,7 @@ const renderPendingPayments = () => {
 
 // SOSTITUISCI QUESTA FUNZIONE
 // 3. SOSTITUISCI QUESTA FUNZIONE
+// 1. SOSTITUISCI QUESTA FUNZIONE
 const renderFutureMovements = () => {
     const container = document.getElementById('future-movements-container');
     if (container) {
@@ -350,7 +351,13 @@ const renderFutureMovements = () => {
                     <div class="flex justify-between items-center text-xs py-1">
                         <label for="share-${movementIndex}-${shareIndex}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
                         <div class="flex items-center gap-2">
-                            <span class="font-medium">€${(share.amount || 0).toFixed(2)}</span>
+                            <span class="font-medium">€</span>
+                            
+                            <input type="number" value="${(share.amount || 0).toFixed(2)}" 
+                                   data-movement-index="${movementIndex}" 
+                                   data-share-index="${shareIndex}" 
+                                   class="w-16 p-1 text-right border rounded-md future-share-amount">
+                            
                             <input type="checkbox" id="share-${movementIndex}-${shareIndex}" data-movement-index="${movementIndex}" data-share-index="${shareIndex}" class="form-checkbox h-4 w-4 text-indigo-600 rounded cursor-pointer future-share-checkbox" ${share.paid ? 'checked' : ''}>
                         </div>
                     </div>`).join('')
@@ -1402,7 +1409,56 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 
 // --- App Initialization (PUNTO DI INNESTO DEL FIX) ---
 // SOSTITUISCI TUTTI I VECCHI BLOCCHI document.addEventListener('click',...) CON QUESTO
+// 2. SOSTITUISCI L'INTERO BLOCCO document.addEventListener('change', ...) CON QUESTO
 
+document.addEventListener('change', (e) => {
+    const target = e.target;
+
+    // Logica per i checkbox delle quote future
+    if (target.matches('.future-share-checkbox')) {
+        const movementIndex = parseInt(target.dataset.movementIndex, 10);
+        const shareIndex = parseInt(target.dataset.shareIndex, 10);
+        const isChecked = target.checked;
+
+        if (!isNaN(movementIndex) && !isNaN(shareIndex) && futureMovements[movementIndex]) {
+            const movement = futureMovements[movementIndex];
+            if (movement && movement.shares && movement.shares[shareIndex]) {
+                // Aggiorna lo stato nel database
+                update(ref(database, `futureMovements/${movementIndex}/shares/${shareIndex}`), { paid: isChecked });
+            }
+        }
+    }
+
+    // NUOVA LOGICA: per la modifica dell'importo delle quote future
+    else if (target.matches('.future-share-amount')) {
+        const movementIndex = parseInt(target.dataset.movementIndex, 10);
+        const shareIndex = parseInt(target.dataset.shareIndex, 10);
+        const newAmount = parseFloat(target.value);
+
+        if (!isNaN(movementIndex) && !isNaN(shareIndex) && !isNaN(newAmount)) {
+            const movement = futureMovements[movementIndex];
+            if (movement && movement.shares && movement.shares[shareIndex]) {
+                // 1. Aggiorna l'importo della singola quota
+                movement.shares[shareIndex].amount = newAmount;
+
+                // 2. Ricalcola il costo totale del movimento sommando tutte le quote aggiornate
+                const newTotalCost = movement.shares.reduce((sum, s) => sum + (s.amount || 0), 0);
+                movement.totalCost = newTotalCost;
+
+                // 3. Prepara gli aggiornamenti per Firebase
+                const updates = {};
+                updates[`futureMovements/${movementIndex}/shares/${shareIndex}/amount`] = newAmount;
+                updates[`futureMovements/${movementIndex}/totalCost`] = newTotalCost;
+
+                // 4. Invia gli aggiornamenti al database
+                update(ref(database), updates);
+
+                // 5. Aggiorna la vista per mostrare il nuovo totale (opzionale, onValue lo farà comunque)
+                renderFutureMovements();
+            }
+        }
+    }
+});
 document.addEventListener('authReady', () => {
     if (document.getElementById('member-count')) {
         console.log("Auth pronto, avvio la pagina finanze...");
@@ -1414,6 +1470,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
