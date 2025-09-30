@@ -94,6 +94,8 @@ function initializeCalendar() {
 
         // SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE calendario.js
 
+        // SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE calendario.js
+
         eventClick: (info) => {
             // Riempi il modale con i dati dell'evento per tutti gli utenti
             const event = info.event;
@@ -116,17 +118,29 @@ function initializeCalendar() {
                 cb.checked = (extendedProps.participants || []).includes(cb.value);
             });
 
+            // Seleziona tutti i campi modificabili nel modale
+            const formElements = eventModal.querySelectorAll('input, select, textarea');
+
             // LOGICA MODIFICATA: Controlla il ruolo dell'utente
             if (currentUser.role === 'user') {
                 // Se è un utente base
-                modalTitle.textContent = 'Dettagli Evento'; // Cambia il titolo in "Dettagli"
-                saveEventBtn.classList.add('hidden');      // Nasconde il pulsante Salva
-                deleteEventBtn.classList.add('hidden');    // Nasconde il pulsante Elimina
+                modalTitle.textContent = 'Dettagli Evento';
+                saveEventBtn.classList.add('hidden');
+                deleteEventBtn.classList.add('hidden');
+                
+                // --- NUOVA AGGIUNTA ---
+                // Disabilita tutti i campi per renderli non modificabili
+                formElements.forEach(el => el.disabled = true);
+                
             } else {
                 // Se è un admin o admin del calendario
-                modalTitle.textContent = 'Modifica Evento'; // Il titolo è "Modifica"
-                saveEventBtn.classList.remove('hidden');   // Mostra il pulsante Salva
-                deleteEventBtn.classList.remove('hidden'); // Mostra il pulsante Elimina
+                modalTitle.textContent = 'Modifica Evento';
+                saveEventBtn.classList.remove('hidden');
+                deleteEventBtn.classList.remove('hidden');
+                
+                // --- NUOVA AGGIUNTA ---
+                // Assicurati che tutti i campi siano abilitati per la modifica
+                formElements.forEach(el => el.disabled = false);
             }
 
             currentEventInfo = { id: event.id, isNew: false };
@@ -273,6 +287,7 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
+
 
 
 
