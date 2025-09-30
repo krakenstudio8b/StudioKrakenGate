@@ -713,7 +713,6 @@ const calculateAndRenderSettlement = (forExport = false) => {
         settlementList.appendChild(summaryLi);
     }
 
-    document.getElementById('settlement-container')?.classList.remove('hidden');
     
     // La logica di esportazione per Excel potrebbe necessitare di un formato diverso, per ora la lasciamo così
     if (forExport) {
@@ -1489,6 +1488,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
