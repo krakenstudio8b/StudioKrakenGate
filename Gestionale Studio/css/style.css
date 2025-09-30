@@ -158,3 +158,12 @@ body {
     align-items: center;
     gap: 0.25rem;
 }
+@media (max-width: 768px) {
+  .fc {
+    font-size: 0.85em; /* Riduci la dimensione del font generale del calendario su schermi piccoli */
+  }
+
+  .fc .fc-toolbar-title {
+    font-size: 1.2em; /* Mantieni il titolo un po' più grande */
+  }
+}
