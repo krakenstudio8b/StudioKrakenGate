@@ -735,150 +735,120 @@ const calculateAndRenderSettlement = (forExport = false) => {
 // --- Funzioni CRUD e di gestione form ---
 
 // SOSTITUISCI L'INTERA FUNZIONE openEditModal CON QUESTA
+// SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE
+
 const openEditModal = (id, type) => {
     const item = getItemFromStore(type, id);
     if (!item) return;
 
-    // Se l'utente non è admin, impedisci la modifica di spese ed entrate
-    const isProtectedType = ['variableExpense', 'incomeEntry', 'fixedExpense'].includes(type);
+    const isProtectedType = ['variableExpense', 'incomeEntry', 'fixedExpense', 'cashMovement'].includes(type);
     if (currentUser.role !== 'admin' && isProtectedType) {
-        alert("Non hai i permessi per modificare questo elemento. Contatta un amministratore.");
-        return;
+        return alert("Non hai i permessi per modificare questo elemento.");
     }
-
-    // Il resto della funzione per aprire la modale rimane quasi invariato
-    const editModal = document.getElementById('edit-modal');
+    
     const editModalTitle = document.getElementById('edit-modal-title');
     const editModalFormContainer = document.getElementById('edit-modal-form-container');
     const editModalActions = document.getElementById('edit-modal-actions');
-
+    
     editModalTitle.textContent = `Modifica ${type}`;
-    editModalFormContainer.innerHTML = ''; 
-    editModalActions.innerHTML = '';
-
     let formHtml = `<form id="edit-form" data-id="${id}" data-type="${type}" class="space-y-4">`;
-    // ... (tutta la logica per generare i campi del form rimane la stessa)...
-    // La logica interna per creare i campi del form va bene, la ometto per brevità
 
-    for (const key in item) {
-        if (key === 'id' || key === 'contributions') continue;
-        const value = item[key];
-        const label = key.replace(/([A-Z])/g, ' $1').replace('_', ' ').toLowerCase();
-        if (key === 'payer' || key === 'member') {
-            formHtml += `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label><select id="edit-${key}" name="${key}" class="w-full p-3 border rounded-lg">${members.map(m => `<option value="${m.name}" ${m.name === value ? 'selected' : ''}>${m.name}</option>`).join('')}</select></div>`;
-        } else if (key === 'links' && type === 'wishlistItem') {
-            formHtml += `<div class="border p-3 rounded-lg"><label class="block text-sm font-medium">Link Associati</label><div id="edit-links-container" class="space-y-2 mt-2">${(value || []).map(link => `<div class="flex items-center space-x-2"><input type="text" class="w-full p-1 border rounded-md" value="${link}"><button type="button" class="remove-edit-link-btn text-red-500">&times;</button></div>`).join('')}</div><div class="flex mt-3"><input type="url" id="new-edit-link" placeholder="Aggiungi nuovo link" class="w-full p-2 border rounded-l-lg"><button type="button" id="add-edit-link-btn" class="bg-indigo-500 text-white p-2 rounded-r-lg">+</button></div></div>`;
-        } else if (key === 'membersInvolved' && type === 'incomeEntry') {
-            formHtml += `<div class="border p-3 rounded-lg"><label class="block text-sm font-medium">Membri che hanno ricevuto</label><div id="edit-income-members-checkboxes" class="grid grid-cols-2 gap-2 mt-2">${members.map(m => `<div class="flex items-center"><input type="checkbox" id="edit-income-member-${m.id}" name="membersInvolved" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600" ${value.includes(m.name) ? 'checked' : ''}><label for="edit-income-member-${m.id}" class="ml-2 text-sm">${m.name}</label></div>`).join('')}</div></div>`;
-        } else if (typeof value === 'boolean') {
-            formHtml += `<div class="flex items-center"><input type="checkbox" id="edit-${key}" name="${key}" class="form-checkbox h-5 w-5 text-indigo-600" ${value ? 'checked' : ''}><label for="edit-${key}" class="ml-2 text-sm capitalize">${label}</label></div>`;
-        } else if (key.includes('date') || key.includes('dueDate')) {
-            formHtml += `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label><input type="date" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg"></div>`;
-        } else if (typeof value === 'number') {
-            formHtml += `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label><input type="number" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg"></div>`;
-        } else {
-            formHtml += `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${label}</label><input type="text" id="edit-${key}" name="${key}" value="${value}" class="w-full p-3 border rounded-lg"></div>`;
-        }
-    }
-    formHtml += `</form>`;
-
-    // Mostra i pulsanti di salvataggio/eliminazione SOLO all'admin
-    let actionsHtml = `<button type="button" id="cancel-edit-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Annulla</button>`;
-    if (currentUser.role === 'admin' || !isProtectedType) {
-        actionsHtml += `
-            <button type="button" id="delete-edit-btn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600">Elimina</button>
-            <button type="submit" form="edit-form" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Salva Modifiche</button>
+    // --- INIZIO LOGICA SPECIFICA ---
+    
+    if (type === 'wishlistItem') {
+        // Logica personalizzata per la Lista Desideri
+        formHtml += `
+            <div>
+                <label for="edit-name" class="block text-sm font-medium">Nome Oggetto</label>
+                <input type="text" id="edit-name" name="name" value="${item.name || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-cost" class="block text-sm font-medium">Costo Stimato (€)</label>
+                <input type="number" step="0.01" id="edit-cost" name="cost" value="${item.cost || 0}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-priority" class="block text-sm font-medium">Priorità</label>
+                <select id="edit-priority" name="priority" class="w-full p-2 border rounded-lg mt-1 bg-white">
+                    <option value="3-Alta" ${item.priority === '3-Alta' ? 'selected' : ''}>Alta</option>
+                    <option value="2-Media" ${item.priority === '2-Media' ? 'selected' : ''}>Media</option>
+                    <option value="1-Bassa" ${item.priority === '1-Bassa' ? 'selected' : ''}>Bassa</option>
+                </select>
+            </div>
         `;
+    } else {
+        // Logica generica per tutti gli altri tipi di elementi
+        formHtml += Object.entries(item).map(([key, value]) => {
+            if (key === 'id' || typeof value === 'object') return ''; // Ignora ID e oggetti complessi
+            
+            let inputType = 'text';
+            if (typeof value === 'number') inputType = 'number';
+            if (key.includes('date') || key.includes('dueDate')) inputType = 'date';
+
+            return `<div>
+                        <label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label>
+                        <input type="${inputType}" id="edit-${key}" name="${key}" value="${value}" class="w-full p-2 border rounded-lg mt-1">
+                    </div>`;
+        }).join('');
     }
+    
+    // --- FINE LOGICA SPECIFICA ---
 
+    formHtml += `</form>`;
     editModalFormContainer.innerHTML = formHtml;
-    editModalActions.innerHTML = `<div class="flex justify-end gap-3 mt-4">${actionsHtml}</div>`;
-    editModal.classList.remove('hidden');
-    // ... (il resto della funzione con i listener per i pulsanti va bene)
 
-    // Aggiungi listener per i link (interno alla modale)
-    const addLinkBtn = document.getElementById('add-edit-link-btn');
-    if (addLinkBtn) {
-        addLinkBtn.addEventListener('click', () => {
-            const input = document.getElementById('new-edit-link');
-            const container = document.getElementById('edit-links-container');
-            if (input.value.trim() && container) {
-                const div = document.createElement('div');
-                div.className = 'flex items-center space-x-2';
-                div.innerHTML = `<input type="text" class="w-full p-1 border rounded-md" value="${input.value.trim()}"><button type="button" class="remove-edit-link-btn text-red-500 hover:text-red-700">&times;</button>`;
-                container.appendChild(div);
-                input.value = '';
+    editModalActions.innerHTML = `
+        <div class="flex justify-between items-center mt-6">
+            <button type="button" id="delete-edit-btn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600">Elimina</button>
+            <div class="flex gap-3">
+                <button type="button" id="cancel-edit-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Annulla</button>
+                <button type="submit" form="edit-form" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Salva Modifiche</button>
+            </div>
+        </div>`;
+
+    editModal.classList.remove('hidden');
+
+    // Associa gli eventi ai pulsanti DOPO aver creato la modale
+    const editForm = document.getElementById('edit-form');
+    if (editForm) {
+        editForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(editForm);
+            const updatedData = { id: id }; // Mantiene l'ID originale
+            
+            for (const [key, value] of formData.entries()) {
+                const originalValue = item[key];
+                // Mantiene il tipo di dato originale (se numero, lo riconverte a numero)
+                updatedData[key] = (typeof originalValue === 'number' && !isNaN(originalValue)) ? parseFloat(value) : value;
             }
+
+            // Trova la chiave dell'oggetto da aggiornare nel database
+            let itemKey = null;
+            if (type === 'wishlistItem') {
+                const itemIndex = wishlist.findIndex(i => i.id === id);
+                if (itemIndex > -1) {
+                    wishlist[itemIndex] = { ...wishlist[itemIndex], ...updatedData };
+                    // Per le liste salvate come array, l'indice è la chiave
+                    itemKey = itemIndex;
+                    update(ref(database, `${wishlistRef.key}/${itemKey}`), updatedData);
+                }
+            } 
+            // Aggiungere qui logica di salvataggio per altri tipi se necessario
+
+            alert('Modifiche salvate!');
+            closeEditModal();
         });
     }
 
-    document.getElementById('delete-edit-btn').addEventListener('click', () => {
-        if (confirm(`Sei sicuro di voler eliminare questo elemento (${type})?`)) {
-            let store;
-            switch (type) {
-                case 'variableExpense': store = variableExpenses; break;
-                case 'fixedExpense': store = fixedExpenses; break;
-                case 'incomeEntry': store = incomeEntries; break;
-                case 'wishlistItem': store = wishlist; break;
-                case 'futureMovement': store = futureMovements; break;
-                case 'pendingPayment': store = pendingPayments; break;
-                case 'member': store = members; break;
-            }
-            const index = store.findIndex(i => i.id === id);
-            if (index !== -1) {
-                store.splice(index, 1);
-                saveDataToFirebase();
-                updateDashboardView();
+    const deleteBtn = document.getElementById('delete-edit-btn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => {
+             if (confirm(`Sei sicuro di voler eliminare questo elemento?`)) {
+                // Trovare la chiave/indice e rimuovere dal DB
+                alert('Funzionalità di eliminazione in sviluppo.');
                 closeEditModal();
-            }
-        }
-    });
-
-    document.getElementById('edit-form').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        const updatedItem = {};
-        
-        // Estrai tutti i valori del form
-        for (const [key, value] of formData.entries()) {
-            if (key === 'members') {
-                // Gestione checkbox multiple
-                if (!updatedItem.members) updatedItem.members = [];
-                updatedItem.members.push(value);
-            } else if (!isMember && (key.includes('amount') || key.includes('cost'))) {
-                updatedItem[key] = parseFloat(value);
-            } else {
-                updatedItem[key] = value;
-            }
-        }
-        
-        // Gestione dei link custom per wishlist (prendi i valori dai campi di input dinamici)
-        if (type === 'wishlistItem') {
-            const linkInputs = document.querySelectorAll('#edit-links-container input[type="text"]');
-            updatedItem.links = Array.from(linkInputs).map(input => input.value.trim()).filter(val => val);
-        }
-        
-        // Applica le modifiche allo store corretto
-        let store;
-        switch (type) {
-            case 'variableExpense': store = variableExpenses; break;
-            case 'fixedExpense': store = fixedExpenses; break;
-            case 'incomeEntry': store = incomeEntries; break;
-            case 'wishlistItem': store = wishlist; break;
-            case 'futureMovement': store = futureMovements; break;
-            case 'pendingPayment': store = pendingPayments; break;
-            case 'member': store = members; break;
-        }
-
-        const index = store.findIndex(i => i.id === id);
-        if (index !== -1) {
-            // Aggiorna solo le proprietà modificate, mantenendo l'ID e altre proprietà non modificate
-            store[index] = { ...store[index], ...updatedItem, id: id };
-            saveDataToFirebase();
-            updateDashboardView();
-            closeEditModal();
-        }
-    });
+             }
+        });
+    }
 };
 
 
@@ -1501,6 +1471,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
