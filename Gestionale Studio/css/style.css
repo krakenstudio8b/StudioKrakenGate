@@ -158,6 +158,11 @@ body {
     align-items: center;
     gap: 0.25rem;
 }
+.fc-daygrid-event .fc-event-title {
+    white-space: nowrap;      /* Impedisce al testo di andare a capo */
+    overflow: hidden;         /* Nasconde il testo che esce dal contenitore */
+    text-overflow: ellipsis;  /* Aggiunge i puntini "..." alla fine */
+}
 @media (max-width: 768px) {
   .fc {
     font-size: 0.85em; /* Riduci la dimensione del font generale del calendario su schermi piccoli */
@@ -167,3 +172,4 @@ body {
     font-size: 1.2em; /* Mantieni il titolo un po' più grande */
   }
 }
+
