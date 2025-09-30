@@ -77,62 +77,72 @@ function saveDataToFirebase() {
 
 // Sostituisci la tua vecchia funzione loadDataFromFirebase con questa
 
+// SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE
+
 function loadDataFromFirebase() {
     onValue(membersRef, (snapshot) => {
         const rawData = snapshot.val() || [];
-
-        // Logica di normalizzazione: Controlla se i dati sono stringhe e li converte in oggetti
         if (Array.isArray(rawData) && rawData.length > 0 && typeof rawData[0] === 'string') {
-            console.log("Dati dei membri trovati come stringhe. Normalizzazione in oggetti...");
-            // Converte l'array di stringhe in un array di oggetti che il resto della pagina si aspetta
             members = rawData.map((name, index) => ({ id: String(index), name: name }));
         } else {
-            // Se i dati sono già oggetti o la lista è vuota, li usa così come sono
-            members = rawData;
+            // Se Firebase restituisce un oggetto, lo converte in array
+            members = Array.isArray(rawData) ? rawData : (rawData ? Object.values(rawData) : []);
         }
-
         renderMembers();
         toggleSectionsVisibility();
         updateDashboardView();
     });
 
     onValue(varExpensesRef, (snapshot) => {
-        variableExpenses = snapshot.val() || [];
+        const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
+        // Converte sempre il risultato in un array per sicurezza
+        variableExpenses = data ? Object.values(data) : [];
         renderVariableExpenses();
         updateDashboardView();
         populateMonthFilter();
     });
 
     onValue(fixedExpensesRef, (snapshot) => {
-        fixedExpenses = snapshot.val() || [];
+        const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
+        fixedExpenses = data ? Object.values(data) : [];
         renderFixedExpenses();
         updateDashboardView();
     });
 
     onValue(incomeRef, (snapshot) => {
-        incomeEntries = snapshot.val() || [];
+        const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
+        incomeEntries = data ? Object.values(data) : [];
         renderIncomeEntries();
         updateDashboardView();
         populateMonthFilter();
     });
 
     onValue(wishlistRef, (snapshot) => {
-        wishlist = snapshot.val() || [];
+        const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
+        wishlist = data ? Object.values(data) : [];
         renderWishlist();
     });
 
     onValue(futureMovementsRef, (snapshot) => {
-        futureMovements = snapshot.val() || [];
+        const data = snapshot.val();
+         // --- CORREZIONE CRUCIALE ---
+        futureMovements = data ? Object.values(data) : [];
         renderFutureMovements();
     });
 
     onValue(pendingPaymentsRef, (snapshot) => {
-        pendingPayments = snapshot.val() || [];
+        const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
+        pendingPayments = data ? Object.values(data) : [];
         renderPendingPayments();
     });
 
     onValue(cassaComuneRef, (snapshot) => {
-        cassaComune = snapshot.val() || { balance: 0, movements: [] };
+        cassaComune = snapshot.val() || { balance: 0, movements: {} };
         renderCassaComune();
         updateDashboardView();
     });
@@ -1474,6 +1484,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
