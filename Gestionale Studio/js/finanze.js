@@ -1415,6 +1415,8 @@ document.addEventListener('click', (e) => {
 
 // Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
 
+// SOSTITUISCI LA VECCHIA RIGA "if (calculateBtn)..." CON QUESTO BLOCCO
+
 if (calculateBtn) {
     calculateBtn.addEventListener('click', () => {
         const settlementContainer = document.getElementById('settlement-container');
@@ -1500,6 +1502,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
