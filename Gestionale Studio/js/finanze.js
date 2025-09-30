@@ -340,37 +340,26 @@ const renderPendingPayments = () => {
 };
 
 // SOSTITUISCI QUESTA FUNZIONE
+// 3. SOSTITUISCI QUESTA FUNZIONE
 const renderFutureMovements = () => {
     const container = document.getElementById('future-movements-container');
-    if (!container) return;
+    if (container) {
+        container.innerHTML = (futureMovements || []).map((m, movementIndex) => {
+            const sharesHtml = (m.shares && Array.isArray(m.shares))
+                ? m.shares.map((share, shareIndex) => `
+                    <div class="flex justify-between items-center text-xs py-1">
+                        <label for="share-${movementIndex}-${shareIndex}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">€${(share.amount || 0).toFixed(2)}</span>
+                            <input type="checkbox" id="share-${movementIndex}-${shareIndex}" data-movement-index="${movementIndex}" data-share-index="${shareIndex}" class="form-checkbox h-4 w-4 text-indigo-600 rounded cursor-pointer future-share-checkbox" ${share.paid ? 'checked' : ''}>
+                        </div>
+                    </div>`).join('')
+                : '<p class="text-xs text-gray-500">Nessuna suddivisione specificata.</p>';
 
-    container.innerHTML = (futureMovements || []).map(m => {
-        // Logica per generare la lista delle quote
-        const sharesHtml = (m.shares && Array.isArray(m.shares))
-            ? m.shares.map(share => `
-                <div class="flex justify-between items-center text-xs py-1 ${share.paid ? 'text-gray-400 line-through' : ''}">
-                    <span>${share.member}</span>
-                    <span class="font-medium">€${(share.amount || 0).toFixed(2)} ${share.paid ? '✓' : ''}</span>
-                </div>
-            `).join('')
-            : '<p class="text-xs text-gray-500">Nessuna suddivisione specificata.</p>';
-
-        // HTML del contenitore a scomparsa
-        const sharesContainerHtml = `
-            <div id="shares-${m.id}" class="mt-2 pt-2 border-t border-blue-200 space-y-1 ${m.isExpanded ? '' : 'hidden'}">
-                ${sharesHtml}
-            </div>`;
-        
-        // HTML completo della card
-        return `
-            <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500 cursor-pointer" data-movement-id="${m.id}">
-                <div class="flex justify-between items-center">
-                    <span class="text-sm font-medium">${m.description} (Scadenza: ${displayDate(m.dueDate)})</span>
-                    <span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span>
-                </div>
-                ${sharesContainerHtml}
-            </div>`;
-    }).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
+            const sharesContainerHtml = `<div id="shares-${m.id}" class="mt-2 pt-2 border-t border-blue-200 space-y-1 ${m.isExpanded ? '' : 'hidden'}">${sharesHtml}</div>`;
+            return `<div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500"><div class="flex justify-between items-center cursor-pointer" data-movement-id="${m.id}"><span class="text-sm font-medium">${m.description} (Scadenza: ${displayDate(m.dueDate)})</span><span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span></div>${sharesContainerHtml}</div>`;
+        }).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
+    }
 };
 
 const renderWishlist = () => {
@@ -1425,6 +1414,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
