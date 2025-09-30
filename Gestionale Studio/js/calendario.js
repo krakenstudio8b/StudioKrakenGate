@@ -87,13 +87,13 @@ function initializeCalendar() {
             // Layout per schermi GRANDI (da 768px in su)
             start: 'prev,next today',
             center: 'title',
-            end: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+            end: 'dayGridMonth,timeGridWeek' // Mese e Settimana in alto
         },
         footerToolbar: {
             // Layout per schermi PICCOLI (sotto i 768px)
-            // Mettiamo i pulsanti di navigazione in basso per più spazio
             start: 'prev,next',
-            end: 'dayGridMonth,listWeek'
+            center: '', // Lasciamo il centro vuoto
+            end: 'listWeek' // Solo Agenda (lista) in basso
         },
         buttonText: {
             today: 'Oggi',
@@ -305,6 +305,7 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
+
 
 
 
