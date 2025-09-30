@@ -92,13 +92,10 @@ function initializeCalendar() {
             openModalForNewEvent({ start: info.startStr, end: info.endStr });
         },
 
-        eventClick: (info) => {
-            if (currentUser.role === 'user') {
-                alert("Non hai i permessi per modificare questo evento. Contatta un amministratore.");
-                return;
-            }
+        // SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE calendario.js
 
-            modalTitle.textContent = 'Modifica Evento';
+        eventClick: (info) => {
+            // Riempi il modale con i dati dell'evento per tutti gli utenti
             const event = info.event;
             const extendedProps = event.extendedProps || {};
             
@@ -119,7 +116,19 @@ function initializeCalendar() {
                 cb.checked = (extendedProps.participants || []).includes(cb.value);
             });
 
-            deleteEventBtn.classList.remove('hidden');
+            // LOGICA MODIFICATA: Controlla il ruolo dell'utente
+            if (currentUser.role === 'user') {
+                // Se è un utente base
+                modalTitle.textContent = 'Dettagli Evento'; // Cambia il titolo in "Dettagli"
+                saveEventBtn.classList.add('hidden');      // Nasconde il pulsante Salva
+                deleteEventBtn.classList.add('hidden');    // Nasconde il pulsante Elimina
+            } else {
+                // Se è un admin o admin del calendario
+                modalTitle.textContent = 'Modifica Evento'; // Il titolo è "Modifica"
+                saveEventBtn.classList.remove('hidden');   // Mostra il pulsante Salva
+                deleteEventBtn.classList.remove('hidden'); // Mostra il pulsante Elimina
+            }
+
             currentEventInfo = { id: event.id, isNew: false };
             openModal();
         },
@@ -264,6 +273,7 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
+
 
 
 
