@@ -1247,8 +1247,9 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
 
 // SOSTITUISCI IL VECCHIO BLOCCO if (addExpenseBtn) CON QUESTO
 // SOSTITUISCI DI NUOVO L'INTERO BLOCCO if (addExpenseBtn) CON QUESTA VERSIONE
+// SOSTITUISCI QUESTO INTERO BLOCCO DI CODICE NEL TUO FILE
+
 if (addExpenseBtn) {
-    // Il testo del bottone viene deciso in base al ruolo
     if (currentUser.role === 'admin') {
         addExpenseBtn.textContent = 'Aggiungi Spesa';
     } else {
@@ -1263,29 +1264,56 @@ if (addExpenseBtn) {
         const description = document.getElementById('description').value;
 
         if (!payer || !date || isNaN(amount) || amount <= 0 || !category || !description) {
-            alert("Compila tutti i campi obbligatori per la spesa.");
-            return;
+            return alert("Compila tutti i campi obbligatori.");
         }
 
-        // CONTROLLO STRINGENTE: Solo se il ruolo è ESATTAMENTE 'admin'
         if (currentUser.role === 'admin') {
-            const newExpense = {
-                id: Date.now().toString(), date, payer, amount, category, description
-            };
-            const newExpenseRef = push(varExpensesRef);
-            set(newExpenseRef, newExpense);
-            alert('Spesa aggiunta con successo.');
+            // --- INIZIO LOGICA MODIFICATA ---
+            if (payer === 'Cassa Comune') {
+                // Se il pagante è la Cassa Comune, esegui la logica specifica
+                if ((cassaComune.balance || 0) < amount) {
+                    return alert("Errore: Fondi insufficienti nella cassa comune per questa spesa.");
+                }
+
+                // 1. Crea la nuova spesa
+                const newExpenseRef = push(varExpensesRef);
+                const newExpense = { id: newExpenseRef.key, date, payer, amount, category, description };
+
+                // 2. Crea il movimento di prelievo dalla cassa
+                const newMovementId = Date.now().toString(); // Usiamo un ID semplice per il movimento
+                const newMovement = {
+                    id: newMovementId,
+                    type: 'withdrawal',
+                    amount: amount,
+                    member: 'Cassa',
+                    date: date,
+                    description: `Spesa: ${description}`
+                };
+
+                // 3. Calcola il nuovo bilancio della cassa
+                const newBalance = (cassaComune.balance || 0) - amount;
+
+                // 4. Prepara l'aggiornamento atomico per Firebase (aggiorna tutto insieme)
+                const updates = {};
+                updates[`variableExpenses/${newExpenseRef.key}`] = newExpense;
+                updates[`cassaComune/balance`] = newBalance;
+                updates[`cassaComune/movements/${newMovementId}`] = newMovement;
+
+                update(ref(database), updates);
+                alert('Spesa pagata dalla Cassa Comune aggiunta con successo. Il bilancio della cassa è stato aggiornato.');
+
+            } else {
+                // Se il pagante è una persona, la logica è più semplice
+                const newExpenseRef = push(varExpensesRef);
+                set(newExpenseRef, { id: newExpenseRef.key, date, payer, amount, category, description });
+                alert('Spesa aggiunta con successo.');
+            }
+            // --- FINE LOGICA MODIFICATA ---
         } else {
-            // TUTTI GLI ALTRI RUOLI (incluso 'calendar_admin') inviano una richiesta
-            const newRequest = {
-                requesterUid: currentUser.uid,
-                requesterName: currentUser.email.split('@')[0],
-                date, payer, amount, category, description,
-                status: 'pending'
-            };
+            // Logica per gli utenti non-admin (invariata)
             const newRequestRef = push(expenseRequestsRef);
-            set(newRequestRef, newRequest);
-            alert("Richiesta di spesa inviata all'amministratore per approvazione.");
+            set(newRequestRef, { requesterUid: currentUser.uid, requesterName: currentUser.email.split('@')[0], date, payer, amount, category, description, status: 'pending' });
+            alert("Richiesta di spesa inviata.");
         }
         
         document.getElementById('expense-form-section').classList.add('hidden');
@@ -1484,6 +1512,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
