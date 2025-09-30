@@ -1320,91 +1320,78 @@ if (quickActionsContainer) quickActionsContainer.addEventListener('click', (e) =
     }
 });
 
+// SOSTITUISCI TUTTI I VECCHI BLOCCHI document.addEventListener('click',...) CON QUESTO UNICO BLOCCO
+
 document.addEventListener('click', (e) => {
-    if (e.target.matches('.open-edit-modal-btn')) {
-        const id = e.target.dataset.id;
-        const type = e.target.dataset.type;
-        openEditModal(id, type);
-    }
-    
-    // Logica per approvare/rifiutare richieste (Admin)
-    if (e.target.matches('.approve-request-btn')) {
-        const key = e.target.dataset.key;
-        if(key && expenseRequests[key]){
-            const req = expenseRequests[key];
-            addExpenseAsAdmin({
-                payer: req.payer,
-                date: req.date,
-                amount: req.amount,
-                category: req.category,
-                description: `[RICHIESTA APPROVATA] ${req.description}`,
-            });
-            expenseRequests[key].status = 'approved';
-            saveDataToFirebase();
-            renderExpenseRequestsForAdmin();
-        }
-    }
-    if (e.target.matches('.reject-request-btn')) {
-        const key = e.target.dataset.key;
-        if(key && expenseRequests[key]){
-            expenseRequests[key].status = 'rejected';
-            saveDataToFirebase();
-            renderExpenseRequestsForAdmin();
-        }
-    }
-    // DENTRO document.addEventListener('click', (e) => { ... })
-// Aggiungi questo nuovo blocco insieme agli altri "if"
+    const target = e.target;
 
-    // NUOVO BLOCCO - Logica per il pulsante Elimina generico
-    if (e.target.matches('.delete-item-btn')) {
-        const id = e.target.dataset.id;
-        const type = e.target.dataset.type;
-
-        if (!id || !type) return;
-
-        if (confirm(`Sei sicuro di voler eliminare questo elemento? L'azione è irreversibile.`)) {
-            if (type === 'cashMovement') {
-                // Logica specifica per i movimenti di cassa
-                const movementIndex = cassaComune.movements.findIndex(m => m.id === id);
+    // Logica per espandere/collassare la card del movimento futuro
+    const movementCardHeader = target.closest('[data-movement-id]');
+    if (movementCardHeader && !target.matches('.future-share-checkbox')) {
+        const movementId = movementCardHeader.dataset.movementId;
+        const sharesContainer = document.getElementById(`shares-${movementId}`);
+        if (sharesContainer) {
+            sharesContainer.classList.toggle('hidden');
+            const movement = futureMovements.find(m => m.id === movementId);
+            if (movement) {
+                movement.isExpanded = !sharesContainer.classList.contains('hidden');
+                const movementIndex = futureMovements.findIndex(m => m.id === movementId);
                 if (movementIndex > -1) {
-                    const movement = cassaComune.movements[movementIndex];
-                    // Storna l'importo dal bilancio
-                    if (movement.type === 'deposit') {
-                        cassaComune.balance -= movement.amount;
-                    } else {
-                        cassaComune.balance += movement.amount;
-                    }
-                    cassaComune.movements.splice(movementIndex, 1);
-                    set(cassaComuneRef, cassaComune); // Salva le modifiche nel database
+                    update(ref(database, `futureMovements/${movementIndex}`), { isExpanded: movement.isExpanded });
+                }
+            }
+        }
+    }
+
+    if (target.matches('.open-edit-modal-btn')) {
+        openEditModal(target.dataset.id, target.dataset.type);
+    } 
+    else if (target.matches('.approve-request-btn')) {
+        const key = target.dataset.key;
+        const req = expenseRequests[key];
+        if (req) {
+            const newExpenseRef = push(varExpensesRef);
+            set(newExpenseRef, { id: newExpenseRef.key, payer: req.payer, date: req.date, amount: req.amount, category: req.category, description: `[RICHIESTA] ${req.description}` });
+            update(ref(database, `expenseRequests/${key}`), { status: 'approved' });
+        }
+    } 
+    else if (target.matches('.reject-request-btn')) {
+        const key = target.dataset.key;
+        if (expenseRequests[key]) update(ref(database, `expenseRequests/${key}`), { status: 'rejected' });
+    } 
+    else if (target.matches('.delete-item-btn')) {
+        const id = target.dataset.id;
+        const type = target.dataset.type;
+        if (confirm(`Sei sicuro di voler eliminare questo elemento?`)) {
+            if (type === 'cashMovement') {
+                const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
+                const movementToDelete = movements.find(m => m.id === id);
+                if (movementToDelete) {
+                    const newBalance = cassaComune.balance + (movementToDelete.type === 'deposit' ? -movementToDelete.amount : movementToDelete.amount);
+                    const newMovements = { ...cassaComune.movements };
+                    delete newMovements[id];
+                    set(cassaComuneRef, { balance: newBalance, movements: newMovements });
                     alert('Movimento eliminato e bilancio ricalcolato.');
                 }
-            } 
-            // Qui in futuro si possono aggiungere 'else if' per altri tipi di eliminazione
+            }
         }
-    }
-    // Logica per chiudere i form
-    if (e.target.matches('.close-form-btn')) {
-        e.target.closest('.action-form').classList.add('hidden');
-    }
-
-    if (e.target.matches('.remove-edit-link-btn')) {
-        e.target.parentElement.remove();
-    }
-    
-    // Chiusura modale
-    if (e.target === editModal || e.target.matches('#close-edit-modal-btn') || e.target.matches('#cancel-edit-btn')) {
+    } 
+    else if (target.matches('.close-form-btn')) {
+        target.closest('.action-form').classList.add('hidden');
+    } 
+    else if (target === editModal || target.matches('#close-edit-modal-btn') || target.matches('#cancel-edit-btn')) {
         closeEditModal();
-    }
-    
-    if (e.target.matches('.complete-pending-btn')) {
-        const id = e.target.dataset.id;
-        if(confirm("Sei sicuro di voler contrassegnare questo pagamento come completato?")){
-            pendingPayments = pendingPayments.filter(p => p.id !== id);
-            saveDataToFirebase();
+    } 
+    else if (target.matches('.complete-pending-btn')) {
+        const id = target.dataset.id;
+        if (confirm("Pagamento completato?")) {
+            const keyToRemove = Object.keys(pendingPayments).find(key => pendingPayments[key].id === id);
+            if(keyToRemove) {
+                remove(ref(database, `pendingPayments/${keyToRemove}`));
+            }
         }
     }
-    // AGGIUNGI QUESTO "else if" ALL'INTERNO DEL TUO document.addEventListener('click', ...)
-
+    // --- NUOVA LOGICA PER IL PULSANTE CHIUDI ---
     else if (target.id === 'close-settlement-btn') {
         const settlementContainer = document.getElementById('settlement-container');
         if (settlementContainer) {
@@ -1502,6 +1489,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
