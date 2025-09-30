@@ -387,27 +387,40 @@ const renderFutureMovements = () => {
 
 const renderWishlist = () => {
     const container = document.getElementById('wishlist-container');
-    const linksContainer = document.getElementById('wishlist-links-container');
-    if (!container) return;
+    if (container) {
+        container.innerHTML = (wishlist || []).sort((a, b) => (b.priority || "").localeCompare(a.priority || "")).map(item => {
+            // 1. Genera l'HTML per i link, solo se esistono
+            let linksHtml = '';
+            if (item.links && item.links.length > 0) {
+                linksHtml = `
+                    <div class="mt-2 pt-2 border-t border-indigo-200">
+                        <p class="text-xs font-bold text-indigo-800 mb-1">Link:</p>
+                        <div class="flex flex-col space-y-1">
+                            ${item.links.map(link => `
+                                <a href="${link}" target="_blank" class="text-xs text-blue-600 hover:underline truncate" title="${link}">${link}</a>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
 
-    container.innerHTML = wishlist.sort((a, b) => b.priority - a.priority).map(item => `
-        <div class="flex justify-between items-center bg-indigo-50 p-3 rounded-lg border-l-4 border-indigo-500">
-            <span class="text-sm font-medium">${item.name} (Priorità: ${item.priority})</span>
-            <span class="font-bold text-indigo-700">€${(item.cost || 0).toFixed(2)}</span>
-            <button data-id="${item.id}" data-type="wishlistItem" class="open-edit-modal-btn text-indigo-600 hover:text-indigo-800">Modifica</button>
-        </div>
-    `).join('') || '<p class="text-gray-500">Nessun articolo nella lista desideri.</p>';
-    
-    // Render links
-    if(linksContainer && wishlist.length > 0 && wishlist[0].links) {
-        linksContainer.innerHTML = (wishlist[0].links || []).map(link => `
-            <div class="flex justify-between items-center text-sm border-b pb-1 mb-1">
-                <a href="${link}" target="_blank" class="text-indigo-500 hover:text-indigo-700 truncate">${link}</a>
-                <button data-link="${link}" data-type="wishlistLink" class="remove-wishlist-link-btn text-red-500 hover:text-red-700">&times;</button>
-            </div>
-        `).join('') || '<p class="text-gray-500 text-xs">Nessun link associato.</p>';
-    } else if (linksContainer) {
-        linksContainer.innerHTML = '<p class="text-gray-500 text-xs">Nessun link associato.</p>';
+            // 2. Costruisce l'intera "card" dell'articolo
+            return `
+                <div class="bg-indigo-50 p-3 rounded-lg border-l-4 border-indigo-500">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-sm font-medium">${item.name}</p>
+                            <p class="text-xs text-gray-600">Priorità: ${item.priority || 'Non definita'}</p>
+                        </div>
+                        <div class="text-right flex-shrink-0 ml-4">
+                            <p class="font-bold text-indigo-700">€${(item.cost || 0).toFixed(2)}</p>
+                            <button data-id="${item.id}" data-type="wishlistItem" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800 mt-1">Modifica</button>
+                        </div>
+                    </div>
+                    ${linksHtml}
+                </div>
+            `;
+        }).join('') || '<p class="text-gray-500">Nessun articolo nella lista desideri.</p>';
     }
 };
 
@@ -1488,6 +1501,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
