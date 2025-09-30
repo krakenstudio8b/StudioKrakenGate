@@ -157,16 +157,24 @@ function initializeCalendar() {
     calendar.render();
 
     // Carica i membri per la lista partecipanti
+    // 1. SOSTITUISCI QUESTO BLOCCO NEL TUO FILE calendario.js
+
+    // Carica i membri per la lista partecipanti
     onValue(membersRef, (snapshot) => {
-        const allMembers = snapshot.val() || [];
+        const rawMembers = snapshot.val() || [];
+        // Assicura che allMembers sia sempre un array di oggetti
+        const allMembers = Array.isArray(rawMembers) ? rawMembers : Object.values(rawMembers);
+        
         participantsContainer.innerHTML = '';
         if (allMembers.length > 0) {
             allMembers.forEach(member => {
+                // --- MODIFICA QUI ---
+                // Ora il codice usa member.id e member.name per creare i checkbox
                 const div = document.createElement('div');
                 div.className = 'flex items-center';
                 div.innerHTML = `
-                    <input id="part-${member}" type="checkbox" value="${member}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                    <label for="part-${member}" class="ml-2 block text-sm text-gray-900">${member}</label>
+                    <input id="part-${member.id}" type="checkbox" value="${member.name}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="part-${member.id}" class="ml-2 block text-sm text-gray-900">${member.name}</label>
                 `;
                 participantsContainer.appendChild(div);
             });
@@ -256,6 +264,7 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
+
 
 
 
