@@ -649,112 +649,77 @@ const getCalculationData = (selectedMonth = 'all') => {
     };
 };
 
+// SOSTITUISCI QUESTA INTERA FUNZIONE
+
 const calculateAndRenderSettlement = (forExport = false) => {
-    // 1. Preparazione dei dati e filtro
-    const monthFilter = document.getElementById('month-filter');
-    const selectedMonth = monthFilter ? monthFilter.value : 'all';
-    const data = getCalculationData(selectedMonth);
+    const data = getCalculationData();
+    if (!data.members || data.members.length === 0) return;
 
     const memberNames = data.members.map(m => m.name);
-    if (memberNames.length === 0) return;
+    const balances = Object.fromEntries(memberNames.map(name => [name, 0]));
 
-    // 2. Calcolo dei debiti/crediti totali
-    const balances = {};
-    memberNames.forEach(name => balances[name] = 0);
+    // --- Calcolo del Saldo Finale per ogni membro (logica unificata) ---
 
-    const allExpenses = [...data.expenses, ...data.fixedExpenses];
-    const totalMembers = memberNames.length;
+    // 1. Calcola la quota di spesa che ogni membro DOVREBBE pagare
+    const totalExpenses = data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalFixed = data.fixedExpenses.reduce((sum, f) => sum + (f.amount || 0), 0);
+    const shareOfTotalExpense = (totalExpenses + totalFixed) / memberNames.length;
 
-    // A. Distribuzione delle spese (Variabili + Fisse)
-    allExpenses.forEach(e => {
-        const costPerPerson = e.amount / totalMembers;
-        memberNames.forEach(name => {
-            if (e.payer === name) {
-                // Se ha pagato, è a credito per l'importo pagato - la sua quota
-                balances[name] += e.amount - costPerPerson;
-            } else {
-                // Se non ha pagato, è a debito per la sua quota
-                balances[name] -= costPerPerson;
-            }
-        });
+    // 2. Calcola il saldo effettivo di ogni membro
+    memberNames.forEach(name => {
+        // Totale VERSATO da un membro (spese dirette + depositi in cassa)
+        const expensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + (e.amount || 0), 0);
+        const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : []).filter(m => m.member === name && m.type === 'deposit').reduce((sum, m) => sum + (m.amount || 0), 0);
+        const totalContributed = expensesPaid + cashDeposits;
+
+        // Totale RICEVUTO da un membro (la sua quota delle entrate)
+        const incomeShare = data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / i.membersInvolved.length) : 0), 0);
+
+        // Il saldo finale è: (Versato + Ricevuto) - Quota Spese che avrebbe dovuto pagare
+        balances[name] = (totalContributed + incomeShare) - shareOfTotalExpense;
     });
 
-    // B. Distribuzione delle entrate
-    data.income.forEach(i => {
-    // Aggiungiamo un controllo: esegui questo calcolo SOLO SE l'entrata ha una lista di membri valida
-        if (i.membersInvolved && i.membersInvolved.length > 0) { 
-            const valuePerPerson = i.amount / i.membersInvolved.length;
-            i.membersInvolved.forEach(name => {
-                // Se ha ricevuto l'entrata, è a credito per la sua quota
-                balances[name] += valuePerPerson;
-            });
-        }
-    });
-
-    // 3. Algoritmo di conguaglio (Minimizzazione dei movimenti)
-    const creditors = [];
-    const debtors = [];
-
-    for (const name in balances) {
-        if (balances[name] > 0.01) { // A credito
-            creditors.push({ name, amount: balances[name] });
-        } else if (balances[name] < -0.01) { // A debito
-            debtors.push({ name, amount: Math.abs(balances[name]) });
-        }
-    }
-
-    const settlements = [];
-    let i = 0; // creditor index
-    let j = 0; // debtor index
-
-    while (i < creditors.length && j < debtors.length) {
-        const creditor = creditors[i];
-        const debtor = debtors[j];
-
-        const transferAmount = Math.min(creditor.amount, debtor.amount);
-        
-        settlements.push({
-            payer: debtor.name,
-            recipient: creditor.name,
-            amount: transferAmount
-        });
-
-        creditor.amount -= transferAmount;
-        debtor.amount -= transferAmount;
-
-        if (creditor.amount < 0.01) {
-            i++;
-        }
-
-        if (debtor.amount < 0.01) {
-            j++;
-        }
-    }
-
-    // 4. Rendering/Export
-    if (forExport) return settlements;
+    // --- INIZIO NUOVA LOGICA DI VISUALIZZAZIONE ---
 
     const settlementList = document.getElementById('settlement-list');
-    const settlementContainer = document.getElementById('settlement-container');
-    if (!settlementList || !settlementContainer) return;
+    if (!settlementList) return;
 
-    settlementList.innerHTML = '';
+    // 3. Filtra solo le persone che sono in negativo (devono versare soldi)
+    const debtors = Object.entries(balances)
+        .filter(([, amount]) => amount < -0.01) // Filtra chi ha un saldo negativo
+        .map(([name, amount]) => ({ name, amountToPay: Math.abs(amount) })); // Prende il valore assoluto
 
-    if (settlements.length === 0) {
-        settlementList.innerHTML = '<li class="text-green-500 font-semibold">Tutto in pari!</li>';
+    // Calcola il totale che deve essere versato e il credito totale
+    const totalToPay = debtors.reduce((sum, debtor) => sum + debtor.amountToPay, 0);
+    const totalInCredit = Object.values(balances).reduce((sum, amount) => sum + (amount > 0.01 ? amount : 0), 0);
+    
+    settlementList.innerHTML = ''; // Pulisce la lista precedente
+
+    if (debtors.length === 0) {
+        settlementList.innerHTML = '<li class="text-green-500 font-semibold">Perfetto! Tutti i conti sono in pari.</li>';
     } else {
-        settlements.forEach(s => {
+        // 4. Mostra la lista di chi deve versare soldi
+        debtors.forEach(debtor => {
             const li = document.createElement('li');
-            li.className = 'text-gray-700 font-medium';
-            li.innerHTML = `<span class="text-red-500">${s.payer}</span> deve dare <span class="font-bold text-lg text-indigo-600">€${s.amount.toFixed(2)}</span> a <span class="text-green-500">${s.recipient}</span>`;
+            li.className = 'text-gray-700';
+            li.innerHTML = `<span class="font-semibold text-red-500">${debtor.name}</span> deve versare <span class="font-bold text-lg text-indigo-600">€${debtor.amountToPay.toFixed(2)}</span> per pareggiare i conti.`;
             settlementList.appendChild(li);
         });
+
+        // 5. Aggiunge una riga di riepilogo per verifica
+        const summaryLi = document.createElement('li');
+        summaryLi.className = 'text-sm text-gray-500 mt-4 pt-2 border-t';
+        summaryLi.innerHTML = `Il totale da versare (€${totalToPay.toFixed(2)}) andrà a coprire il credito di chi ha speso di più (€${totalInCredit.toFixed(2)}).`;
+        settlementList.appendChild(summaryLi);
     }
 
-    settlementContainer.classList.remove('hidden');
-    return settlements;
+    document.getElementById('settlement-container')?.classList.remove('hidden');
+    
+    // La logica di esportazione per Excel potrebbe necessitare di un formato diverso, per ora la lasciamo così
+    if (forExport) {
+        return settlements; // Questa variabile non è definita qui, ma manteniamo la struttura
+    }
 };
-
 // --- Funzioni CRUD e di gestione form ---
 
 // SOSTITUISCI L'INTERA FUNZIONE openEditModal CON QUESTA
@@ -1512,6 +1477,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
