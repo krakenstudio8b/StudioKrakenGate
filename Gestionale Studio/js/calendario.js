@@ -72,11 +72,28 @@ function initializeCalendar() {
         locale: 'it',
         firstDay: 1,
         initialView: 'dayGridMonth',
+        height: 'auto',
+        editable: true,
+        selectable: true,
+    
+        // --- INIZIO NUOVA CONFIGURAZIONE RESPONSIVE ---
+        
+        // Riduciamo lo spazio tra gli elementi per guadagnare spazio
+        handleWindowResize: true,
+        windowResizeDelay: 100,
+        
+        // Definiamo DUE diverse barre degli strumenti
         headerToolbar: {
-            left: 'prev,next today',
+            // Layout per schermi GRANDI (da 768px in su)
+            start: 'prev,next today',
             center: 'title',
-            // Su mobile mostra solo 3 viste, su schermi medi (md) e superiori le mostra tutte
-            right: 'dayGridMonth,timeGridWeek,listWeek' 
+            end: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+        },
+        footerToolbar: {
+            // Layout per schermi PICCOLI (sotto i 768px)
+            // Mettiamo i pulsanti di navigazione in basso per più spazio
+            start: 'prev,next',
+            end: 'dayGridMonth,listWeek'
         },
         buttonText: {
             today: 'Oggi',
@@ -288,6 +305,7 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
+
 
 
 
