@@ -1403,6 +1403,14 @@ document.addEventListener('click', (e) => {
             saveDataToFirebase();
         }
     }
+    // AGGIUNGI QUESTO "else if" ALL'INTERNO DEL TUO document.addEventListener('click', ...)
+
+    else if (target.id === 'close-settlement-btn') {
+        const settlementContainer = document.getElementById('settlement-container');
+        if (settlementContainer) {
+            settlementContainer.classList.add('hidden');
+        }
+    }
 });
 
 // Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
@@ -1492,6 +1500,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
