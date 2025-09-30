@@ -910,40 +910,38 @@ const closeEditModal = () => {
     if (editModal) editModal.classList.add('hidden');
 };
 
+// 2. SOSTITUISCI QUESTA FUNZIONE
+
 function handleAddMovement() {
     const movementType = document.getElementById('cash-movement-type').value;
     const member = document.getElementById('cash-movement-member').value || 'Cassa';
     const amount = parseFloat(document.getElementById('cash-movement-amount').value);
-    const date = document.getElementById('cash-movement-date').value || today;
+    const date = document.getElementById('cash-movement-date').value || new Date().toISOString().split('T')[0];
     const description = document.getElementById('cash-movement-description').value.trim();
 
     if (isNaN(amount) || amount <= 0 || !description) {
-        alert("Inserisci un importo e una descrizione validi.");
-        return;
+        return alert("Inserisci un importo e una descrizione validi.");
     }
 
-    if (movementType === 'withdrawal' && cassaComune.balance < amount) {
-        alert("Errore: Prelievo superiore al saldo disponibile in cassa.");
-        return;
+    if (movementType === 'withdrawal' && (cassaComune.balance || 0) < amount) {
+        return alert("Errore: Prelievo superiore al saldo disponibile in cassa.");
     }
 
-    const newBalance = movementType === 'deposit' ? cassaComune.balance + amount : cassaComune.balance - amount;
+    // --- LOGICA DI SALVATAGGIO AGGIORNATA ---
+    const newMovementId = Date.now().toString();
+    const newMovement = { id: newMovementId, type: movementType, amount, member, date, description };
+    const newBalance = (movementType === 'deposit') ? (cassaComune.balance || 0) + amount : (cassaComune.balance || 0) - amount;
 
-    cassaComune.balance = newBalance;
-    cassaComune.movements.push({
-        id: Date.now().toString(),
-        type: movementType,
-        amount: amount,
-        member: member,
-        date: date,
-        description: description
-    });
+    // Prepara l'aggiornamento per Firebase, salvando il movimento come oggetto
+    const updates = {};
+    updates[`cassaComune/movements/${newMovementId}`] = newMovement;
+    updates[`cassaComune/balance`] = newBalance;
 
-    saveDataToFirebase();
+    update(ref(database), updates);
+
     alert(`Movimento di ${movementType} registrato. Nuovo saldo: €${newBalance.toFixed(2)}`);
-    // Chiudi il form
     document.getElementById('cash-form-section').classList.add('hidden');
-};
+}
 
 function addExpenseAsAdmin(expenseData = null) {
     const isRequest = !!expenseData;
@@ -1514,6 +1512,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
