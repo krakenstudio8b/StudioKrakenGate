@@ -1407,7 +1407,22 @@ document.addEventListener('click', (e) => {
 
 // Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
 
-if (calculateBtn) calculateBtn.addEventListener('click', () => calculateAndRenderSettlement(false));
+if (calculateBtn) {
+    calculateBtn.addEventListener('click', () => {
+        const settlementContainer = document.getElementById('settlement-container');
+        if (settlementContainer) {
+            // Se il riquadro è nascosto...
+            if (settlementContainer.classList.contains('hidden')) {
+                // ...calcola i saldi e mostralo.
+                calculateAndRenderSettlement(false);
+                settlementContainer.classList.remove('hidden');
+            } else {
+                // ...altrimenti, se è già visibile, nascondilo.
+                settlementContainer.classList.add('hidden');
+            }
+        }
+    });
+}
 if (exportExcelBtn) exportExcelBtn.addEventListener('click', exportToExcel);
 if (exportDataBtn) exportDataBtn.addEventListener('click', handleExportData);
 if (importDataBtn) importDataBtn.addEventListener('click', () => importFileInput.click());
@@ -1477,6 +1492,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
