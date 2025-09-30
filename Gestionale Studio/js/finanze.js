@@ -264,26 +264,30 @@ const populateMonthFilter = () => {
 };
 
 // SOSTITUISCI QUESTA FUNZIONE
+// SOSTITUISCI QUESTA INTERA FUNZIONE
+
 const renderMembers = () => {
     if (memberCountEl) memberCountEl.textContent = members.length;
     const membersListEl = document.getElementById('members-list');
-    
-    // --- MODIFICA QUI ---
-    // Ho rimosso il pulsante "Modifica" dalla lista dei membri.
     if (membersListEl) {
-        membersListEl.innerHTML = members.map(m => 
-            `<li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-sm">${m.name}</li>`
-        ).join('');
+        membersListEl.innerHTML = members.map(m => `<li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-sm">${m.name}</li>`).join('');
     }
-    // --- FINE MODIFICA ---
-
+    
     const memberOptions = members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
+    
     const payerSelect = document.getElementById('payer');
-    if (payerSelect) payerSelect.innerHTML = `<option value="">Seleziona chi ha pagato</option>` + memberOptions;
+    if (payerSelect) {
+        // --- MODIFICA QUI ---
+        // Ho ri-aggiunto <option value="Cassa Comune">Cassa Comune</option> alla lista
+        payerSelect.innerHTML = `<option value="">Seleziona chi ha pagato</option><option value="Cassa Comune">Cassa Comune</option>` + memberOptions;
+    }
+    
     const pendingPaymentMemberSelect = document.getElementById('pending-payment-member');
     if (pendingPaymentMemberSelect) pendingPaymentMemberSelect.innerHTML = `<option value="">Seleziona membro</option>` + memberOptions;
+    
     const cashMovementMemberSelect = document.getElementById('cash-movement-member');
     if (cashMovementMemberSelect) cashMovementMemberSelect.innerHTML = `<option value="">Nessuno</option>` + memberOptions;
+    
     const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
     if (incomeMembersCheckboxes) {
         incomeMembersCheckboxes.innerHTML = members.map(m => `<div class="flex items-center"><input type="checkbox" id="income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600"><label for="income-member-${m.id}" class="ml-2 text-sm">${m.name}</label></div>`).join('');
@@ -1470,6 +1474,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
