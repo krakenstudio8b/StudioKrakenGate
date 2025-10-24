@@ -128,9 +128,10 @@ function loadDataFromFirebase() {
     });
 
     onValue(futureMovementsRef, (snapshot) => {
-        const data = snapshot.val();
-         // --- CORREZIONE CRUCIALE ---
-        futureMovements = data ? Object.values(data) : [];
+        const rawData = snapshot.val();
+        // Converti l'oggetto di oggetti in un array di oggetti, includendo l'ID come proprietà interna
+        // Se rawData è null, usa un array vuoto
+        futureMovements = rawData ? Object.keys(rawData).map(key => ({ id: key, ...rawData[key] })) : [];
         renderFutureMovements();
     });
 
@@ -362,22 +363,22 @@ const renderPendingPayments = () => {
 
 // 1. SOSTITUISCI QUESTA FUNZIONE
 
+// 3. SOSTITUISCI QUESTA FUNZIONE
+
 const renderFutureMovements = () => {
     const container = document.getElementById('future-movements-container');
     if (container) {
-        container.innerHTML = (futureMovements || []).map(m => { // Rimosso 'movementIndex' non necessario qui
+        container.innerHTML = (futureMovements || []).map(m => {
             const sharesHtml = (m.shares && Array.isArray(m.shares))
                 ? m.shares.map((share, shareIndex) => `
                     <div class="flex justify-between items-center text-xs py-1">
                         <label for="share-${m.id}-${shareIndex}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
                         <div class="flex items-center gap-2">
                             <span class="font-medium">€</span>
-                            
                             <input type="number" value="${(share.amount || 0).toFixed(2)}" 
                                    data-movement-id="${m.id}" 
                                    data-share-index="${shareIndex}" 
                                    class="w-16 p-1 text-right border rounded-md future-share-amount">
-                            
                             <input type="checkbox" id="share-${m.id}-${shareIndex}" 
                                    data-movement-id="${m.id}" 
                                    data-share-index="${shareIndex}" 
@@ -813,6 +814,21 @@ const openEditModal = (id, type) => {
                 </div>
             </div>
         `;
+    } else if (type === 'futureMovement') { // --- NUOVO BLOCCO QUI ---
+        formHtml += `
+            <div>
+                <label for="edit-description" class="block text-sm font-medium">Descrizione</label>
+                <input type="text" id="edit-description" name="description" value="${item.description || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-totalCost" class="block text-sm font-medium">Costo Totale (€)</label>
+                <input type="number" step="0.01" id="edit-totalCost" name="totalCost" value="${item.totalCost || 0}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-dueDate" class="block text-sm font-medium">Data Scadenza</label>
+                <input type="date" id="edit-dueDate" name="dueDate" value="${item.dueDate || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+        `;
     } else {
         // Logica generica per tutti gli altri tipi di elementi
         formHtml += Object.entries(item).map(([key, value]) => {
@@ -883,6 +899,9 @@ const openEditModal = (id, type) => {
             if (type === 'wishlistItem') {
                 const linkInputs = document.querySelectorAll('.edit-link-input');
                 updatedData.links = Array.from(linkInputs).map(input => input.value.trim()).filter(link => link);
+            } else if (type === 'futureMovement') { // --- NUOVO BLOCCO QUI ---
+                // Aggiorna Firebase direttamente usando l'ID
+                update(ref(database, `futureMovements/${id}`), updatedData);
             }
 
             // Trova la chiave/indice dell'oggetto da aggiornare
@@ -1175,6 +1194,8 @@ if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
 
 // 1. SOSTITUISCI QUESTO BLOCCO
 
+// 2. SOSTITUISCI QUESTO BLOCCO
+
 if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
     const descriptionInput = document.getElementById('future-movement-description');
     const costInput = document.getElementById('future-movement-cost');
@@ -1189,7 +1210,6 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
         return;
     }
 
-    // Calcola la quota iniziale per persona (sarà modificabile dopo)
     const costPerPerson = totalCost / members.length;
     const shares = members.map(member => ({
         member: member.name,
@@ -1197,7 +1217,7 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
         paid: false
     }));
 
-    // Prepara il nuovo movimento senza ID iniziale
+    // Prepara il nuovo oggetto, l'ID sarà la chiave generata da push()
     const newMovementData = {
         description: description,
         totalCost: totalCost,
@@ -1206,19 +1226,20 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
         isExpanded: false
     };
 
-    // Usa push() per ottenere un riferimento univoco e la chiave (ID)
-    const newMovementRef = push(futureMovementsRef);
-    newMovementData.id = newMovementRef.key; // Assegna l'ID generato da Firebase
-
-    // Salva i dati completi nel nuovo riferimento
-    set(newMovementRef, newMovementData);
-
-    alert("Movimento futuro pianificato. Puoi ora modificare le singole quote se necessario.");
-    
-    descriptionInput.value = '';
-    costInput.value = '';
-    dueDateInput.value = new Date().toISOString().split('T')[0];
-    document.getElementById('future-movement-form-section').classList.add('hidden');
+    // Usa push() per aggiungere un nuovo nodo con un ID univoco generato da Firebase
+    // E Firebase lo salverà come un oggetto, non un array implicito.
+    push(futureMovementsRef, newMovementData)
+        .then(() => {
+            alert("Movimento futuro pianificato. Puoi ora modificare le singole quote.");
+            descriptionInput.value = '';
+            costInput.value = '';
+            dueDateInput.value = new Date().toISOString().split('T')[0];
+            document.getElementById('future-movement-form-section').classList.add('hidden');
+        })
+        .catch(error => {
+            console.error("Errore aggiungendo movimento futuro:", error);
+            alert("Errore durante l'aggiunta del movimento futuro.");
+        });
 });
 
 if (wishlistNewLinkInput && addWishlistLinkBtn) addWishlistLinkBtn.addEventListener('click', () => {
@@ -1479,32 +1500,18 @@ document.addEventListener('click', (e) => {
     // ... (altre logiche else if per i click) ...
 
     else if (target.matches('.delete-future-movement-btn')) {
-        const idToDelete = target.dataset.id; // Questo è l'ID univoco salvato DENTRO l'oggetto
+        const idToDelete = target.dataset.id;
         if (idToDelete && confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
-
-            // --- CORREZIONE QUI ---
-            // 1. Trova l'indice dell'elemento nell'array locale basato sull'ID interno
-            const itemIndex = futureMovements.findIndex(m => m && m.id === idToDelete);
-
-            if (itemIndex > -1) {
-                // 2. Crea un NUOVO array escludendo l'elemento da cancellare
-                const updatedFutureMovements = futureMovements.filter(m => m.id !== idToDelete);
-
-                // 3. Usa set() per SOVRASCRIVERE l'intera lista /futureMovements su Firebase
-                //    con il nuovo array filtrato. Questo è il modo corretto per eliminare da un array.
-                set(futureMovementsRef, updatedFutureMovements)
-                    .then(() => {
-                        alert('Movimento futuro eliminato.');
-                        // Non serve fare altro, onValue aggiornerà la vista automaticamente
-                    })
-                    .catch((error) => {
-                        console.error("Errore durante l'eliminazione:", error);
-                        alert("Si è verificato un errore durante l'eliminazione.");
-                    });
-            } else {
-                 console.warn("Movimento futuro non trovato nell'array locale con ID:", idToDelete);
-                 alert("Errore: Impossibile trovare il movimento da eliminare.");
-            }
+            // Ora basta chiamare remove() sul riferimento diretto all'ID del movimento
+            remove(ref(database, `futureMovements/${idToDelete}`))
+                .then(() => {
+                    alert('Movimento futuro eliminato.');
+                    // onValue si occuperà di aggiornare l'interfaccia
+                })
+                .catch((error) => {
+                    console.error("Errore durante l'eliminazione:", error);
+                    alert("Si è verificato un errore durante l'eliminazione.");
+                });
         }
     }
 
@@ -1546,52 +1553,45 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 
 // 2. SOSTITUISCI QUESTO BLOCCO
 
+// 4. SOSTITUISCI QUESTO BLOCCO
+
 document.addEventListener('change', (e) => {
     const target = e.target;
     
     // Logica per i checkbox delle quote future (usa ID)
     if (target.matches('.future-share-checkbox')) {
-        const movementId = target.dataset.movementId; // Usa l'ID
+        const movementId = target.dataset.movementId;
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const isChecked = target.checked;
 
-        // Trova l'indice del movimento nell'array locale basato sull'ID
-        const movementIndex = futureMovements.findIndex(m => m && m.id === movementId); 
-
-        if (movementIndex > -1 && !isNaN(shareIndex)) { // Controlla che l'indice sia valido
-            const movement = futureMovements[movementIndex];
-            if (movement && movement.shares && movement.shares[shareIndex]) {
-                // Aggiorna Firebase usando il percorso con l'INDICE dell'array
-                update(ref(database, `futureMovements/${movementIndex}/shares/${shareIndex}`), { paid: isChecked });
-            }
+        // Trova il movimento nel database usando il suo ID come chiave
+        if (movementId && !isNaN(shareIndex)) {
+            update(ref(database, `futureMovements/${movementId}/shares/${shareIndex}`), { paid: isChecked })
+                .catch(error => console.error("Errore aggiornando stato quota:", error));
         }
     }
 
-    // Logica per la modifica dell'importo delle quote future (usa ID per trovare, indice per salvare)
+    // Logica per la modifica dell'importo delle quote future (usa ID)
     else if (target.matches('.future-share-amount')) {
-        const movementId = target.dataset.movementId; // Usa l'ID
+        const movementId = target.dataset.movementId;
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const newAmount = parseFloat(target.value);
 
-        // Trova l'indice del movimento nell'array locale basato sull'ID
-        const movementIndex = futureMovements.findIndex(m => m && m.id === movementId);
-
-        if (movementIndex > -1 && !isNaN(shareIndex) && !isNaN(newAmount)) { // Controlla indice e importo
-            const movement = futureMovements[movementIndex];
+        if (movementId && !isNaN(shareIndex) && !isNaN(newAmount)) {
+            // Ottieni il movimento locale per ricalcolare il totale (non essenziale, ma robusto)
+            const movement = futureMovements.find(m => m.id === movementId);
             if (movement && movement.shares && movement.shares[shareIndex]) {
-                // Aggiorna l'importo locale per il ricalcolo
+                 // Aggiorna l'importo localmente per il ricalcolo immediato del totale
                 movement.shares[shareIndex].amount = newAmount;
                 const newTotalCost = movement.shares.reduce((sum, s) => sum + (s.amount || 0), 0);
-                // Non aggiorniamo movement.totalCost localmente per evitare conflitti con onValue
 
-                // Prepara gli aggiornamenti per Firebase usando il percorso con l'INDICE dell'array
+                // Aggiorna Firebase con update() per il percorso specifico
                 const updates = {};
-                updates[`futureMovements/${movementIndex}/shares/${shareIndex}/amount`] = newAmount;
-                updates[`futureMovements/${movementIndex}/totalCost`] = newTotalCost; // Aggiorna anche il totale
+                updates[`futureMovements/${movementId}/shares/${shareIndex}/amount`] = newAmount;
+                updates[`futureMovements/${movementId}/totalCost`] = newTotalCost; // Aggiorna anche il totale
 
-                update(ref(database), updates);
-                
-                // Non serve ri-renderizzare manualmente, onValue lo farà
+                update(ref(database), updates)
+                    .catch(error => console.error("Errore aggiornando importo quota:", error));
             }
         }
     }
@@ -1607,6 +1607,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
