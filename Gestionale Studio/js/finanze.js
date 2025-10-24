@@ -358,33 +358,49 @@ const renderPendingPayments = () => {
 // SOSTITUISCI QUESTA FUNZIONE
 // 3. SOSTITUISCI QUESTA FUNZIONE
 // 1. SOSTITUISCI QUESTA FUNZIONE
+// 2. SOSTITUISCI QUESTA FUNZIONE
+
 const renderFutureMovements = () => {
     const container = document.getElementById('future-movements-container');
     if (container) {
-        container.innerHTML = (futureMovements || []).map((m, movementIndex) => {
+        container.innerHTML = (futureMovements || []).map(m => { // Non serve più movementIndex
             const sharesHtml = (m.shares && Array.isArray(m.shares))
                 ? m.shares.map((share, shareIndex) => `
                     <div class="flex justify-between items-center text-xs py-1">
-                        <label for="share-${movementIndex}-${shareIndex}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
+                        <label for="share-${m.id}-${shareIndex}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
                         <div class="flex items-center gap-2">
                             <span class="font-medium">€</span>
-                            
-                            <input type="number" value="${(share.amount || 0).toFixed(2)}" 
-                                   data-movement-index="${movementIndex}" 
-                                   data-share-index="${shareIndex}" 
+                            <input type="number" value="${(share.amount || 0).toFixed(2)}"
+                                   data-movement-id="${m.id}" data-share-index="${shareIndex}"
                                    class="w-16 p-1 text-right border rounded-md future-share-amount">
-                            
-                            <input type="checkbox" id="share-${movementIndex}-${shareIndex}" data-movement-index="${movementIndex}" data-share-index="${shareIndex}" class="form-checkbox h-4 w-4 text-indigo-600 rounded cursor-pointer future-share-checkbox" ${share.paid ? 'checked' : ''}>
+                            <input type="checkbox" id="share-${m.id}-${shareIndex}"
+                                   data-movement-id="${m.id}" data-share-index="${shareIndex}"
+                                   class="form-checkbox h-4 w-4 text-indigo-600 rounded cursor-pointer future-share-checkbox" ${share.paid ? 'checked' : ''}>
                         </div>
                     </div>`).join('')
                 : '<p class="text-xs text-gray-500">Nessuna suddivisione specificata.</p>';
 
             const sharesContainerHtml = `<div id="shares-${m.id}" class="mt-2 pt-2 border-t border-blue-200 space-y-1 ${m.isExpanded ? '' : 'hidden'}">${sharesHtml}</div>`;
-            return `<div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500"><div class="flex justify-between items-center cursor-pointer" data-movement-id="${m.id}"><span class="text-sm font-medium">${m.description} (Scadenza: ${displayDate(m.dueDate)})</span><span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span></div>${sharesContainerHtml}</div>`;
+
+            const adminButtonsHtml = currentUser.role === 'admin' ? `
+                <div class="flex gap-2 mt-2 justify-end">
+                    <button data-id="${m.id}" data-type="futureMovement" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800">Modifica</button>
+                    <button data-id="${m.id}" data-type="futureMovement" class="delete-future-movement-btn text-xs text-red-600 hover:text-red-800">Elimina</button>
+                </div>
+            ` : '';
+
+            return `
+                <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
+                    <div class="flex justify-between items-center cursor-pointer" data-movement-id="${m.id}">
+                        <span class="text-sm font-medium">${m.description} (Scadenza: ${displayDate(m.dueDate)})</span>
+                        <span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span>
+                    </div>
+                    ${sharesContainerHtml}
+                    ${adminButtonsHtml}
+                </div>`;
         }).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
     }
 };
-
 const renderWishlist = () => {
     const container = document.getElementById('wishlist-container');
     if (container) {
@@ -1452,6 +1468,15 @@ document.addEventListener('click', (e) => {
             settlementContainer.classList.add('hidden');
         }
     }
+    else if (target.matches('.delete-future-movement-btn')) {
+        const idToDelete = target.dataset.id;
+        if (confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
+            // Usa remove() con il riferimento diretto all'ID (chiave Firebase)
+            remove(ref(database, `futureMovements/${idToDelete}`));
+            alert('Movimento futuro eliminato.');
+            // La vista si aggiornerà automaticamente grazie a onValue
+        }
+    }
 });
 
 // Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
@@ -1484,49 +1509,48 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 // SOSTITUISCI TUTTI I VECCHI BLOCCHI document.addEventListener('click',...) CON QUESTO
 // 2. SOSTITUISCI L'INTERO BLOCCO document.addEventListener('change', ...) CON QUESTO
 
+// 3. SOSTITUISCI QUESTO BLOCCO
+
 document.addEventListener('change', (e) => {
     const target = e.target;
-
-    // Logica per i checkbox delle quote future
+    
+    // Logica per i checkbox delle quote future (usa ID)
     if (target.matches('.future-share-checkbox')) {
-        const movementIndex = parseInt(target.dataset.movementIndex, 10);
+        const movementId = target.dataset.movementId; // Usa l'ID
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const isChecked = target.checked;
 
-        if (!isNaN(movementIndex) && !isNaN(shareIndex) && futureMovements[movementIndex]) {
-            const movement = futureMovements[movementIndex];
+        if (movementId && !isNaN(shareIndex)) { // Controlla che l'ID esista
+            const movement = futureMovements.find(m => m.id === movementId); // Trova per ID
             if (movement && movement.shares && movement.shares[shareIndex]) {
-                // Aggiorna lo stato nel database
-                update(ref(database, `futureMovements/${movementIndex}/shares/${shareIndex}`), { paid: isChecked });
+                // Aggiorna Firebase usando il percorso con l'ID
+                update(ref(database, `futureMovements/${movementId}/shares/${shareIndex}`), { paid: isChecked });
             }
         }
     }
 
-    // NUOVA LOGICA: per la modifica dell'importo delle quote future
+    // Logica per la modifica dell'importo delle quote future (usa ID)
     else if (target.matches('.future-share-amount')) {
-        const movementIndex = parseInt(target.dataset.movementIndex, 10);
+        const movementId = target.dataset.movementId; // Usa l'ID
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const newAmount = parseFloat(target.value);
 
-        if (!isNaN(movementIndex) && !isNaN(shareIndex) && !isNaN(newAmount)) {
-            const movement = futureMovements[movementIndex];
+        if (movementId && !isNaN(shareIndex) && !isNaN(newAmount)) { // Controlla ID
+            const movement = futureMovements.find(m => m.id === movementId); // Trova per ID
             if (movement && movement.shares && movement.shares[shareIndex]) {
-                // 1. Aggiorna l'importo della singola quota
+                // Aggiorna l'importo locale per il ricalcolo
                 movement.shares[shareIndex].amount = newAmount;
-
-                // 2. Ricalcola il costo totale del movimento sommando tutte le quote aggiornate
                 const newTotalCost = movement.shares.reduce((sum, s) => sum + (s.amount || 0), 0);
-                movement.totalCost = newTotalCost;
+                movement.totalCost = newTotalCost; // Aggiorna il totale locale
 
-                // 3. Prepara gli aggiornamenti per Firebase
+                // Prepara gli aggiornamenti per Firebase usando il percorso con l'ID
                 const updates = {};
-                updates[`futureMovements/${movementIndex}/shares/${shareIndex}/amount`] = newAmount;
-                updates[`futureMovements/${movementIndex}/totalCost`] = newTotalCost;
+                updates[`futureMovements/${movementId}/shares/${shareIndex}/amount`] = newAmount;
+                updates[`futureMovements/${movementId}/totalCost`] = newTotalCost;
 
-                // 4. Invia gli aggiornamenti al database
                 update(ref(database), updates);
 
-                // 5. Aggiorna la vista per mostrare il nuovo totale (opzionale, onValue lo farà comunque)
+                // Rirenderizza per mostrare il nuovo totale aggiornato istantaneamente
                 renderFutureMovements();
             }
         }
@@ -1543,6 +1567,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
