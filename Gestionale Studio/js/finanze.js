@@ -1151,25 +1151,52 @@ if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
     alert("Richiesta quota aggiunta.");
 });
 
-if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
-    const description = document.getElementById('future-movement-description').value.trim();
-    const cost = parseFloat(document.getElementById('future-movement-cost').value);
-    const dueDate = document.getElementById('future-movement-due-date').value;
+// 1. SOSTITUISCI QUESTO BLOCCO
 
-    if (!description || isNaN(cost) || cost <= 0 || !dueDate) {
-        alert("Compila tutti i campi obbligatori.");
+if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
+    const descriptionInput = document.getElementById('future-movement-description');
+    const costInput = document.getElementById('future-movement-cost');
+    const dueDateInput = document.getElementById('future-movement-due-date');
+
+    const description = descriptionInput.value.trim();
+    const totalCost = parseFloat(costInput.value);
+    const dueDate = dueDateInput.value;
+
+    if (!description || isNaN(totalCost) || totalCost <= 0 || !dueDate || members.length === 0) {
+        alert("Compila tutti i campi obbligatori e assicurati che ci siano membri registrati.");
         return;
     }
 
-    futureMovements.push({
-        id: Date.now().toString(),
+    // Calcola la quota iniziale per persona (sarà modificabile dopo)
+    const costPerPerson = totalCost / members.length;
+    const shares = members.map(member => ({
+        member: member.name,
+        amount: costPerPerson,
+        paid: false
+    }));
+
+    // Prepara il nuovo movimento senza ID iniziale
+    const newMovementData = {
         description: description,
-        cost: cost,
-        dueDate: dueDate
-    });
-    saveDataToFirebase();
+        totalCost: totalCost,
+        dueDate: dueDate,
+        shares: shares,
+        isExpanded: false
+    };
+
+    // Usa push() per ottenere un riferimento univoco e la chiave (ID)
+    const newMovementRef = push(futureMovementsRef);
+    newMovementData.id = newMovementRef.key; // Assegna l'ID generato da Firebase
+
+    // Salva i dati completi nel nuovo riferimento
+    set(newMovementRef, newMovementData);
+
+    alert("Movimento futuro pianificato. Puoi ora modificare le singole quote se necessario.");
+    
+    descriptionInput.value = '';
+    costInput.value = '';
+    dueDateInput.value = new Date().toISOString().split('T')[0];
     document.getElementById('future-movement-form-section').classList.add('hidden');
-    alert("Movimento futuro pianificato.");
 });
 
 if (wishlistNewLinkInput && addWishlistLinkBtn) addWishlistLinkBtn.addEventListener('click', () => {
@@ -1516,6 +1543,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
