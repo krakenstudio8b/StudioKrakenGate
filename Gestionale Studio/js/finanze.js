@@ -1441,11 +1441,42 @@ if (quickActionsContainer) quickActionsContainer.addEventListener('click', (e) =
 
 // SOSTITUISCI TUTTI I VECCHI BLOCCHI document.addEventListener('click',...) CON QUESTO UNICO BLOCCO
 
+// SOSTITUISCI TUTTI I VECCHI BLOCCHI 'addEventListener('click', ...)' CON QUESTO UNICO BLOCCO
+
 document.addEventListener('click', (e) => {
     const target = e.target;
 
-    // Logica per espandere/collassare la card del movimento futuro
-    
+    // --- Gestione Espansione/Collasso Movimenti Futuri ---
+    // Cerca l'HEADER della card cliccata (l'elemento con data-movement-id)
+    const movementCardHeader = target.closest('[data-movement-id]');
+    // Cerca l'intera CARD del movimento futuro
+    const movementCard = target.closest('.bg-blue-50'); // Usa una classe specifica della card
+
+    if (movementCardHeader && movementCard) {
+        // Controlla se il click è avvenuto DIRETTAMENTE sull'header
+        // E NON su un pulsante o input all'interno della card
+        if (movementCardHeader === target || movementCardHeader.contains(target)) {
+            if (!target.matches('button, input, a, .open-edit-modal-btn, .delete-future-movement-btn')) {
+                const movementId = movementCardHeader.dataset.movementId;
+                const sharesContainer = document.getElementById(`shares-${movementId}`);
+                if (sharesContainer) {
+                    sharesContainer.classList.toggle('hidden');
+                    const movement = futureMovements.find(m => m && m.id === movementId);
+                    if (movement) {
+                        movement.isExpanded = !sharesContainer.classList.contains('hidden');
+                        // Aggiorna solo lo stato isExpanded nel DB
+                        update(ref(database, `futureMovements/${movementId}`), { isExpanded: movement.isExpanded })
+                            .catch(error => console.error("Errore aggiornando isExpanded:", error));
+                    }
+                }
+                // Impedisce che il click si propaghi ad altri listener (importante!)
+                e.stopPropagation(); 
+                return; // Esce dalla funzione per non eseguire altri controlli
+            }
+        }
+    }
+
+    // --- Altre Azioni Gestite dal Click ---
 
     if (target.matches('.open-edit-modal-btn')) {
         openEditModal(target.dataset.id, target.dataset.type);
@@ -1463,21 +1494,29 @@ document.addEventListener('click', (e) => {
         const key = target.dataset.key;
         if (expenseRequests[key]) update(ref(database, `expenseRequests/${key}`), { status: 'rejected' });
     } 
-    else if (target.matches('.delete-item-btn')) {
+    else if (target.matches('.delete-future-movement-btn')) {
+        const idToDelete = target.dataset.id;
+        if (idToDelete && confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
+            remove(ref(database, `futureMovements/${idToDelete}`))
+                .then(() => alert('Movimento futuro eliminato.'))
+                .catch((error) => console.error("Errore eliminazione movimento futuro:", error));
+        }
+    }
+    else if (target.matches('.delete-item-btn')) { // Gestione eliminazione altri tipi (es. Cassa)
         const id = target.dataset.id;
         const type = target.dataset.type;
-        if (confirm(`Sei sicuro di voler eliminare questo elemento?`)) {
+        if (id && type && confirm(`Sei sicuro di voler eliminare questo elemento?`)) {
             if (type === 'cashMovement') {
-                const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
-                const movementToDelete = movements.find(m => m.id === id);
+                const movements = cassaComune.movements ? { ...cassaComune.movements } : {};
+                const movementToDelete = movements[id];
                 if (movementToDelete) {
                     const newBalance = cassaComune.balance + (movementToDelete.type === 'deposit' ? -movementToDelete.amount : movementToDelete.amount);
-                    const newMovements = { ...cassaComune.movements };
-                    delete newMovements[id];
-                    set(cassaComuneRef, { balance: newBalance, movements: newMovements });
-                    alert('Movimento eliminato e bilancio ricalcolato.');
+                    delete movements[id];
+                    set(cassaComuneRef, { balance: newBalance, movements: movements });
+                    alert('Movimento cassa eliminato e bilancio ricalcolato.');
                 }
             }
+            // Aggiungere qui logica per altri tipi se necessario
         }
     } 
     else if (target.matches('.close-form-btn')) {
@@ -1495,62 +1534,13 @@ document.addEventListener('click', (e) => {
             }
         }
     }
-    // --- NUOVA LOGICA PER IL PULSANTE CHIUDI ---
     else if (target.id === 'close-settlement-btn') {
         const settlementContainer = document.getElementById('settlement-container');
         if (settlementContainer) {
             settlementContainer.classList.add('hidden');
         }
     }
-    // TROVA IL BLOCCO 'document.addEventListener('click', ...)' E SOSTITUISCI QUESTO "ELSE IF"
-
-    // ... (altre logiche else if per i click) ...
-
-    else if (target.matches('.delete-future-movement-btn')) {
-        const idToDelete = target.dataset.id;
-        if (idToDelete && confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
-            // Ora basta chiamare remove() sul riferimento diretto all'ID del movimento
-            remove(ref(database, `futureMovements/${idToDelete}`))
-                .then(() => {
-                    alert('Movimento futuro eliminato.');
-                    // onValue si occuperà di aggiornare l'interfaccia
-                })
-                .catch((error) => {
-                    console.error("Errore durante l'eliminazione:", error);
-                    alert("Si è verificato un errore durante l'eliminazione.");
-                });
-        }
-    }
-
-    // ... (assicurati che questo sia l'ultimo else if prima della parentesi graffa di chiusura del listener)
-
-});
-// 1. INCOLLA QUESTO NUOVO BLOCCO DOPO LA FINE DEL document.addEventListener('click', ...)
-
-// Listener specifico per l'espansione/collasso dei movimenti futuri
-document.getElementById('future-movements-container')?.addEventListener('click', (e) => {
-    // Cerca l'elemento cliccato che ha l'attributo data-movement-id (l'intestazione della card)
-    const movementCardHeader = e.target.closest('[data-movement-id]');
-    
-    // Assicurati di non aver cliccato su un checkbox o un pulsante all'interno della card
-    if (movementCardHeader && !e.target.matches('input, button, a')) {
-        const movementId = movementCardHeader.dataset.movementId;
-        const sharesContainer = document.getElementById(`shares-${movementId}`);
-        
-        if (sharesContainer) {
-            sharesContainer.classList.toggle('hidden'); // Mostra/nasconde le quote
-            
-            // Trova il movimento corrispondente nei dati locali
-            const movement = futureMovements.find(m => m && m.id === movementId);
-            if (movement) {
-                movement.isExpanded = !sharesContainer.classList.contains('hidden');
-                
-                // Aggiorna lo stato isExpanded nel database (importante per mantenere lo stato)
-                update(ref(database, `futureMovements/${movementId}`), { isExpanded: movement.isExpanded });
-            }
-        }
-    }
-});
+}); // Fine dell'unico listener per i click
 
 // Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
 
@@ -1640,6 +1630,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
