@@ -1196,6 +1196,8 @@ if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
 
 // 2. SOSTITUISCI QUESTO BLOCCO
 
+// SOSTITUISCI QUESTO INTERO BLOCCO
+
 if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
     const descriptionInput = document.getElementById('future-movement-description');
     const costInput = document.getElementById('future-movement-cost');
@@ -1210,25 +1212,32 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
         return;
     }
 
+    // Calcola la quota iniziale per persona (sarà modificabile dopo)
     const costPerPerson = totalCost / members.length;
+
+    // --- VERIFICA QUI ---
+    // Assicurati che l'oggetto 'shares' sia creato correttamente senza commenti o errori
     const shares = members.map(member => ({
         member: member.name,
         amount: costPerPerson,
         paid: false
     }));
 
-    // Prepara il nuovo oggetto, l'ID sarà la chiave generata da push()
+    // Prepara il nuovo oggetto movimento futuro
     const newMovementData = {
+        // L'ID verrà aggiunto da Firebase
         description: description,
         totalCost: totalCost,
         dueDate: dueDate,
-        shares: shares,
+        shares: shares,       // Assicurati che 'shares' sia l'array corretto
         isExpanded: false
     };
 
-    // Usa push() per aggiungere un nuovo nodo con un ID univoco generato da Firebase
-    // E Firebase lo salverà come un oggetto, non un array implicito.
-    push(futureMovementsRef, newMovementData)
+    // Usa push() per aggiungere un nuovo nodo con un ID univoco
+    const newMovementRef = push(futureMovementsRef);
+
+    // Salva i dati E AGGIUNGI L'ID GENERATO all'oggetto salvato
+    set(newMovementRef, { ...newMovementData, id: newMovementRef.key }) // Aggiunge l'ID ai dati salvati
         .then(() => {
             alert("Movimento futuro pianificato. Puoi ora modificare le singole quote.");
             descriptionInput.value = '';
@@ -1241,7 +1250,6 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
             alert("Errore durante l'aggiunta del movimento futuro.");
         });
 });
-
 if (wishlistNewLinkInput && addWishlistLinkBtn) addWishlistLinkBtn.addEventListener('click', () => {
     const input = wishlistNewLinkInput;
     if(input.value.trim()){
@@ -1607,6 +1615,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
