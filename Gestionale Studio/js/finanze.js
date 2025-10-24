@@ -1198,6 +1198,8 @@ if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
 
 // SOSTITUISCI QUESTO INTERO BLOCCO
 
+// SOSTITUISCI QUESTO INTERO BLOCCO
+
 if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
     const descriptionInput = document.getElementById('future-movement-description');
     const costInput = document.getElementById('future-movement-cost');
@@ -1207,39 +1209,66 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
     const totalCost = parseFloat(costInput.value);
     const dueDate = dueDateInput.value;
 
-    if (!description || isNaN(totalCost) || totalCost <= 0 || !dueDate || members.length === 0) {
-        alert("Compila tutti i campi obbligatori e assicurati che ci siano membri registrati.");
+    // Controllo più robusto sugli input e sulla presenza dei membri
+    if (!description || isNaN(totalCost) || totalCost <= 0 || !dueDate) {
+        alert("Compila tutti i campi obbligatori (Descrizione, Costo, Data).");
+        return;
+    }
+    if (!members || members.length === 0) {
+         alert("Errore: Non ci sono membri registrati per calcolare le quote.");
+         return;
+    }
+
+    // Calcola la quota iniziale per persona
+    const costPerPerson = totalCost / members.length;
+
+    // Crea l'array delle quote con un controllo aggiuntivo
+    let shares = [];
+    try {
+        shares = members.map(member => {
+            if (!member || typeof member.name !== 'string') {
+                throw new Error("Formato membro non valido."); // Lancia un errore se un membro non è corretto
+            }
+            return {
+                member: member.name,
+                amount: costPerPerson,
+                paid: false
+            };
+        });
+    } catch (error) {
+        console.error("Errore durante la creazione delle quote:", error);
+        alert("Si è verificato un errore nel calcolo delle quote. Controlla i dati dei membri.");
+        return; // Interrompe l'esecuzione se c'è un errore
+    }
+
+    // Verifica che l'array shares sia stato creato correttamente
+    if (!Array.isArray(shares) || shares.length === 0) {
+        alert("Errore: Impossibile creare la suddivisione delle quote.");
         return;
     }
 
-    // Calcola la quota iniziale per persona (sarà modificabile dopo)
-    const costPerPerson = totalCost / members.length;
-
-    // --- VERIFICA QUI ---
-    // Assicurati che l'oggetto 'shares' sia creato correttamente senza commenti o errori
-    const shares = members.map(member => ({
-        member: member.name,
-        amount: costPerPerson,
-        paid: false
-    }));
-
     // Prepara il nuovo oggetto movimento futuro
     const newMovementData = {
-        // L'ID verrà aggiunto da Firebase
+        // ID verrà aggiunto dopo push()
         description: description,
         totalCost: totalCost,
         dueDate: dueDate,
-        shares: shares,       // Assicurati che 'shares' sia l'array corretto
+        shares: shares, // Usa l'array 'shares' verificato
         isExpanded: false
     };
 
-    // Usa push() per aggiungere un nuovo nodo con un ID univoco
+    // Usa push() per ottenere un riferimento univoco
     const newMovementRef = push(futureMovementsRef);
+    const newMovementId = newMovementRef.key; // Ottieni l'ID generato
 
-    // Salva i dati E AGGIUNGI L'ID GENERATO all'oggetto salvato
-    set(newMovementRef, { ...newMovementData, id: newMovementRef.key }) // Aggiunge l'ID ai dati salvati
+    // Aggiungi l'ID ai dati prima di salvarli
+    newMovementData.id = newMovementId; 
+
+    // Salva i dati completi nel nuovo riferimento
+    set(newMovementRef, newMovementData)
         .then(() => {
-            alert("Movimento futuro pianificato. Puoi ora modificare le singole quote.");
+            alert("Movimento futuro pianificato con quote iniziali. Puoi ora modificare le singole quote.");
+            // Resetta il form
             descriptionInput.value = '';
             costInput.value = '';
             dueDateInput.value = new Date().toISOString().split('T')[0];
@@ -1615,6 +1644,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
