@@ -1468,25 +1468,43 @@ document.addEventListener('click', (e) => {
             settlementContainer.classList.add('hidden');
         }
     }
+    // TROVA IL BLOCCO 'document.addEventListener('click', ...)' E SOSTITUISCI QUESTO "ELSE IF"
+
+    // ... (altre logiche else if per i click) ...
+
     else if (target.matches('.delete-future-movement-btn')) {
-        const idToDelete = target.dataset.id; // Questo è l'ID univoco (chiave Firebase)
+        const idToDelete = target.dataset.id; // Questo è l'ID univoco salvato DENTRO l'oggetto
         if (idToDelete && confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
-            
+
             // --- CORREZIONE QUI ---
-            // Usa remove() con il riferimento diretto al percorso che include l'ID univoco
-            remove(ref(database, `futureMovements/${idToDelete}`))
-                .then(() => {
-                    alert('Movimento futuro eliminato.');
-                    // Nota: Non serve aggiornare manualmente la lista locale 'futureMovements'.
-                    // La funzione onValue() rileverà il cambiamento nel database e
-                    // aggiornerà automaticamente la variabile e la vista.
-                })
-                .catch((error) => {
-                    console.error("Errore durante l'eliminazione:", error);
-                    alert("Si è verificato un errore durante l'eliminazione.");
-                });
+            // 1. Trova l'elemento nell'array locale usando il suo ID interno
+            const itemIndex = futureMovements.findIndex(m => m && m.id === idToDelete);
+
+            if (itemIndex > -1) {
+                // 2. Crea un NUOVO array escludendo l'elemento da cancellare
+                const updatedFutureMovements = futureMovements.filter(m => m.id !== idToDelete);
+
+                // 3. Usa set() per SOVRASCRIVERE l'intera lista /futureMovements su Firebase
+                //    con il nuovo array filtrato. Questo è il modo corretto per eliminare da un array.
+                set(futureMovementsRef, updatedFutureMovements)
+                    .then(() => {
+                        alert('Movimento futuro eliminato.');
+                        // Non serve fare altro, onValue aggiornerà la vista automaticamente
+                    })
+                    .catch((error) => {
+                        console.error("Errore durante l'eliminazione:", error);
+                        alert("Si è verificato un errore durante l'eliminazione.");
+                    });
+            } else {
+                 // Questo non dovrebbe succedere se i dati sono caricati correttamente
+                 console.warn("Movimento futuro non trovato nell'array locale con ID:", idToDelete);
+                 alert("Errore: Impossibile trovare il movimento da eliminare.");
+            }
         }
     }
+
+    // ... (assicurati che questo sia l'ultimo else if prima della parentesi graffa di chiusura del listener)
+
 });
 
 // Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
@@ -1577,6 +1595,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
