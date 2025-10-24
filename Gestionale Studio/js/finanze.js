@@ -1200,6 +1200,8 @@ if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
 
 // SOSTITUISCI QUESTO INTERO BLOCCO
 
+// 2. SOSTITUISCI QUESTO BLOCCO
+
 if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
     const descriptionInput = document.getElementById('future-movement-description');
     const costInput = document.getElementById('future-movement-cost');
@@ -1209,7 +1211,6 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
     const totalCost = parseFloat(costInput.value);
     const dueDate = dueDateInput.value;
 
-    // Controllo più robusto sugli input e sulla presenza dei membri
     if (!description || isNaN(totalCost) || totalCost <= 0 || !dueDate) {
         alert("Compila tutti i campi obbligatori (Descrizione, Costo, Data).");
         return;
@@ -1221,54 +1222,38 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
 
     // Calcola la quota iniziale per persona
     const costPerPerson = totalCost / members.length;
-
-    // Crea l'array delle quote con un controllo aggiuntivo
     let shares = [];
     try {
         shares = members.map(member => {
-            if (!member || typeof member.name !== 'string') {
-                throw new Error("Formato membro non valido."); // Lancia un errore se un membro non è corretto
-            }
-            return {
-                member: member.name,
-                amount: costPerPerson,
-                paid: false
-            };
+            if (!member || typeof member.name !== 'string') throw new Error("Formato membro non valido.");
+            return { member: member.name, amount: costPerPerson, paid: false };
         });
     } catch (error) {
         console.error("Errore durante la creazione delle quote:", error);
-        alert("Si è verificato un errore nel calcolo delle quote. Controlla i dati dei membri.");
-        return; // Interrompe l'esecuzione se c'è un errore
+        alert("Si è verificato un errore nel calcolo delle quote.");
+        return;
     }
 
-    // Verifica che l'array shares sia stato creato correttamente
-    if (!Array.isArray(shares) || shares.length === 0) {
+    if (!Array.isArray(shares) || shares.length !== members.length) { // Controllo più stretto
         alert("Errore: Impossibile creare la suddivisione delle quote.");
         return;
     }
 
-    // Prepara il nuovo oggetto movimento futuro
+    // Prepara i dati da salvare
     const newMovementData = {
-        // ID verrà aggiunto dopo push()
         description: description,
         totalCost: totalCost,
         dueDate: dueDate,
-        shares: shares, // Usa l'array 'shares' verificato
-        isExpanded: false
+        shares: shares,
+        isExpanded: false // Inizia chiuso
     };
 
-    // Usa push() per ottenere un riferimento univoco
-    const newMovementRef = push(futureMovementsRef);
-    const newMovementId = newMovementRef.key; // Ottieni l'ID generato
+    const newMovementRef = push(futureMovementsRef); // Ottiene il riferimento e la chiave
+    newMovementData.id = newMovementRef.key; // Aggiunge l'ID ai dati
 
-    // Aggiungi l'ID ai dati prima di salvarli
-    newMovementData.id = newMovementId; 
-
-    // Salva i dati completi nel nuovo riferimento
-    set(newMovementRef, newMovementData)
+    set(newMovementRef, newMovementData) // Salva i dati completi
         .then(() => {
-            alert("Movimento futuro pianificato con quote iniziali. Puoi ora modificare le singole quote.");
-            // Resetta il form
+            alert("Movimento futuro pianificato con quote iniziali.");
             descriptionInput.value = '';
             costInput.value = '';
             dueDateInput.value = new Date().toISOString().split('T')[0];
@@ -1460,22 +1445,7 @@ document.addEventListener('click', (e) => {
     const target = e.target;
 
     // Logica per espandere/collassare la card del movimento futuro
-    const movementCardHeader = target.closest('[data-movement-id]');
-    if (movementCardHeader && !target.matches('.future-share-checkbox')) {
-        const movementId = movementCardHeader.dataset.movementId;
-        const sharesContainer = document.getElementById(`shares-${movementId}`);
-        if (sharesContainer) {
-            sharesContainer.classList.toggle('hidden');
-            const movement = futureMovements.find(m => m.id === movementId);
-            if (movement) {
-                movement.isExpanded = !sharesContainer.classList.contains('hidden');
-                const movementIndex = futureMovements.findIndex(m => m.id === movementId);
-                if (movementIndex > -1) {
-                    update(ref(database, `futureMovements/${movementIndex}`), { isExpanded: movement.isExpanded });
-                }
-            }
-        }
-    }
+    
 
     if (target.matches('.open-edit-modal-btn')) {
         openEditModal(target.dataset.id, target.dataset.type);
@@ -1554,6 +1524,32 @@ document.addEventListener('click', (e) => {
 
     // ... (assicurati che questo sia l'ultimo else if prima della parentesi graffa di chiusura del listener)
 
+});
+// 1. INCOLLA QUESTO NUOVO BLOCCO DOPO LA FINE DEL document.addEventListener('click', ...)
+
+// Listener specifico per l'espansione/collasso dei movimenti futuri
+document.getElementById('future-movements-container')?.addEventListener('click', (e) => {
+    // Cerca l'elemento cliccato che ha l'attributo data-movement-id (l'intestazione della card)
+    const movementCardHeader = e.target.closest('[data-movement-id]');
+    
+    // Assicurati di non aver cliccato su un checkbox o un pulsante all'interno della card
+    if (movementCardHeader && !e.target.matches('input, button, a')) {
+        const movementId = movementCardHeader.dataset.movementId;
+        const sharesContainer = document.getElementById(`shares-${movementId}`);
+        
+        if (sharesContainer) {
+            sharesContainer.classList.toggle('hidden'); // Mostra/nasconde le quote
+            
+            // Trova il movimento corrispondente nei dati locali
+            const movement = futureMovements.find(m => m && m.id === movementId);
+            if (movement) {
+                movement.isExpanded = !sharesContainer.classList.contains('hidden');
+                
+                // Aggiorna lo stato isExpanded nel database (importante per mantenere lo stato)
+                update(ref(database, `futureMovements/${movementId}`), { isExpanded: movement.isExpanded });
+            }
+        }
+    }
 });
 
 // Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
@@ -1644,6 +1640,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
