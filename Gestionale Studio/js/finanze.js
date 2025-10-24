@@ -372,12 +372,12 @@ const renderFutureMovements = () => {
                         <label for="share-${m.id}-${shareIndex}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
                         <div class="flex items-center gap-2">
                             <span class="font-medium">€</span>
-                            {/* Passa l'ID corretto (m.id) */}
+                            
                             <input type="number" value="${(share.amount || 0).toFixed(2)}" 
                                    data-movement-id="${m.id}" 
                                    data-share-index="${shareIndex}" 
                                    class="w-16 p-1 text-right border rounded-md future-share-amount">
-                            {/* Passa l'ID corretto (m.id) */}
+                            
                             <input type="checkbox" id="share-${m.id}-${shareIndex}" 
                                    data-movement-id="${m.id}" 
                                    data-share-index="${shareIndex}" 
@@ -1607,6 +1607,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
