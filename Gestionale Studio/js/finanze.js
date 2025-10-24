@@ -360,21 +360,27 @@ const renderPendingPayments = () => {
 // 1. SOSTITUISCI QUESTA FUNZIONE
 // 2. SOSTITUISCI QUESTA FUNZIONE
 
+// 1. SOSTITUISCI QUESTA FUNZIONE
+
 const renderFutureMovements = () => {
     const container = document.getElementById('future-movements-container');
     if (container) {
-        container.innerHTML = (futureMovements || []).map(m => { // Non serve più movementIndex
+        container.innerHTML = (futureMovements || []).map(m => { // Rimosso 'movementIndex' non necessario qui
             const sharesHtml = (m.shares && Array.isArray(m.shares))
                 ? m.shares.map((share, shareIndex) => `
                     <div class="flex justify-between items-center text-xs py-1">
                         <label for="share-${m.id}-${shareIndex}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
                         <div class="flex items-center gap-2">
                             <span class="font-medium">€</span>
-                            <input type="number" value="${(share.amount || 0).toFixed(2)}"
-                                   data-movement-id="${m.id}" data-share-index="${shareIndex}"
+                            {/* Passa l'ID corretto (m.id) */}
+                            <input type="number" value="${(share.amount || 0).toFixed(2)}" 
+                                   data-movement-id="${m.id}" 
+                                   data-share-index="${shareIndex}" 
                                    class="w-16 p-1 text-right border rounded-md future-share-amount">
-                            <input type="checkbox" id="share-${m.id}-${shareIndex}"
-                                   data-movement-id="${m.id}" data-share-index="${shareIndex}"
+                            {/* Passa l'ID corretto (m.id) */}
+                            <input type="checkbox" id="share-${m.id}-${shareIndex}" 
+                                   data-movement-id="${m.id}" 
+                                   data-share-index="${shareIndex}" 
                                    class="form-checkbox h-4 w-4 text-indigo-600 rounded cursor-pointer future-share-checkbox" ${share.paid ? 'checked' : ''}>
                         </div>
                     </div>`).join('')
@@ -396,7 +402,7 @@ const renderFutureMovements = () => {
                         <span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span>
                     </div>
                     ${sharesContainerHtml}
-                    ${adminButtonsHtml}
+                    ${adminButtonsHtml} 
                 </div>`;
         }).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
     }
@@ -1477,7 +1483,7 @@ document.addEventListener('click', (e) => {
         if (idToDelete && confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
 
             // --- CORREZIONE QUI ---
-            // 1. Trova l'elemento nell'array locale usando il suo ID interno
+            // 1. Trova l'indice dell'elemento nell'array locale basato sull'ID interno
             const itemIndex = futureMovements.findIndex(m => m && m.id === idToDelete);
 
             if (itemIndex > -1) {
@@ -1496,7 +1502,6 @@ document.addEventListener('click', (e) => {
                         alert("Si è verificato un errore durante l'eliminazione.");
                     });
             } else {
-                 // Questo non dovrebbe succedere se i dati sono caricati correttamente
                  console.warn("Movimento futuro non trovato nell'array locale con ID:", idToDelete);
                  alert("Errore: Impossibile trovare il movimento da eliminare.");
             }
@@ -1539,6 +1544,8 @@ if (importFileInput) importFileInput.addEventListener('change', handleImportData
 
 // 3. SOSTITUISCI QUESTO BLOCCO
 
+// 2. SOSTITUISCI QUESTO BLOCCO
+
 document.addEventListener('change', (e) => {
     const target = e.target;
     
@@ -1548,38 +1555,43 @@ document.addEventListener('change', (e) => {
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const isChecked = target.checked;
 
-        if (movementId && !isNaN(shareIndex)) { // Controlla che l'ID esista
-            const movement = futureMovements.find(m => m.id === movementId); // Trova per ID
+        // Trova l'indice del movimento nell'array locale basato sull'ID
+        const movementIndex = futureMovements.findIndex(m => m && m.id === movementId); 
+
+        if (movementIndex > -1 && !isNaN(shareIndex)) { // Controlla che l'indice sia valido
+            const movement = futureMovements[movementIndex];
             if (movement && movement.shares && movement.shares[shareIndex]) {
-                // Aggiorna Firebase usando il percorso con l'ID
-                update(ref(database, `futureMovements/${movementId}/shares/${shareIndex}`), { paid: isChecked });
+                // Aggiorna Firebase usando il percorso con l'INDICE dell'array
+                update(ref(database, `futureMovements/${movementIndex}/shares/${shareIndex}`), { paid: isChecked });
             }
         }
     }
 
-    // Logica per la modifica dell'importo delle quote future (usa ID)
+    // Logica per la modifica dell'importo delle quote future (usa ID per trovare, indice per salvare)
     else if (target.matches('.future-share-amount')) {
         const movementId = target.dataset.movementId; // Usa l'ID
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const newAmount = parseFloat(target.value);
 
-        if (movementId && !isNaN(shareIndex) && !isNaN(newAmount)) { // Controlla ID
-            const movement = futureMovements.find(m => m.id === movementId); // Trova per ID
+        // Trova l'indice del movimento nell'array locale basato sull'ID
+        const movementIndex = futureMovements.findIndex(m => m && m.id === movementId);
+
+        if (movementIndex > -1 && !isNaN(shareIndex) && !isNaN(newAmount)) { // Controlla indice e importo
+            const movement = futureMovements[movementIndex];
             if (movement && movement.shares && movement.shares[shareIndex]) {
                 // Aggiorna l'importo locale per il ricalcolo
                 movement.shares[shareIndex].amount = newAmount;
                 const newTotalCost = movement.shares.reduce((sum, s) => sum + (s.amount || 0), 0);
-                movement.totalCost = newTotalCost; // Aggiorna il totale locale
+                // Non aggiorniamo movement.totalCost localmente per evitare conflitti con onValue
 
-                // Prepara gli aggiornamenti per Firebase usando il percorso con l'ID
+                // Prepara gli aggiornamenti per Firebase usando il percorso con l'INDICE dell'array
                 const updates = {};
-                updates[`futureMovements/${movementId}/shares/${shareIndex}/amount`] = newAmount;
-                updates[`futureMovements/${movementId}/totalCost`] = newTotalCost;
+                updates[`futureMovements/${movementIndex}/shares/${shareIndex}/amount`] = newAmount;
+                updates[`futureMovements/${movementIndex}/totalCost`] = newTotalCost; // Aggiorna anche il totale
 
                 update(ref(database), updates);
-
-                // Rirenderizza per mostrare il nuovo totale aggiornato istantaneamente
-                renderFutureMovements();
+                
+                // Non serve ri-renderizzare manualmente, onValue lo farà
             }
         }
     }
@@ -1595,6 +1607,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
