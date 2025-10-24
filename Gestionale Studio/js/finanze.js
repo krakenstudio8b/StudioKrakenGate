@@ -1469,12 +1469,22 @@ document.addEventListener('click', (e) => {
         }
     }
     else if (target.matches('.delete-future-movement-btn')) {
-        const idToDelete = target.dataset.id;
-        if (confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
-            // Usa remove() con il riferimento diretto all'ID (chiave Firebase)
-            remove(ref(database, `futureMovements/${idToDelete}`));
-            alert('Movimento futuro eliminato.');
-            // La vista si aggiornerà automaticamente grazie a onValue
+        const idToDelete = target.dataset.id; // Questo è l'ID univoco (chiave Firebase)
+        if (idToDelete && confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
+            
+            // --- CORREZIONE QUI ---
+            // Usa remove() con il riferimento diretto al percorso che include l'ID univoco
+            remove(ref(database, `futureMovements/${idToDelete}`))
+                .then(() => {
+                    alert('Movimento futuro eliminato.');
+                    // Nota: Non serve aggiornare manualmente la lista locale 'futureMovements'.
+                    // La funzione onValue() rileverà il cambiamento nel database e
+                    // aggiornerà automaticamente la variabile e la vista.
+                })
+                .catch((error) => {
+                    console.error("Errore durante l'eliminazione:", error);
+                    alert("Si è verificato un errore durante l'eliminazione.");
+                });
         }
     }
 });
@@ -1567,6 +1577,7 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
+
 
 
 
