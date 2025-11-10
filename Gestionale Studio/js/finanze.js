@@ -1,23 +1,12 @@
+// js/finanze.js
+// VERSIONE CORRETTA - 10 NOVEMBRE
+
 import { database } from './firebase-config.js';
 import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-// FIX: Aggiunto onAuthReady per risolvere il problema di timing
 import { currentUser } from './auth-guard.js';
 
-
-// --- Riferimenti ai nodi del tuo database ---
-const membersRef = ref(database, 'members');
-const varExpensesRef = ref(database, 'variableExpenses');
-const fixedExpensesRef = ref(database, 'fixedExpenses');
-const incomeRef = ref(database, 'incomeEntries');
-const wishlistRef = ref(database, 'wishlist');
-const futureMovementsRef = ref(database, 'futureMovements');
-const pendingPaymentsRef = ref(database, 'pendingPayments');
-const cassaComuneRef = ref(database, 'cassaComune');
-const expenseRequestsRef = ref(database, 'expenseRequests');
-
-
 // --- Data State (Firebase-synced) ---
-let members = [];
+let members = []; // Verrà popolato correttamente
 let variableExpenses = [];
 let fixedExpenses = [];
 let incomeEntries = [];
@@ -27,13 +16,12 @@ let pendingPayments = [];
 let cassaComune = { balance: 0, movements: [] };
 let expenseRequests = {}; 
 
-// Variabili per i grafici
-let membersContributionsChart, membersIncomeChart, categoriesChart, balancesChart;
+// Variabili per i grafici (se usi Chart.js)
+// let membersContributionsChart, membersIncomeChart, categoriesChart, balancesChart;
 let tempWishlistLinks = [];
 
 
 // --- Funzioni Utility ---
-
 const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -42,7 +30,8 @@ const formatDate = (dateString) => {
 
 const displayDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
+    // Aggiungi orario fittizio per evitare problemi di timezone
+    const date = new Date(dateString + 'T12:00:00Z'); 
     return date.toLocaleDateString('it-IT');
 };
 
@@ -64,30 +53,32 @@ const getItemFromStore = (type, id) => {
 // --- Funzioni di Interazione con Firebase ---
 
 function saveDataToFirebase() {
-    set(membersRef, members);
+    // Non salviamo più 'members' da qui, viene gestito altrove
     set(varExpensesRef, variableExpenses);
     set(fixedExpensesRef, fixedExpenses);
     set(incomeRef, incomeEntries);
     set(wishlistRef, wishlist);
-    set(futureMovementsRef, futureMovements);
-    set(pendingPaymentsRef, pendingPayments);
-    set(cassaComuneRef, cassaComune);
-    set(expenseRequestsRef, expenseRequests);
+    // Nota: futureMovements, pendingPayments, cassaComune, expenseRequests
+    // vengono già aggiornati con 'update', 'push', 'remove'
 }
 
-// Sostituisci la tua vecchia funzione loadDataFromFirebase con questa
-
-// SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE
-
+// ==========================================================
+// --- FUNZIONE loadDataFromFirebase (CORRETTA) ---
+// ==========================================================
 function loadDataFromFirebase() {
     onValue(membersRef, (snapshot) => {
-        const rawData = snapshot.val() || [];
-        if (Array.isArray(rawData) && rawData.length > 0 && typeof rawData[0] === 'string') {
-            members = rawData.map((name, index) => ({ id: String(index), name: name }));
-        } else {
-            // Se Firebase restituisce un oggetto, lo converte in array
-            members = Array.isArray(rawData) ? rawData : (rawData ? Object.values(rawData) : []);
-        }
+        // 1. Prendiamo i dati come OGGETTO
+        const membersObject = snapshot.val() || {};
+        
+        // 2. Trasformiamo l'oggetto in un array di { id: "uid", name: "..." }
+        // che è la struttura che il resto di questo file si aspetta
+        members = Object.entries(membersObject).map(([uid, memberData]) => ({
+            id: uid, // <--- QUESTA È LA CORREZIONE CHIAVE
+            name: memberData.name,
+            cleaningCount: memberData.cleaningCount
+        }));
+
+        // 3. Ora tutto il resto funziona
         renderMembers();
         toggleSectionsVisibility();
         updateDashboardView();
@@ -95,8 +86,6 @@ function loadDataFromFirebase() {
 
     onValue(varExpensesRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
-        // Converte sempre il risultato in un array per sicurezza
         variableExpenses = data ? Object.values(data) : [];
         renderVariableExpenses();
         updateDashboardView();
@@ -105,7 +94,6 @@ function loadDataFromFirebase() {
 
     onValue(fixedExpensesRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
         fixedExpenses = data ? Object.values(data) : [];
         renderFixedExpenses();
         updateDashboardView();
@@ -113,7 +101,6 @@ function loadDataFromFirebase() {
 
     onValue(incomeRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
         incomeEntries = data ? Object.values(data) : [];
         renderIncomeEntries();
         updateDashboardView();
@@ -122,22 +109,18 @@ function loadDataFromFirebase() {
 
     onValue(wishlistRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
         wishlist = data ? Object.values(data) : [];
         renderWishlist();
     });
 
     onValue(futureMovementsRef, (snapshot) => {
         const rawData = snapshot.val();
-        // Converti l'oggetto di oggetti in un array di oggetti, includendo l'ID come proprietà interna
-        // Se rawData è null, usa un array vuoto
         futureMovements = rawData ? Object.keys(rawData).map(key => ({ id: key, ...rawData[key] })) : [];
         renderFutureMovements();
     });
 
     onValue(pendingPaymentsRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
         pendingPayments = data ? Object.values(data) : [];
         renderPendingPayments();
     });
@@ -153,8 +136,15 @@ function loadDataFromFirebase() {
         renderExpenseRequestsForAdmin();
     });
 }
+// ==========================================================
+// --- FINE FUNZIONE CORRETTA ---
+// ==========================================================
+
 
 // --- Funzioni di Rendering e Logica ---
+// (Il resto del tuo file js/finanze.js rimane identico a quello che mi hai mandato)
+// ... (tutte le altre funzioni: renderMembers, renderCassaComune, initializeCharts, etc.) ...
+// Copia e incolla tutto il resto del tuo file .js originale da qui in poi.
 
 // Riferimenti DOM cruciali
 const monthFilter = document.getElementById('month-filter');
@@ -241,11 +231,11 @@ const toggleSectionsVisibility = () => {
     const hasMembers = members.length > 0;
     Object.values(sections).forEach(section => {
         if(section && section.id === 'admin-requests-section') {
-             if(currentUser.role === 'admin' && hasMembers){
-                 section.classList.remove('hidden');
-             } else {
-                 section.classList.add('hidden');
-             }
+            if(currentUser.role === 'admin' && hasMembers){
+                section.classList.remove('hidden');
+            } else {
+                section.classList.add('hidden');
+            }
         } else if(section) {
             section.classList.toggle('hidden', !hasMembers);
         }
@@ -259,10 +249,11 @@ const populateMonthFilter = () => {
     const allDates = [...variableExpenses, ...incomeEntries].map(item => new Date(item.date)).filter(d => !isNaN(d));
     const uniqueMonths = new Set(allDates.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`));
     
-    // Rimuovi le vecchie opzioni
+    // Salva l'opzione selezionata
+    const selectedValue = monthFilter.value; 
+    
     monthFilter.innerHTML = '<option value="all">Tutti i mesi</option>';
 
-    // Aggiungi le nuove opzioni
     Array.from(uniqueMonths).sort((a, b) => b.localeCompare(a)).forEach(monthYear => {
         const [year, month] = monthYear.split('-');
         const date = new Date(year, parseInt(month) - 1);
@@ -272,11 +263,12 @@ const populateMonthFilter = () => {
         option.textContent = monthName;
         monthFilter.appendChild(option);
     });
+    
+    // Ripristina l'opzione selezionata
+    monthFilter.value = selectedValue; 
 };
 
-// SOSTITUISCI QUESTA FUNZIONE
-// SOSTITUISCI QUESTA INTERA FUNZIONE
-
+// QUESTA FUNZIONE ORA FUNZIONERÀ PERCHÉ 'members' è un array di {id, name}
 const renderMembers = () => {
     if (memberCountEl) memberCountEl.textContent = members.length;
     const membersListEl = document.getElementById('members-list');
@@ -288,8 +280,6 @@ const renderMembers = () => {
     
     const payerSelect = document.getElementById('payer');
     if (payerSelect) {
-        // --- MODIFICA QUI ---
-        // Ho ri-aggiunto <option value="Cassa Comune">Cassa Comune</option> alla lista
         payerSelect.innerHTML = `<option value="">Seleziona chi ha pagato</option><option value="Cassa Comune">Cassa Comune</option>` + memberOptions;
     }
     
@@ -305,14 +295,6 @@ const renderMembers = () => {
     }
 };
 
-
-// SOSTITUISCI L'INTERA FUNZIONE renderCassaComune
-// SOSTITUISCI L'INTERA FUNZIONE renderCassaComune CON QUESTA VERSIONE CORRETTA
-
-// SOSTITUISCI L'INTERA FUNZIONE renderCassaComune CON QUESTA VERSIONE CORRETTA
-
-// 1. SOSTITUISCI QUESTA FUNZIONE
-
 const renderCassaComune = () => {
     const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
     const cashMovementsHistoryEl = document.getElementById('cash-movements-history');
@@ -320,8 +302,6 @@ const renderCassaComune = () => {
     if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${(cassaComune.balance || 0).toFixed(2)}`;
     
     if (cashMovementsHistoryEl) {
-        // --- MODIFICA CRUCIALE QUI ---
-        // Converte i movimenti in un array, sia che Firebase li dia come array o come oggetto.
         const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
         
         cashMovementsHistoryEl.innerHTML = movements.sort((a, b) => new Date(b.date) - new Date(a.date)).map(m => {
@@ -355,15 +335,6 @@ const renderPendingPayments = () => {
         </div>
     `).join('') || '<p class="text-gray-500">Nessun pagamento in sospeso.</p>';
 };
-
-// SOSTITUISCI QUESTA FUNZIONE
-// 3. SOSTITUISCI QUESTA FUNZIONE
-// 1. SOSTITUISCI QUESTA FUNZIONE
-// 2. SOSTITUISCI QUESTA FUNZIONE
-
-// 1. SOSTITUISCI QUESTA FUNZIONE
-
-// 3. SOSTITUISCI QUESTA FUNZIONE
 
 const renderFutureMovements = () => {
     const container = document.getElementById('future-movements-container');
@@ -412,7 +383,6 @@ const renderWishlist = () => {
     const container = document.getElementById('wishlist-container');
     if (container) {
         container.innerHTML = (wishlist || []).sort((a, b) => (b.priority || "").localeCompare(a.priority || "")).map(item => {
-            // 1. Genera l'HTML per i link, solo se esistono
             let linksHtml = '';
             if (item.links && item.links.length > 0) {
                 linksHtml = `
@@ -427,7 +397,6 @@ const renderWishlist = () => {
                 `;
             }
 
-            // 2. Costruisce l'intera "card" dell'articolo
             return `
                 <div class="bg-indigo-50 p-3 rounded-lg border-l-4 border-indigo-500">
                     <div class="flex justify-between items-start">
@@ -484,7 +453,7 @@ const renderFixedExpenses = () => {
         <div class="flex justify-between items-center bg-orange-50 p-3 rounded-lg border-l-4 border-orange-500">
             <div>
                 <span class="font-medium">${f.description}</span>
-                <span class="text-xs text-gray-500 block">Paga: ${f.payer}</span>
+                <span class="text-xs text-gray-500 block">Paga: ${f.payer || 'Tutti'}</span>
             </div>
             <span class="font-bold text-orange-700">€${f.amount.toFixed(2)}</span>
             <button data-id="${f.id}" data-type="fixedExpense" class="open-edit-modal-btn text-orange-600 hover:text-orange-800">Modifica</button>
@@ -511,7 +480,8 @@ const renderExpenseRequestsForAdmin = () => {
     }
 
     pendingRequests.forEach(([key, req]) => {
-        const requesterName = members.find(m => m.id === req.requesterUid)?.name || 'N/A';
+        // Usa l'array 'members' globale (ora corretto) per trovare il nome
+        const requesterName = members.find(m => m.id === req.requesterUid)?.name || req.requesterName || 'N/D';
         const reqEl = document.createElement('div');
         reqEl.className = 'bg-white p-3 rounded-lg border flex justify-between items-center mb-2';
         reqEl.innerHTML = `
@@ -547,7 +517,7 @@ const createBarChart = (canvasId, label, data, labels, color) => {
             label: label,
             data: data,
             backgroundColor: color,
-            borderColor: color.map(c => c.replace('0.2', '1')), // Versione più scura per il bordo
+            borderColor: Array.isArray(color) ? color.map(c => c.replace('0.6', '1')) : color.replace('0.6', '1'),
             borderWidth: 1
         }]
     };
@@ -568,9 +538,6 @@ const createBarChart = (canvasId, label, data, labels, color) => {
     return new Chart(ctx, chartConfig);
 };
 
-// SOSTITUISCI L'INTERA FUNZIONE initializeCharts CON QUESTA
-
-// SOSTITUISCI L'INTERA FUNZIONE initializeCharts CON QUESTA VERSIONE FINALE
 
 const initializeCharts = () => {
     const data = getCalculationData();
@@ -578,14 +545,12 @@ const initializeCharts = () => {
 
     const memberNames = data.members.map(m => m.name);
     
-    // Lista di colori più ampia per assegnarli in modo univoco
     const colorPalette = [
         'rgba(75, 192, 192, 0.6)', 'rgba(255, 99, 132, 0.6)', 'rgba(255, 206, 86, 0.6)', 
         'rgba(54, 162, 235, 0.6)', 'rgba(153, 102, 255, 0.6)', 'rgba(255, 159, 64, 0.6)',
         'rgba(199, 199, 199, 0.6)', 'rgba(83, 109, 254, 0.6)', 'rgba(0, 200, 83, 0.6)',
         'rgba(255, 69, 0, 0.6)', 'rgba(46, 204, 113, 0.6)', 'rgba(52, 152, 219, 0.6)'
     ];
-    // Assegna un colore a ogni membro. Se i membri sono più dei colori, i colori si ripeteranno.
     const memberColors = memberNames.map((_, index) => colorPalette[index % colorPalette.length]);
 
     // Grafico 1: Contributi Totali
@@ -599,14 +564,13 @@ const initializeCharts = () => {
     createBarChart('membersContributionsChart', 'Contributi Totali (Spese + Cassa)', contributionsData, memberNames, memberColors);
     
     // Grafico 2: Ripartizione Entrate
-    const incomeData = memberNames.map(name => data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / i.membersInvolved.length) : 0), 0));
+    const incomeData = memberNames.map(name => data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / (i.membersInvolved.length || 1)) : 0), 0));
     createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
     
     // Grafico 3: Spese per Categoria
     const categoryMap = [...data.expenses, ...data.fixedExpenses].reduce((map, e) => {
-        if (e.category) {
-            map.set(e.category, (map.get(e.category) || 0) + (e.amount || 0));
-        }
+        const category = e.category || 'Non categorizzata';
+        map.set(category, (map.get(category) || 0) + (e.amount || 0));
         return map;
     }, new Map());
     createBarChart('categoriesChart', 'Spese per Categoria', Array.from(categoryMap.values()), Array.from(categoryMap.keys()), colorPalette);
@@ -615,21 +579,21 @@ const initializeCharts = () => {
     const totalExpenses = data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalFixed = data.fixedExpenses.reduce((sum, f) => sum + (f.amount || 0), 0);
     if (data.members.length > 0) {
-        // La quota di spesa che ogni membro dovrebbe teoricamente pagare
         const shareOfTotalExpense = (totalExpenses + totalFixed) / data.members.length;
 
         const balanceData = memberNames.map(name => {
-            // Ricalcoliamo il contributo totale ESATTAMENTE come per il primo grafico
             const expensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + (e.amount || 0), 0);
             const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
                 .filter(m => m.member === name && m.type === 'deposit')
                 .reduce((sum, m) => sum + (m.amount || 0), 0);
             
-            // Il totale versato dal membro (spese dirette + depositi in cassa)
             const totalContributed = expensesPaid + cashDeposits;
 
-            // Il saldo è la differenza tra quanto ha versato e quanto avrebbe dovuto versare
-            return totalContributed - shareOfTotalExpense;
+            // Totale RICEVUTO da un membro (la sua quota delle entrate)
+            const incomeShare = data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / (i.membersInvolved.length || 1)) : 0), 0);
+            
+            // Saldo finale: (Versato + Ricevuto) - Quota Spese
+            return (totalContributed + incomeShare) - shareOfTotalExpense;
         });
         createBarChart('balancesChart', 'Bilanci (Netto)', balanceData, memberNames, balanceData.map(b => b >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'));
     }
@@ -637,9 +601,9 @@ const initializeCharts = () => {
 
 const updateDashboardView = () => { 
     // Aggiorna i totali basati sullo stato corrente
-    const totalVar = variableExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const totalFix = fixedExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const totalInc = incomeEntries.reduce((sum, i) => sum + i.amount, 0);
+    const totalVar = variableExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalFix = fixedExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalInc = incomeEntries.reduce((sum, i) => sum + (i.amount || 0), 0);
     
     // Aggiorna gli elementi del DOM
     const totalVariableEl = document.getElementById('total-variable-expense');
@@ -655,16 +619,16 @@ const updateDashboardView = () => {
     
     if (memberCountEl) memberCountEl.textContent = members.length;
     if (perPersonShareEl && members.length > 0) perPersonShareEl.textContent = `€${((totalVar + totalFix) / members.length).toFixed(2)}`;
-    if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${cassaComune.balance.toFixed(2)}`;
+    if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${(cassaComune.balance || 0).toFixed(2)}`;
 
-    // Aggiorna i grafici e ricalcola il conguaglio
-    initializeCharts(); 
-    calculateAndRenderSettlement(true); 
+    if (typeof Chart !== 'undefined') {
+        initializeCharts(); 
+    }
+    calculateAndRenderSettlement(false); 
 };
 
 
 const getCalculationData = (selectedMonth = 'all') => {
-    // Questa funzione serve a filtrare i dati per il mese selezionato (o tutti)
     const filterData = (data) => {
         if (selectedMonth === 'all') return data;
         return data.filter(item => {
@@ -673,68 +637,62 @@ const getCalculationData = (selectedMonth = 'all') => {
         });
     };
 
-    // Filtra tutte le collezioni
     const filteredExpenses = filterData(variableExpenses);
     const filteredIncome = filterData(incomeEntries);
     
     return {
         members: members,
         expenses: filteredExpenses,
-        fixedExpenses: fixedExpenses, // Le spese fisse non vengono filtrate per mese qui, ma vengono considerate in getCalculationData
+        fixedExpenses: fixedExpenses, // Le spese fisse si applicano sempre
         income: filteredIncome
     };
 };
 
-// SOSTITUISCI QUESTA INTERA FUNZIONE
-
 const calculateAndRenderSettlement = (forExport = false) => {
-    const data = getCalculationData();
-    if (!data.members || data.members.length === 0) return;
+    const selectedMonth = document.getElementById('month-filter')?.value || 'all';
+    const data = getCalculationData(selectedMonth);
+    
+    const settlementList = document.getElementById('settlement-list');
+    if (!settlementList) return;
+
+    if (!data.members || data.members.length === 0) {
+        settlementList.innerHTML = '<li class="text-gray-500">Nessun membro registrato per calcolare i saldi.</li>';
+        return;
+    }
 
     const memberNames = data.members.map(m => m.name);
     const balances = Object.fromEntries(memberNames.map(name => [name, 0]));
 
-    // --- Calcolo del Saldo Finale per ogni membro (logica unificata) ---
-
-    // 1. Calcola la quota di spesa che ogni membro DOVREBBE pagare
+    // 1. Calcola la quota di spesa
     const totalExpenses = data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalFixed = data.fixedExpenses.reduce((sum, f) => sum + (f.amount || 0), 0);
     const shareOfTotalExpense = (totalExpenses + totalFixed) / memberNames.length;
 
-    // 2. Calcola il saldo effettivo di ogni membro
+    // 2. Calcola il saldo effettivo
     memberNames.forEach(name => {
-        // Totale VERSATO da un membro (spese dirette + depositi in cassa)
         const expensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + (e.amount || 0), 0);
-        const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : []).filter(m => m.member === name && m.type === 'deposit').reduce((sum, m) => sum + (m.amount || 0), 0);
+        const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
+            .filter(m => m.member === name && m.type === 'deposit')
+            .reduce((sum, m) => sum + (m.amount || 0), 0);
         const totalContributed = expensesPaid + cashDeposits;
 
-        // Totale RICEVUTO da un membro (la sua quota delle entrate)
-        const incomeShare = data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / i.membersInvolved.length) : 0), 0);
+        const incomeShare = data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / (i.membersInvolved.length || 1)) : 0), 0);
 
-        // Il saldo finale è: (Versato + Ricevuto) - Quota Spese che avrebbe dovuto pagare
         balances[name] = (totalContributed + incomeShare) - shareOfTotalExpense;
     });
 
-    // --- INIZIO NUOVA LOGICA DI VISUALIZZAZIONE ---
-
-    const settlementList = document.getElementById('settlement-list');
-    if (!settlementList) return;
-
-    // 3. Filtra solo le persone che sono in negativo (devono versare soldi)
     const debtors = Object.entries(balances)
-        .filter(([, amount]) => amount < -0.01) // Filtra chi ha un saldo negativo
-        .map(([name, amount]) => ({ name, amountToPay: Math.abs(amount) })); // Prende il valore assoluto
+        .filter(([, amount]) => amount < -0.01)
+        .map(([name, amount]) => ({ name, amountToPay: Math.abs(amount) }));
 
-    // Calcola il totale che deve essere versato e il credito totale
     const totalToPay = debtors.reduce((sum, debtor) => sum + debtor.amountToPay, 0);
     const totalInCredit = Object.values(balances).reduce((sum, amount) => sum + (amount > 0.01 ? amount : 0), 0);
     
-    settlementList.innerHTML = ''; // Pulisce la lista precedente
+    settlementList.innerHTML = ''; 
 
     if (debtors.length === 0) {
         settlementList.innerHTML = '<li class="text-green-500 font-semibold">Perfetto! Tutti i conti sono in pari.</li>';
     } else {
-        // 4. Mostra la lista di chi deve versare soldi
         debtors.forEach(debtor => {
             const li = document.createElement('li');
             li.className = 'text-gray-700';
@@ -742,26 +700,19 @@ const calculateAndRenderSettlement = (forExport = false) => {
             settlementList.appendChild(li);
         });
 
-        // 5. Aggiunge una riga di riepilogo per verifica
         const summaryLi = document.createElement('li');
         summaryLi.className = 'text-sm text-gray-500 mt-4 pt-2 border-t';
         summaryLi.innerHTML = `Il totale da versare (€${totalToPay.toFixed(2)}) andrà a coprire il credito di chi ha speso di più (€${totalInCredit.toFixed(2)}).`;
         settlementList.appendChild(summaryLi);
     }
-
     
-    // La logica di esportazione per Excel potrebbe necessitare di un formato diverso, per ora la lasciamo così
+    // Logica di esportazione (semplificata)
     if (forExport) {
-        return settlements; // Questa variabile non è definita qui, ma manteniamo la struttura
+        return debtors.map(d => ({ payer: d.name, recipient: 'Cassa', amount: d.amountToPay }));
     }
 };
+
 // --- Funzioni CRUD e di gestione form ---
-
-// SOSTITUISCI L'INTERA FUNZIONE openEditModal CON QUESTA
-// SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE
-
-// SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE
-
 const openEditModal = (id, type) => {
     const item = getItemFromStore(type, id);
     if (!item) return;
@@ -779,7 +730,6 @@ const openEditModal = (id, type) => {
     let formHtml = `<form id="edit-form" data-id="${id}" data-type="${type}" class="space-y-4">`;
 
     if (type === 'wishlistItem') {
-        // Logica personalizzata per la Lista Desideri
         formHtml += `
             <div>
                 <label for="edit-name" class="block text-sm font-medium">Nome Oggetto</label>
@@ -814,7 +764,7 @@ const openEditModal = (id, type) => {
                 </div>
             </div>
         `;
-    } else if (type === 'futureMovement') { // --- NUOVO BLOCCO QUI ---
+    } else if (type === 'futureMovement') { 
         formHtml += `
             <div>
                 <label for="edit-description" class="block text-sm font-medium">Descrizione</label>
@@ -830,12 +780,22 @@ const openEditModal = (id, type) => {
             </div>
         `;
     } else {
-        // Logica generica per tutti gli altri tipi di elementi
+        // Logica generica
         formHtml += Object.entries(item).map(([key, value]) => {
             if (key === 'id' || typeof value === 'object') return '';
             let inputType = 'text';
             if (typeof value === 'number') inputType = 'number';
             if (key.includes('date') || key.includes('dueDate')) inputType = 'date';
+            
+            if (key === 'payer' && type === 'variableExpense') {
+                const memberOptions = members.map(m => `<option value="${m.name}" ${value === m.name ? 'selected' : ''}>${m.name}</option>`).join('');
+                return `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label>
+                        <select id="edit-${key}" name="${key}" class="w-full p-2 border rounded-lg mt-1 bg-white">
+                            <option value="Cassa Comune" ${value === 'Cassa Comune' ? 'selected' : ''}>Cassa Comune</option>
+                            ${memberOptions}
+                        </select></div>`;
+            }
+            
             return `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label><input type="${inputType}" id="edit-${key}" name="${key}" value="${value}" class="w-full p-2 border rounded-lg mt-1"></div>`;
         }).join('');
     }
@@ -855,8 +815,6 @@ const openEditModal = (id, type) => {
     editModal.classList.remove('hidden');
 
     // --- LISTENER INTERNI ALLA MODALE ---
-
-    // Aggiungi link
     const addLinkBtn = document.getElementById('add-edit-link-btn');
     if (addLinkBtn) {
         addLinkBtn.addEventListener('click', () => {
@@ -872,7 +830,6 @@ const openEditModal = (id, type) => {
         });
     }
 
-    // Rimuovi link (usa event delegation)
     const linksContainer = document.getElementById('edit-links-container');
     if(linksContainer) {
         linksContainer.addEventListener('click', (e) => {
@@ -882,56 +839,68 @@ const openEditModal = (id, type) => {
         });
     }
 
-    // Salva il form
     const editForm = document.getElementById('edit-form');
     if (editForm) {
         editForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const formData = new FormData(editForm);
-            const updatedData = { id: id };
+            const updatedData = {}; // Non includere l'ID qui, usiamo la key
             
             for (const [key, value] of formData.entries()) {
                 const originalValue = item[key];
                 updatedData[key] = (typeof originalValue === 'number' && !isNaN(originalValue)) ? parseFloat(value) : value;
             }
-
-            // Raccogli i link aggiornati
+            
+            let dbRef;
+            
             if (type === 'wishlistItem') {
                 const linkInputs = document.querySelectorAll('.edit-link-input');
                 updatedData.links = Array.from(linkInputs).map(input => input.value.trim()).filter(link => link);
-            } else if (type === 'futureMovement') { // --- NUOVO BLOCCO QUI ---
-                // Aggiorna Firebase direttamente usando l'ID
-                update(ref(database, `futureMovements/${id}`), updatedData);
-            }
-
-            // Trova la chiave/indice dell'oggetto da aggiornare
-            let itemKey = null;
-            const itemIndex = wishlist.findIndex(i => i.id === id);
-            if (itemIndex > -1) {
-                wishlist[itemIndex] = { ...wishlist[itemIndex], ...updatedData };
-                // Firebase usa gli indici dell'array come chiavi
-                itemKey = itemIndex; 
-                update(ref(database, `wishlist/${itemKey}`), updatedData);
+                dbRef = ref(database, `wishlist/${item.id}`); // Assumendo che ID sia la chiave
+            } else if (type === 'futureMovement') {
+                dbRef = ref(database, `futureMovements/${item.id}`);
+            } else if (type === 'variableExpense') {
+                dbRef = ref(database, `variableExpenses/${item.id}`);
+            } else if (type === 'fixedExpense') {
+                dbRef = ref(database, `fixedExpenses/${item.id}`);
+            } else if (type === 'incomeEntry') {
+                dbRef = ref(database, `incomeEntries/${item.id}`);
+            } else if (type === 'cashMovement') {
+                dbRef = ref(database, `cassaComune/movements/${item.id}`);
             }
             
-            alert('Modifiche salvate!');
-            closeEditModal();
+            if(dbRef) {
+                update(dbRef, updatedData);
+                alert('Modifiche salvate!');
+                closeEditModal();
+            } else {
+                alert('Errore: tipo di elemento non riconosciuto per il salvataggio.');
+            }
         });
     }
 
-    // Funzionalità del pulsante Elimina
     const deleteBtn = document.getElementById('delete-edit-btn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', () => {
              if (confirm(`Sei sicuro di voler eliminare questo elemento?`)) {
-                const itemIndex = wishlist.findIndex(i => i.id === id);
-                if (itemIndex > -1) {
-                    // Per rimuovere un elemento da un array in Firebase, è più sicuro riscrivere l'intero array aggiornato
-                    const updatedWishlist = wishlist.filter(i => i.id !== id);
-                    set(ref(database, 'wishlist'), updatedWishlist);
+                let dbRef;
+                if (type === 'wishlistItem') dbRef = ref(database, `wishlist/${item.id}`);
+                else if (type === 'futureMovement') dbRef = ref(database, `futureMovements/${item.id}`);
+                else if (type === 'variableExpense') dbRef = ref(database, `variableExpenses/${item.id}`);
+                else if (type === 'fixedExpense') dbRef = ref(database, `fixedExpenses/${item.id}`);
+                else if (type === 'incomeEntry') dbRef = ref(database, `incomeEntries/${item.id}`);
+                else if (type === 'cashMovement') dbRef = ref(database, `cassaComune/movements/${item.id}`);
+
+                if(dbRef) {
+                    remove(dbRef);
+                    // Logica speciale per ricalcolare il saldo cassa se si elimina un movimento
+                    if (type === 'cashMovement') {
+                         const newBalance = cassaComune.balance + (item.type === 'deposit' ? -item.amount : item.amount);
+                         update(cassaComuneRef, { balance: newBalance });
+                    }
+                    alert('Elemento eliminato.');
+                    closeEditModal();
                 }
-                alert('Elemento eliminato.');
-                closeEditModal();
              }
         });
     }
@@ -943,7 +912,6 @@ const closeEditModal = () => {
     if (editModal) editModal.classList.add('hidden');
 };
 
-// 2. SOSTITUISCI QUESTA FUNZIONE
 
 function handleAddMovement() {
     const movementType = document.getElementById('cash-movement-type').value;
@@ -960,12 +928,11 @@ function handleAddMovement() {
         return alert("Errore: Prelievo superiore al saldo disponibile in cassa.");
     }
 
-    // --- LOGICA DI SALVATAGGIO AGGIORNATA ---
-    const newMovementId = Date.now().toString();
+    const newMovementRef = push(ref(database, 'cassaComune/movements'));
+    const newMovementId = newMovementRef.key;
     const newMovement = { id: newMovementId, type: movementType, amount, member, date, description };
     const newBalance = (movementType === 'deposit') ? (cassaComune.balance || 0) + amount : (cassaComune.balance || 0) - amount;
 
-    // Prepara l'aggiornamento per Firebase, salvando il movimento come oggetto
     const updates = {};
     updates[`cassaComune/movements/${newMovementId}`] = newMovement;
     updates[`cassaComune/balance`] = newBalance;
@@ -974,97 +941,14 @@ function handleAddMovement() {
 
     alert(`Movimento di ${movementType} registrato. Nuovo saldo: €${newBalance.toFixed(2)}`);
     document.getElementById('cash-form-section').classList.add('hidden');
+    document.getElementById('cash-movement-amount').value = '';
+    document.getElementById('cash-movement-description').value = '';
 }
 
-function addExpenseAsAdmin(expenseData = null) {
-    const isRequest = !!expenseData;
-    let newExpense;
-
-    if (isRequest) {
-        newExpense = {
-            id: Date.now().toString(),
-            date: expenseData.date,
-            payer: expenseData.payer,
-            amount: expenseData.amount,
-            category: expenseData.category,
-            description: expenseData.description
-        };
-    } else {
-        const payer = document.getElementById('payer').value;
-        const date = document.getElementById('expense-date').value;
-        const amount = parseFloat(document.getElementById('amount').value);
-        const category = document.getElementById('category').value;
-        const description = document.getElementById('description').value;
-
-        if (!payer || !date || isNaN(amount) || amount <= 0 || !category || !description) {
-            alert("Compila tutti i campi obbligatori per la spesa.");
-            return;
-        }
-
-        newExpense = {
-            id: Date.now().toString(),
-            date: date,
-            payer: payer,
-            amount: amount,
-            category: category,
-            description: description
-        };
-    }
-
-    variableExpenses.push(newExpense);
-    saveDataToFirebase();
-    alert(`Spesa ${isRequest ? 'approvata e ' : ''}aggiunta con successo.`);
-    if (!isRequest) document.getElementById('expense-form-section').classList.add('hidden');
-};
-
-function submitExpenseRequest() {
-    const payer = document.getElementById('payer').value;
-    const date = document.getElementById('expense-date').value;
-    const amount = parseFloat(document.getElementById('amount').value);
-    const category = document.getElementById('category').value;
-    const description = document.getElementById('description').value;
-
-    if (!payer || !date || isNaN(amount) || amount <= 0 || !category || !description) {
-        alert("Compila tutti i campi obbligatori per la richiesta di spesa.");
-        return;
-    }
-
-    const newRequest = {
-        id: Date.now().toString(),
-        requesterUid: currentUser.uid,
-        requesterName: currentUser.email.split('@')[0], // Nome utente semplificato
-        date: date,
-        payer: payer,
-        amount: amount,
-        category: category,
-        description: description,
-        status: 'pending'
-    };
-
-    const newKey = push(expenseRequestsRef).key;
-    expenseRequests[newKey] = newRequest;
-
-    saveDataToFirebase();
-    alert("Richiesta di spesa inviata all'amministratore per approvazione.");
-    document.getElementById('expense-form-section').classList.add('hidden');
-};
-
-function createLinkedExpense(payer, date, amount, description, category) {
-    const newExpense = {
-        id: Date.now().toString(),
-        date: date,
-        payer: payer,
-        amount: amount,
-        category: category,
-        description: description
-    };
-    variableExpenses.push(newExpense);
-    saveDataToFirebase();
-};
-
 function handleExportData() { 
+    // Ricostruisce l'oggetto dati per l'esportazione
     const dataToExport = {
-        members: members,
+        members: members, // Questo ora è un array di oggetti {id, name, ...}
         variableExpenses: variableExpenses,
         fixedExpenses: fixedExpenses,
         incomeEntries: incomeEntries,
@@ -1097,19 +981,29 @@ function handleImportData(event) {
             const importedData = JSON.parse(e.target.result);
             if (!confirm("Sei sicuro di voler SOVRASCRIVERE i dati attuali con questo backup? Questa azione è irreversibile!")) return;
             
-            // Sovrascrivi tutti gli store globali con i dati importati
-            members = importedData.members || [];
-            variableExpenses = importedData.variableExpenses || [];
-            fixedExpenses = importedData.fixedExpenses || [];
-            incomeEntries = importedData.incomeEntries || [];
-            wishlist = importedData.wishlist || [];
-            futureMovements = importedData.futureMovements || [];
-            pendingPayments = importedData.pendingPayments || [];
-            cassaComune = importedData.cassaComune || { balance: 0, movements: [] };
-            expenseRequests = importedData.expenseRequests || {};
+            // --- LOGICA DI IMPORTAZIONE MIGLIORATA ---
+            // Ricostruisce gli oggetti da array, se necessario
+            const formatAsObject = (arr) => arr.reduce((acc, item) => {
+                if(item.id) acc[item.id] = item;
+                return acc;
+            }, {});
 
-            saveDataToFirebase();
+            // Prepara gli aggiornamenti
+            const updates = {};
+            updates['members'] = formatAsObject(importedData.members || []); // Salva 'members' come oggetto (la nuova struttura)
+            updates['variableExpenses'] = formatAsObject(importedData.variableExpenses || []);
+            updates['fixedExpenses'] = formatAsObject(importedData.fixedExpenses || []);
+            updates['incomeEntries'] = formatAsObject(importedData.incomeEntries || []);
+            updates['wishlist'] = formatAsObject(importedData.wishlist || []);
+            updates['futureMovements'] = formatAsObject(importedData.futureMovements || []);
+            updates['pendingPayments'] = formatAsObject(importedData.pendingPayments || []);
+            updates['cassaComune'] = importedData.cassaComune || { balance: 0, movements: {} };
+            updates['expenseRequests'] = importedData.expenseRequests || {};
+            
+            set(ref(database), updates); // Sovrascrive l'intero DB con i nuovi dati
+            
             alert("Dati importati con successo e salvati su Firebase! La pagina verrà aggiornata.");
+            location.reload(); // Ricarica per vedere i nuovi dati
         } catch (error) {
             console.error("Errore durante l'importazione del file JSON:", error);
             alert("Errore nell'importazione: file non valido o corrotto.");
@@ -1120,15 +1014,27 @@ function handleImportData(event) {
 
 function exportToExcel() { 
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Riepilogo Finanze');
     
-    // Aggiungi logica di esportazione...
-    alert("Esportazione Excel avviata. Controlla il download del file.");
-
+    // Sheet 1: Riepilogo
+    const summarySheet = workbook.addWorksheet('Riepilogo');
+    summarySheet.addRow(['Voce', 'Importo (€)']);
+    summarySheet.addRow(['Totale Spese Fisse', fixedExpenses.reduce((s, e) => s + (e.amount || 0), 0)]);
+    summarySheet.addRow(['Totale Spese Variabili', variableExpenses.reduce((s, e) => s + (e.amount || 0), 0)]);
+    summarySheet.addRow(['Totale Entrate', incomeEntries.reduce((s, e) => s + (e.amount || 0), 0)]);
+    summarySheet.addRow(['Saldo Cassa Comune', cassaComune.balance]);
+    
+    // Sheet 2: Conguaglio
     const settlements = calculateAndRenderSettlement(true);
     const settlementSheet = workbook.addWorksheet('Conguaglio');
     settlementSheet.addRow(['Chi paga', 'Chi riceve', 'Importo (€)']);
     settlements.forEach(s => settlementSheet.addRow([s.payer, s.recipient, s.amount.toFixed(2)]));
+
+    // Sheet 3: Spese Variabili
+    const varSheet = workbook.addWorksheet('Spese Variabili');
+    varSheet.addRow(['Data', 'Pagante', 'Importo (€)', 'Categoria', 'Descrizione']);
+    variableExpenses.forEach(e => varSheet.addRow([displayDate(e.date), e.payer, e.amount, e.category, e.description]));
+    
+    // ... (Aggiungi altri sheet se vuoi) ...
 
     workbook.xlsx.writeBuffer().then(buffer => {
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -1144,26 +1050,21 @@ function exportToExcel() {
 }
 
 
-// --- Riferimenti DOM (Per gli Event Listeners) ---
-
-
-
-// Imposta le date di default
-const today = new Date().toISOString().split('T')[0];
-if (expenseDateInput) expenseDateInput.value = today;
-if (incomeDateInput) incomeDateInput.value = today;
-if (futureMovementDueDateInput) futureMovementDueDateInput.value = today;
-
-
 // --- Event Listeners ---
-
-if (monthFilter) monthFilter.addEventListener('change', updateDashboardView);
+if (monthFilter) monthFilter.addEventListener('change', () => {
+    // Quando il filtro cambia, aggiorna solo il conguaglio e i grafici
+    calculateAndRenderSettlement(false);
+    if (typeof Chart !== 'undefined') {
+        initializeCharts();
+    }
+});
 
 if (addMemberBtn) addMemberBtn.addEventListener('click', () => {
     const name = newMemberNameInput.value.trim();
     if (name && !members.some(m => m.name === name)) {
-        members.push({ id: Date.now().toString(), name: name });
-        saveDataToFirebase();
+        // NON aggiungere più a 'members'. Gestisci l'aggiunta di membri
+        // solo tramite l'autenticazione e il nodo /users e /members
+        alert("Funzione deprecata. I membri vengono aggiunti tramite la gestione utenti (autenticazione).");
         newMemberNameInput.value = '';
     } else if (name) {
         alert("Membro già esistente.");
@@ -1176,51 +1077,36 @@ if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
     const description = document.getElementById('pending-payment-description').value.trim();
 
     if (!member || isNaN(amount) || amount <= 0 || !description) {
-        alert("Compila tutti i campi obbligatori.");
-        return;
+        return alert("Compila tutti i campi obbligatori.");
     }
 
-    pendingPayments.push({
-        id: Date.now().toString(),
+    const newPaymentRef = push(pendingPaymentsRef);
+    set(newPaymentRef, {
+        id: newPaymentRef.key,
         member: member,
         amount: amount,
         description: description,
-        date: today
+        date: new Date().toISOString().split('T')[0]
     });
-    saveDataToFirebase();
+    
     document.getElementById('pending-payment-form-section').classList.add('hidden');
     alert("Richiesta quota aggiunta.");
 });
 
-// 1. SOSTITUISCI QUESTO BLOCCO
-
-// 2. SOSTITUISCI QUESTO BLOCCO
-
-// SOSTITUISCI QUESTO INTERO BLOCCO
-
-// SOSTITUISCI QUESTO INTERO BLOCCO
-
-// 2. SOSTITUISCI QUESTO BLOCCO
 
 if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
-    const descriptionInput = document.getElementById('future-movement-description');
-    const costInput = document.getElementById('future-movement-cost');
-    const dueDateInput = document.getElementById('future-movement-due-date');
-
-    const description = descriptionInput.value.trim();
-    const totalCost = parseFloat(costInput.value);
-    const dueDate = dueDateInput.value;
+    const description = document.getElementById('future-movement-description').value.trim();
+    const totalCost = parseFloat(document.getElementById('future-movement-cost').value);
+    const dueDate = document.getElementById('future-movement-due-date').value;
 
     if (!description || isNaN(totalCost) || totalCost <= 0 || !dueDate) {
-        alert("Compila tutti i campi obbligatori (Descrizione, Costo, Data).");
-        return;
+        return alert("Compila tutti i campi obbligatori (Descrizione, Costo, Data).");
     }
     if (!members || members.length === 0) {
          alert("Errore: Non ci sono membri registrati per calcolare le quote.");
          return;
     }
 
-    // Calcola la quota iniziale per persona
     const costPerPerson = totalCost / members.length;
     let shares = [];
     try {
@@ -1234,29 +1120,22 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
         return;
     }
 
-    if (!Array.isArray(shares) || shares.length !== members.length) { // Controllo più stretto
-        alert("Errore: Impossibile creare la suddivisione delle quote.");
-        return;
-    }
-
-    // Prepara i dati da salvare
+    const newMovementRef = push(futureMovementsRef); 
     const newMovementData = {
+        id: newMovementRef.key,
         description: description,
         totalCost: totalCost,
         dueDate: dueDate,
         shares: shares,
-        isExpanded: false // Inizia chiuso
+        isExpanded: false
     };
 
-    const newMovementRef = push(futureMovementsRef); // Ottiene il riferimento e la chiave
-    newMovementData.id = newMovementRef.key; // Aggiunge l'ID ai dati
-
-    set(newMovementRef, newMovementData) // Salva i dati completi
+    set(newMovementRef, newMovementData)
         .then(() => {
             alert("Movimento futuro pianificato con quote iniziali.");
-            descriptionInput.value = '';
-            costInput.value = '';
-            dueDateInput.value = new Date().toISOString().split('T')[0];
+            document.getElementById('future-movement-description').value = '';
+            document.getElementById('future-movement-cost').value = '';
+            document.getElementById('future-movement-due-date').value = new Date().toISOString().split('T')[0];
             document.getElementById('future-movement-form-section').classList.add('hidden');
         })
         .catch(error => {
@@ -1264,21 +1143,32 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
             alert("Errore durante l'aggiunta del movimento futuro.");
         });
 });
+
 if (wishlistNewLinkInput && addWishlistLinkBtn) addWishlistLinkBtn.addEventListener('click', () => {
     const input = wishlistNewLinkInput;
     if(input.value.trim()){
-        if(wishlist.length === 0) wishlist.push({id: '1', name: "Articoli Generici", cost: 0, priority: "2-Media", links: []});
-        wishlist[0].links.push(input.value.trim());
+        const newLink = input.value.trim();
+        // Cerca un item "Generico" o crea il primo item
+        let genericItem = wishlist.find(item => item.name === "Articoli Generici");
+        if (!genericItem) {
+            const newWishRef = push(wishlistRef);
+            genericItem = {id: newWishRef.key, name: "Articoli Generici", cost: 0, priority: "1-Bassa", links: [newLink]};
+            set(newWishRef, genericItem);
+        } else {
+            const updatedLinks = [...(genericItem.links || []), newLink];
+            update(ref(database, `wishlist/${genericItem.id}`), { links: updatedLinks });
+        }
         input.value = '';
-        saveDataToFirebase();
     }
 });
+
 if (wishlistLinksContainer) wishlistLinksContainer.addEventListener('click', (e) => {
     if(e.target.matches('.remove-wishlist-link-btn')){
         const linkToRemove = e.target.dataset.link;
-        if(wishlist.length > 0 && wishlist[0].links) {
-            wishlist[0].links = wishlist[0].links.filter(link => link !== linkToRemove);
-            saveDataToFirebase();
+        let genericItem = wishlist.find(item => item.name === "Articoli Generici");
+        if(genericItem && genericItem.links) {
+            const updatedLinks = genericItem.links.filter(link => link !== linkToRemove);
+            update(ref(database, `wishlist/${genericItem.id}`), { links: updatedLinks });
         }
     }
 });
@@ -1290,21 +1180,22 @@ if (addWishlistItemBtn) addWishlistItemBtn.addEventListener('click', () => {
     const priority = document.getElementById('wishlist-item-priority').value;
 
     if (!name || isNaN(cost) || cost <= 0) {
-        alert("Compila nome e costo stimato.");
-        return;
+        return alert("Compila nome e costo stimato.");
     }
 
-    wishlist.push({
-        id: Date.now().toString(),
+    const newWishRef = push(wishlistRef);
+    set(newWishRef, {
+        id: newWishRef.key,
         name: name,
         cost: cost,
         priority: priority,
         links: []
     });
-    saveDataToFirebase();
+    
     document.getElementById('wishlist-form-section').classList.add('hidden');
     alert("Articolo aggiunto alla lista desideri.");
 });
+
 if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
     const date = document.getElementById('income-date').value;
     const amount = parseFloat(document.getElementById('income-amount').value);
@@ -1312,26 +1203,22 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
     const membersInvolved = Array.from(document.querySelectorAll('#income-members-checkboxes input:checked')).map(cb => cb.value);
 
     if (!date || isNaN(amount) || amount <= 0 || !description || membersInvolved.length === 0) {
-        alert("Compila tutti i campi e seleziona almeno un membro.");
-        return;
+        return alert("Compila tutti i campi e seleziona almeno un membro.");
     }
-
-    incomeEntries.push({
-        id: Date.now().toString(),
+    
+    const newIncomeRef = push(incomeRef);
+    set(newIncomeRef, {
+        id: newIncomeRef.key,
         date: date,
         amount: amount,
         description: description,
-        membersInvolved: membersInvolved // <-- CORRETTO
+        membersInvolved: membersInvolved
     });
-    saveDataToFirebase();
+
     document.getElementById('income-form-section').classList.add('hidden');
     alert("Entrata aggiunta.");
 });
 
-
-// SOSTITUISCI IL VECCHIO BLOCCO if (addExpenseBtn) CON QUESTO
-// SOSTITUISCI DI NUOVO L'INTERO BLOCCO if (addExpenseBtn) CON QUESTA VERSIONE
-// SOSTITUISCI QUESTO INTERO BLOCCO DI CODICE NEL TUO FILE
 
 if (addExpenseBtn) {
     if (currentUser.role === 'admin') {
@@ -1350,53 +1237,59 @@ if (addExpenseBtn) {
         if (!payer || !date || isNaN(amount) || amount <= 0 || !category || !description) {
             return alert("Compila tutti i campi obbligatori.");
         }
+        
+        // Trova l'ID del membro pagante (se non è Cassa Comune)
+        const payerMember = members.find(m => m.name === payer);
+        const payerId = (payer === 'Cassa Comune') ? 'Cassa Comune' : payerMember?.id;
 
         if (currentUser.role === 'admin') {
-            // --- INIZIO LOGICA MODIFICATA ---
             if (payer === 'Cassa Comune') {
-                // Se il pagante è la Cassa Comune, esegui la logica specifica
                 if ((cassaComune.balance || 0) < amount) {
-                    return alert("Errore: Fondi insufficienti nella cassa comune per questa spesa.");
+                    return alert("Errore: Fondi insufficienti nella cassa comune.");
                 }
 
-                // 1. Crea la nuova spesa
                 const newExpenseRef = push(varExpensesRef);
-                const newExpense = { id: newExpenseRef.key, date, payer, amount, category, description };
+                const newExpense = { id: newExpenseRef.key, date, payer, amount, category, description, payerId };
 
-                // 2. Crea il movimento di prelievo dalla cassa
-                const newMovementId = Date.now().toString(); // Usiamo un ID semplice per il movimento
+                const newMovementRef = push(ref(database, 'cassaComune/movements'));
                 const newMovement = {
-                    id: newMovementId,
+                    id: newMovementRef.key,
                     type: 'withdrawal',
                     amount: amount,
-                    member: 'Cassa',
+                    member: 'Cassa', 
                     date: date,
                     description: `Spesa: ${description}`
                 };
 
-                // 3. Calcola il nuovo bilancio della cassa
                 const newBalance = (cassaComune.balance || 0) - amount;
-
-                // 4. Prepara l'aggiornamento atomico per Firebase (aggiorna tutto insieme)
                 const updates = {};
                 updates[`variableExpenses/${newExpenseRef.key}`] = newExpense;
                 updates[`cassaComune/balance`] = newBalance;
-                updates[`cassaComune/movements/${newMovementId}`] = newMovement;
+                updates[`cassaComune/movements/${newMovementRef.key}`] = newMovement;
 
                 update(ref(database), updates);
-                alert('Spesa pagata dalla Cassa Comune aggiunta con successo. Il bilancio della cassa è stato aggiornato.');
+                alert('Spesa pagata dalla Cassa Comune aggiunta.');
 
             } else {
-                // Se il pagante è una persona, la logica è più semplice
+                // Pagante è un membro, Admin lo aggiunge direttamente
                 const newExpenseRef = push(varExpensesRef);
-                set(newExpenseRef, { id: newExpenseRef.key, date, payer, amount, category, description });
+                set(newExpenseRef, { id: newExpenseRef.key, date, payer, amount, category, description, payerId });
                 alert('Spesa aggiunta con successo.');
             }
-            // --- FINE LOGICA MODIFICATA ---
         } else {
-            // Logica per gli utenti non-admin (invariata)
+            // Utente non-admin invia richiesta
             const newRequestRef = push(expenseRequestsRef);
-            set(newRequestRef, { requesterUid: currentUser.uid, requesterName: currentUser.email.split('@')[0], date, payer, amount, category, description, status: 'pending' });
+            set(newRequestRef, { 
+                requesterUid: currentUser.uid, 
+                requesterName: currentUser.name, // USA IL NOME DA AUTH-GUARD
+                date, 
+                payer, 
+                payerId,
+                amount, 
+                category, 
+                description, 
+                status: 'pending' 
+            });
             alert("Richiesta di spesa inviata.");
         }
         
@@ -1406,20 +1299,19 @@ if (addExpenseBtn) {
 if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
     const description = document.getElementById('fixed-desc').value.trim();
     const amount = parseFloat(document.getElementById('fixed-amount').value);
-    // const payer = document.getElementById('fixed-payer').value; // Implementazione omessa nel form HTML, usa solo descrizione e importo
 
     if (!description || isNaN(amount) || amount <= 0) {
-        alert("Compila descrizione e importo per la spesa fissa.");
-        return;
+        return alert("Compila descrizione e importo.");
     }
 
-    fixedExpenses.push({
-        id: Date.now().toString(),
+    const newFixedRef = push(fixedExpensesRef);
+    set(newFixedRef, {
+        id: newFixedRef.key,
         description: description,
         amount: amount,
         payer: 'Tutti' // Default
     });
-    saveDataToFirebase();
+
     document.getElementById('fixed-expenses-section').classList.add('hidden');
     alert("Spesa fissa aggiunta.");
 });
@@ -1429,54 +1321,38 @@ if (quickActionsContainer) quickActionsContainer.addEventListener('click', (e) =
         const targetId = e.target.dataset.formId;
         const targetForm = document.getElementById(targetId);
         
-        // Chiudi tutti i form
         document.querySelectorAll('.action-form').forEach(form => form.classList.add('hidden'));
 
-        // Apri il form selezionato
         if (targetForm) {
             targetForm.classList.remove('hidden');
         }
     }
 });
 
-// SOSTITUISCI TUTTI I VECCHI BLOCCHI document.addEventListener('click',...) CON QUESTO UNICO BLOCCO
-
-// SOSTITUISCI TUTTI I VECCHI BLOCCHI 'addEventListener('click', ...)' CON QUESTO UNICO BLOCCO
-
 document.addEventListener('click', (e) => {
     const target = e.target;
-
-    // --- Gestione Espansione/Collasso Movimenti Futuri ---
-    // Cerca l'HEADER della card cliccata (l'elemento con data-movement-id)
     const movementCardHeader = target.closest('[data-movement-id]');
-    // Cerca l'intera CARD del movimento futuro
-    const movementCard = target.closest('.bg-blue-50'); // Usa una classe specifica della card
+    const movementCard = target.closest('.bg-blue-50'); 
 
     if (movementCardHeader && movementCard) {
-        // Controlla se il click è avvenuto DIRETTAMENTE sull'header
-        // E NON su un pulsante o input all'interno della card
         if (movementCardHeader === target || movementCardHeader.contains(target)) {
-            if (!target.matches('button, input, a, .open-edit-modal-btn, .delete-future-movement-btn')) {
+            if (!target.matches('button, input, a, .open-edit-modal-btn, .delete-future-movement-btn, .future-share-amount, .future-share-checkbox')) {
                 const movementId = movementCardHeader.dataset.movementId;
                 const sharesContainer = document.getElementById(`shares-${movementId}`);
                 if (sharesContainer) {
                     sharesContainer.classList.toggle('hidden');
                     const movement = futureMovements.find(m => m && m.id === movementId);
                     if (movement) {
-                        movement.isExpanded = !sharesContainer.classList.contains('hidden');
-                        // Aggiorna solo lo stato isExpanded nel DB
-                        update(ref(database, `futureMovements/${movementId}`), { isExpanded: movement.isExpanded })
+                        const isExpanded = !sharesContainer.classList.contains('hidden');
+                        update(ref(database, `futureMovements/${movementId}`), { isExpanded: isExpanded })
                             .catch(error => console.error("Errore aggiornando isExpanded:", error));
                     }
                 }
-                // Impedisce che il click si propaghi ad altri listener (importante!)
                 e.stopPropagation(); 
-                return; // Esce dalla funzione per non eseguire altri controlli
+                return;
             }
         }
     }
-
-    // --- Altre Azioni Gestite dal Click ---
 
     if (target.matches('.open-edit-modal-btn')) {
         openEditModal(target.dataset.id, target.dataset.type);
@@ -1486,7 +1362,15 @@ document.addEventListener('click', (e) => {
         const req = expenseRequests[key];
         if (req) {
             const newExpenseRef = push(varExpensesRef);
-            set(newExpenseRef, { id: newExpenseRef.key, payer: req.payer, date: req.date, amount: req.amount, category: req.category, description: `[RICHIESTA] ${req.description}` });
+            set(newExpenseRef, { 
+                id: newExpenseRef.key, 
+                payer: req.payer, 
+                payerId: req.payerId,
+                date: req.date, 
+                amount: req.amount, 
+                category: req.category, 
+                description: `[RICHIESTA] ${req.description}` 
+            });
             update(ref(database, `expenseRequests/${key}`), { status: 'approved' });
         }
     } 
@@ -1516,7 +1400,6 @@ document.addEventListener('click', (e) => {
                     alert('Movimento cassa eliminato e bilancio ricalcolato.');
                 }
             }
-            // Aggiungere qui logica per altri tipi se necessario
         }
     } 
     else if (target.matches('.close-form-btn')) {
@@ -1540,23 +1423,16 @@ document.addEventListener('click', (e) => {
             settlementContainer.classList.add('hidden');
         }
     }
-}); // Fine dell'unico listener per i click
-
-// Gestione Modale (Edit, Save) - Logica dettagliata nell'openEditModal
-
-// SOSTITUISCI LA VECCHIA RIGA "if (calculateBtn)..." CON QUESTO BLOCCO
+}); 
 
 if (calculateBtn) {
     calculateBtn.addEventListener('click', () => {
         const settlementContainer = document.getElementById('settlement-container');
         if (settlementContainer) {
-            // Se il riquadro è nascosto...
             if (settlementContainer.classList.contains('hidden')) {
-                // ...calcola i saldi e mostralo.
                 calculateAndRenderSettlement(false);
                 settlementContainer.classList.remove('hidden');
             } else {
-                // ...altrimenti, se è già visibile, nascondilo.
                 settlementContainer.classList.add('hidden');
             }
         }
@@ -1567,58 +1443,39 @@ if (exportDataBtn) exportDataBtn.addEventListener('click', handleExportData);
 if (importDataBtn) importDataBtn.addEventListener('click', () => importFileInput.click());
 if (importFileInput) importFileInput.addEventListener('change', handleImportData);
 
-
-// --- App Initialization (PUNTO DI INNESTO DEL FIX) ---
-// SOSTITUISCI TUTTI I VECCHI BLOCCHI document.addEventListener('click',...) CON QUESTO
-// 2. SOSTITUISCI L'INTERO BLOCCO document.addEventListener('change', ...) CON QUESTO
-
-// 3. SOSTITUISCI QUESTO BLOCCO
-
-// 2. SOSTITUISCI QUESTO BLOCCO
-
-// 4. SOSTITUISCI QUESTO BLOCCO
-
 document.addEventListener('change', (e) => {
     const target = e.target;
     
-    // Logica per i checkbox delle quote future (usa ID)
     if (target.matches('.future-share-checkbox')) {
         const movementId = target.dataset.movementId;
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const isChecked = target.checked;
 
-        // Trova il movimento nel database usando il suo ID come chiave
         if (movementId && !isNaN(shareIndex)) {
             update(ref(database, `futureMovements/${movementId}/shares/${shareIndex}`), { paid: isChecked })
                 .catch(error => console.error("Errore aggiornando stato quota:", error));
         }
     }
-
-    // Logica per la modifica dell'importo delle quote future (usa ID)
     else if (target.matches('.future-share-amount')) {
         const movementId = target.dataset.movementId;
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const newAmount = parseFloat(target.value);
 
         if (movementId && !isNaN(shareIndex) && !isNaN(newAmount)) {
-            // Ottieni il movimento locale per ricalcolare il totale (non essenziale, ma robusto)
             const movement = futureMovements.find(m => m.id === movementId);
             if (movement && movement.shares && movement.shares[shareIndex]) {
-                 // Aggiorna l'importo localmente per il ricalcolo immediato del totale
-                movement.shares[shareIndex].amount = newAmount;
-                const newTotalCost = movement.shares.reduce((sum, s) => sum + (s.amount || 0), 0);
-
-                // Aggiorna Firebase con update() per il percorso specifico
-                const updates = {};
-                updates[`futureMovements/${movementId}/shares/${shareIndex}/amount`] = newAmount;
-                updates[`futureMovements/${movementId}/totalCost`] = newTotalCost; // Aggiorna anche il totale
-
-                update(ref(database), updates)
+                 movement.shares[shareIndex].amount = newAmount;
+                 const newTotalCost = movement.shares.reduce((sum, s) => sum + (s.amount || 0), 0);
+                 const updates = {};
+                 updates[`futureMovements/${movementId}/shares/${shareIndex}/amount`] = newAmount;
+                 updates[`futureMovements/${movementId}/totalCost`] = newTotalCost; 
+                 update(ref(database), updates)
                     .catch(error => console.error("Errore aggiornando importo quota:", error));
             }
         }
     }
 });
+
 document.addEventListener('authReady', () => {
     if (document.getElementById('member-count')) {
         console.log("Auth pronto, avvio la pagina finanze...");
@@ -1630,47 +1487,3 @@ document.addEventListener('authReady', () => {
         if (incomeDateInput) incomeDateInput.value = today;
     }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
