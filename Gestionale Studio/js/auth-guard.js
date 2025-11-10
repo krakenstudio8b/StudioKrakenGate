@@ -1,87 +1,116 @@
-// js/auth-guard.js (VERSIONE CORRETTA E MODIFICATA per includere il NOME)
+// js/auth-guard.js (VERSIONE COMPLETA E CORRETTA CON NUOVA LOGICA PERMESSI)
 
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 import { ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-// Importa le istanze di auth e database GIA' INIZIALIZZATE dal tuo file di configurazione
 import { auth, database } from './firebase-config.js';
 
 const logoutBtn = document.getElementById('logout-btn');
 const adminPanelLink = document.getElementById('admin-panel-link');
 
-// Esportiamo un oggetto mutabile per i dettagli dell'utente
 export let currentUser = {};
-
-// Logica per attendere che l'autenticazione sia completa
 let authReadyFired = false;
+
+// --- NUOVA LOGICA PERMESSI ---
+// Elenco delle pagine e i ruoli che NON possono vederle
+const pagePermissions = {
+    // Solo 'admin' può vedere le finanze
+    'finanze.html': ['user', 'calendar_admin'], 
+    
+    // 'admin' e 'calendar_admin' possono vedere l'admin panel
+    'admin.html': ['user'] 
+};
+
+function getCurrentPage() {
+    const path = window.location.pathname;
+    const page = path.split("/").pop();
+    // Gestisce il caso in cui sei su "index.html" o sulla root "/"
+    return page === '' ? 'index.html' : page;
+}
+// --- FINE NUOVA LOGICA ---
+
+
 onAuthStateChanged(auth, async (user) => {
-    if (authReadyFired) return; // Evita esecuzioni multiple
+    if (authReadyFired) return; 
+    const currentPage = getCurrentPage();
 
     if (!user) {
-        // Se non c'è utente, torna al login
-        if (!window.location.pathname.endsWith('login.html')) {
+        // Utente NON LOGGATO
+        // Se la pagina non è 'login.html', rimanda al login
+        if (currentPage !== 'login.html') {
             window.location.href = 'login.html';
         }
     } else {
-        // Se c'è un utente loggato, popoliamo il nostro oggetto currentUser
+        // Utente LOGGATO
         currentUser.uid = user.uid;
         currentUser.email = user.email;
 
-        // --- MODIFICA INIZIA QUI ---
-        // Ora controlliamo il suo ruolo E IL SUO NOME nel database
         try {
-            // 1. Definiamo i riferimenti
-            const userRef = ref(database, 'users/' + user.uid); // Per il ruolo
-            const memberRef = ref(database, 'members/' + user.uid); // Per il nome
+            // Recupera ruolo e nome in parallelo
+            const userRef = ref(database, 'users/' + user.uid);
+            const memberRef = ref(database, 'members/' + user.uid);
 
-            // 2. Chiamiamo entrambi in parallelo per efficienza
             const [userSnapshot, memberSnapshot] = await Promise.all([
                 get(userRef),
                 get(memberRef)
             ]);
 
-            // 3. Elaboriamo il ruolo (da /users)
+            // Assegna ruolo (default 'user')
             if (userSnapshot.exists()) {
                 currentUser.role = userSnapshot.val().role || 'user';
             } else {
                 currentUser.role = 'user';
             }
             
-            // 4. Elaboriamo il nome (da /members)
+            // Assegna nome (fallback a email)
             if (memberSnapshot.exists() && memberSnapshot.val().name) {
-                // Trovato! Aggiungilo all'oggetto
                 currentUser.name = memberSnapshot.val().name;
             } else {
-                // Fallback se l'utente non è in /members o non ha un nome
-                currentUser.name = user.email; // Usiamo l'email come nome di riserva
-                console.warn(`Nome non trovato per l'utente ${user.uid} in /members. Uso l'email come fallback.`);
+                currentUser.name = user.email; 
             }
-            // --- MODIFICA FINISCE QUI ---
+
+            console.log(`Accesso effettuato come: ${currentUser.name} (Ruolo: ${currentUser.role})`);
+
+            // --- NUOVO BLOCCO DI CONTROLLO PERMESSI ---
+            const forbiddenRoles = pagePermissions[currentPage];
+            if (forbiddenRoles && forbiddenRoles.includes(currentUser.role)) {
+                // L'utente è su una pagina che non può vedere
+                console.warn(`Accesso negato a ${currentPage} per ruolo: ${currentUser.role}`);
+                alert("Non hai i permessi per visualizzare questa pagina.");
+                window.location.href = 'index.html'; // Rimanda alla home
+                return; // Interrompi l'esecuzione
+            }
+            // --- FINE BLOCCO CONTROLLO PERMESSI ---
+
+
+            // Mostra il link al pannello admin (logica esistente)
+            if (adminPanelLink) {
+                if (currentUser.role === 'admin' || currentUser.role === 'calendar_admin') {
+                    adminPanelLink.classList.remove('hidden');
+                } else {
+                    adminPanelLink.classList.add('hidden');
+                }
+            }
+            
+            // Se sei loggato e vai su login.html, ti rimanda alla home
+            if (currentPage === 'login.html') {
+                 window.location.href = 'index.html';
+                 return;
+            }
 
         } catch (error) {
             console.error("Errore nel recuperare i dati dell'utente (ruolo/nome):", error);
-            currentUser.role = 'user'; // Imposta un ruolo di fallback
-            currentUser.name = user.email; // Imposta un nome di fallback
-        }
-
-        console.log(`Accesso effettuato come: ${currentUser.name} (Ruolo: ${currentUser.role})`);
-
-        // Mostra il link al pannello admin se l'utente ha i permessi
-        if (adminPanelLink) {
-            if (currentUser.role === 'admin' || currentUser.role === 'calendar_admin') {
-                adminPanelLink.classList.remove('hidden');
-            } else {
-                adminPanelLink.classList.add('hidden');
-            }
+            // In caso di errore, esegui il logout per sicurezza
+            signOut(auth);
+            return;
         }
     }
 
-    // A prescindere dall'esito, l'autenticazione è "pronta".
-    // Lancia un evento globale per avvisare gli altri script che possono partire.
+    // Se tutti i controlli sono passati, spara l'evento
     authReadyFired = true;
     document.dispatchEvent(new CustomEvent('authReady'));
 });
 
-// Listener per il bottone di logout
+// Listener per il bottone di logout (logica esistente)
 if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
         signOut(auth).catch((error) => console.error("Errore durante il logout:", error));
