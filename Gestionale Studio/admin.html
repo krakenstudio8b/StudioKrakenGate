@@ -47,15 +47,38 @@
             </div>
         </section>
         
+        
         <section id="user-management-section" class="card hidden">
             <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Gestione Ruoli Utenti</h2>
             <div id="users-list" class="space-y-3">
                 <p class="text-gray-500">Caricamento utenti...</p>
             </div>
         </section>
-    </main>
 
+        <section id="cleaning-management-section" class="card hidden"> <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Gestione Turni Pulizie</h2>
+            <p class="text-gray-600 mb-4">
+                Genera i turni di pulizia per le prossime settimane.
+                La rotazione di membri e zone è automatica.
+            </p>
+    
+            <div class="mb-4">
+                <label for="week-select" class="block text-sm font-medium mb-1">Seleziona la settimana da generare:</label>
+                <select id="week-select" class="w-full p-2 border rounded-lg bg-white">
+                    </select>
+            </div>
+            
+            <button id="generate-cleaning-btn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors shadow disabled:bg-gray-400">
+                Genera Turni
+            </button>
+    
+            <div id="generation-feedback" class="mt-4 text-sm"></div>
+        </section>
+
+    </main>
+    
+    
     <script type="module" src="js/admin.js"></script>
     <script type="module" src="js/auth-guard.js"></script>
+    
 </body>
 </html>
