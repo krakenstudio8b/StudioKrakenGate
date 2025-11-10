@@ -1,7 +1,6 @@
 // js/finanze.js (VERSIONE COMPLETA E CORRETTA)
 import { database } from './firebase-config.js';
 import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-// FIX: Aggiunto onAuthReady per risolvere il problema di timing
 import { currentUser } from './auth-guard.js';
 
 
@@ -94,9 +93,14 @@ function loadDataFromFirebase() {
         toggleSectionsVisibility();
         updateDashboardView();
     });
+    // ==========================================================
+    // --- IL RESTO DELLA FUNZIONE È IDENTICO ---
+    // ==========================================================
 
     onValue(varExpensesRef, (snapshot) => {
         const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
+        // Converte sempre il risultato in un array per sicurezza
         variableExpenses = data ? Object.values(data) : [];
         renderVariableExpenses();
         updateDashboardView();
@@ -105,6 +109,7 @@ function loadDataFromFirebase() {
 
     onValue(fixedExpensesRef, (snapshot) => {
         const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
         fixedExpenses = data ? Object.values(data) : [];
         renderFixedExpenses();
         updateDashboardView();
@@ -112,6 +117,7 @@ function loadDataFromFirebase() {
 
     onValue(incomeRef, (snapshot) => {
         const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
         incomeEntries = data ? Object.values(data) : [];
         renderIncomeEntries();
         updateDashboardView();
@@ -120,18 +126,22 @@ function loadDataFromFirebase() {
 
     onValue(wishlistRef, (snapshot) => {
         const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
         wishlist = data ? Object.values(data) : [];
         renderWishlist();
     });
 
     onValue(futureMovementsRef, (snapshot) => {
         const rawData = snapshot.val();
+        // Converti l'oggetto di oggetti in un array di oggetti, includendo l'ID come proprietà interna
+        // Se rawData è null, usa un array vuoto
         futureMovements = rawData ? Object.keys(rawData).map(key => ({ id: key, ...rawData[key] })) : [];
         renderFutureMovements();
     });
 
     onValue(pendingPaymentsRef, (snapshot) => {
         const data = snapshot.val();
+        // --- CORREZIONE CRUCIALE ---
         pendingPayments = data ? Object.values(data) : [];
         renderPendingPayments();
     });
@@ -1002,7 +1012,7 @@ function handleImportData(event) {
             alert("Dati importati con successo e salvati su Firebase! La pagina verrà aggiornata.");
             location.reload(); // Ricarica per vedere i nuovi dati
         } catch (error) {
-            console.error("Errore durante l'importazione del file JSON:", error);
+            console.error("Errore during l'importazione del file JSON:", error);
             alert("Errore nell'importazione: file non valido o corrotto.");
         }
     };
