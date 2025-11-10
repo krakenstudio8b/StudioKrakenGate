@@ -1,91 +1,174 @@
-// js/pulizie.js
+// js/pulizie.js (VERSIONE NUOVA per Team Rotation)
 import { database } from './firebase-config.js';
-import { ref, onValue, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, onValue, update, query, orderByChild, startAt, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 
-// --- FUNZIONE PER CAPIRE LA SETTIMANA CORRENTE ---
-function getWeekId(date = new Date()) {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    // Set to nearest Thursday: current date + 4 - current day number
-    // Make Sunday's day number 7
-    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-    // Get first day of year
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    // Calculate full weeks to nearest Thursday
-    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-    // Return "YYYY-W##"
-    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+// --- RIFERIMENTI DOM ---
+const sessionsListContainer = document.getElementById('cleaning-sessions-list');
+const loadingMessage = document.getElementById('loading-tasks');
+const substituteModal = document.getElementById('substitute-modal');
+const memberToReplaceName = document.getElementById('member-to-replace-name');
+const memberSelect = document.getElementById('member-select');
+const cancelSubBtn = document.getElementById('cancel-sub-btn');
+const confirmSubBtn = document.getElementById('confirm-sub-btn');
+
+// --- STATO GLOBALE PER IL MODALE ---
+let substitutionData = null; // Conterrà { date, taskIndex, oldMemberId, oldMemberName }
+
+// --- FUNZIONI UTILITY ---
+function getIsoDate(date) {
+    return date.toISOString().split('T')[0];
+}
+function getReadableDate(dateString) {
+    const date = new Date(dateString + 'T12:00:00Z');
+    return date.toLocaleDateString('it-IT', {
+        weekday: 'long', day: 'numeric', month: 'long'
+    });
 }
 
-// Funzione per ottenere le date di inizio/fine settimana (bonus)
-function getWeekDateRange(weekId) {
-    const [year, weekNum] = weekId.split('-W').map(Number);
-    const d = new Date(Date.UTC(year, 0, 1 + (weekNum - 1) * 7));
-    d.setUTCDate(d.getUTCDate() + (1 - (d.getUTCDay() || 7))); // Vai a Lunedì
-    const startDate = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
-    d.setUTCDate(d.getUTCDate() + 6); // Vai a Domenica
-    const endDate = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
-    return `${startDate} - ${endDate}`;
-}
-
-// --- FUNZIONE DI INIZIALIZZAZIONE ---
-document.addEventListener('authReady', () => {
-    const tasksContainer = document.getElementById('tasks-container');
-    const loadingMessage = document.getElementById('loading-tasks');
-    const weekDatesEl = document.getElementById('week-dates');
-
-    const currentWeekId = getWeekId(); // Es. "2025-W46"
-    weekDatesEl.textContent = getWeekDateRange(currentWeekId);
-
-    const weekScheduleRef = ref(database, `cleaningSchedule/${currentWeekId}`);
-
-    onValue(weekScheduleRef, (snapshot) => {
-        if (snapshot.exists()) {
-            const data = snapshot.val();
-            const assignments = data.assignments || [];
-            
-            // Svuota il contenitore
-            tasksContainer.innerHTML = ''; 
-
-            if (assignments.length === 0) {
-                tasksContainer.innerHTML = '<p class="text-gray-500">Nessun turno assegnato per questa settimana.</p>';
-                return;
+// --- FUNZIONI MODALE ---
+async function openSubstituteModal(date, taskIndex, oldMemberId, oldMemberName) {
+    substitutionData = { date, taskIndex, oldMemberId, oldMemberName };
+    memberToReplaceName.textContent = oldMemberName;
+    memberSelect.innerHTML = '<option value="">Caricamento...</option>';
+    
+    // Carica tutti i membri tranne quello da sostituire
+    const membersRef = ref(database, 'members');
+    const snapshot = await get(membersRef);
+    if (snapshot.exists()) {
+        memberSelect.innerHTML = '';
+        const members = snapshot.val();
+        Object.entries(members).forEach(([id, member]) => {
+            if (id !== oldMemberId) {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = `${member.name} (Pulizie: ${member.cleaningCount || 0})`;
+                memberSelect.appendChild(option);
             }
+        });
+    }
+    substituteModal.classList.remove('hidden');
+}
 
-            // Crea una card per ogni task
-            assignments.forEach((task, index) => {
-                const card = document.createElement('div');
-                card.className = 'flex items-center justify-between p-4 bg-gray-50 rounded-lg border';
+function closeSubstituteModal() {
+    substitutionData = null;
+    substituteModal.classList.add('hidden');
+}
+
+async function handleConfirmSubstitution() {
+    if (!substitutionData) return;
+
+    const { date, taskIndex, oldMemberId, oldMemberName } = substitutionData;
+    const newMemberId = memberSelect.value;
+    const newMemberName = memberSelect.options[memberSelect.selectedIndex].text.split(' (')[0];
+
+    if (!newMemberId) {
+        alert("Seleziona un membro sostituto.");
+        return;
+    }
+
+    confirmSubBtn.disabled = true;
+    
+    try {
+        // 1. Prendi i conteggi attuali
+        const oldMemberRef = ref(database, `members/${oldMemberId}/cleaningCount`);
+        const newMemberRef = ref(database, `members/${newMemberId}/cleaningCount`);
+        
+        const [oldMemberSnap, newMemberSnap] = await Promise.all([get(oldMemberRef), get(newMemberRef)]);
+        
+        const oldMemberCount = oldMemberSnap.val() || 0;
+        const newMemberCount = newMemberSnap.val() || 0;
+
+        // 2. Prepara l'aggiornamento
+        const updates = {};
+        // Aggiorna il turno
+        updates[`cleaningSchedule/${date}/assignments/${taskIndex}/memberId`] = newMemberId;
+        updates[`cleaningSchedule/${date}/assignments/${taskIndex}/memberName`] = newMemberName;
+        // Aggiorna i conteggi (la parte fondamentale)
+        updates[`members/${oldMemberId}/cleaningCount`] = oldMemberCount - 1;
+        updates[`members/${newMemberId}/cleaningCount`] = newMemberCount + 1;
+        
+        // 3. Esegui l'aggiornamento
+        await update(ref(database), updates);
+
+        alert('Sostituzione completata! Il conteggio è stato aggiornato.');
+        closeSubstituteModal();
+    } catch (error) {
+        console.error("Errore durante la sostituzione:", error);
+        alert("Si è verificato un errore.");
+    } finally {
+        confirmSubBtn.disabled = false;
+    }
+}
+
+// --- LOGICA DI VISUALIZZAZIONE PRINCIPALE ---
+document.addEventListener('authReady', () => {
+    const todayString = getIsoDate(new Date());
+    const scheduleRef = ref(database, 'cleaningSchedule');
+    const q = query(scheduleRef, orderByChild('date'), startAt(todayString));
+
+    onValue(q, (snapshot) => {
+        if (snapshot.exists()) {
+            sessionsListContainer.innerHTML = ''; // Pulisci
+            
+            snapshot.forEach(childSnapshot => {
+                const date = childSnapshot.key; // "YYYY-MM-DD"
+                const session = childSnapshot.val();
                 
-                const isDone = task.done;
+                const sessionCard = document.createElement('div');
+                sessionCard.className = 'card fade-in';
+                sessionCard.innerHTML = `<h2 class="text-2xl font-semibold mb-4 border-b pb-2">${getReadableDate(date)}</h2><div class="space-y-3"></div>`;
                 
-                card.innerHTML = `
-                    <div class="flex items-center">
-                        <input id="task-${index}" type="checkbox" ${isDone ? 'checked' : ''} 
-                               class="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                        <label for="task-${index}" class="ml-3">
-                            <span class="block text-lg font-medium ${isDone ? 'text-gray-400 line-through' : 'text-gray-900'}">${task.zone}</span>
-                            <span class="block text-sm ${isDone ? 'text-gray-400' : 'text-gray-500'}">Assegnato a: <strong>${task.memberName}</strong></span>
-                        </label>
-                    </div>
-                `;
-                
-                // Aggiungi l'evento alla checkbox
-                const checkbox = card.querySelector(`#task-${index}`);
-                checkbox.addEventListener('change', (e) => {
-                    const doneStatus = e.target.checked;
-                    // Scrivi il nuovo stato "done" su Firebase
-                    const taskRef = ref(database, `cleaningSchedule/${currentWeekId}/assignments/${index}/done`);
-                    update(ref(database), {
-                        [`cleaningSchedule/${currentWeekId}/assignments/${index}/done`]: doneStatus
-                    });
+                const tasksContainer = sessionCard.querySelector('.space-y-3');
+
+                session.assignments.forEach((task, index) => {
+                    const taskEl = document.createElement('div');
+                    taskEl.className = `flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border ${task.done ? 'bg-gray-100' : 'bg-gray-50'}`;
+                    
+                    taskEl.innerHTML = `
+                        <div class="flex items-center flex-grow">
+                            <input id="task-${date}-${index}" data-date="${date}" data-index="${index}" type="checkbox" ${task.done ? 'checked' : ''} 
+                                   class="task-checkbox h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            <label for="task-${date}-${index}" class="ml-3">
+                                <span class="block text-lg font-medium ${task.done ? 'text-gray-400 line-through' : 'text-gray-900'}">${task.zone}</span>
+                                <span class="block text-sm ${task.done ? 'text-gray-400' : 'text-gray-500'}">Assegnato a: <strong>${task.memberName}</strong></span>
+                            </label>
+                        </div>
+                        <button data-date="${date}" 
+                                data-index="${index}"
+                                data-member-id="${task.memberId}" 
+                                data-member-name="${task.memberName}"
+                                class="substitute-btn mt-2 sm:mt-0 sm:ml-4 text-sm bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-lg hover:bg-gray-300">
+                            Sostituisci
+                        </button>
+                    `;
+                    tasksContainer.appendChild(taskEl);
                 });
-
-                tasksContainer.appendChild(card);
+                sessionsListContainer.appendChild(sessionCard);
             });
-
         } else {
-            // Nessun dato trovato per questa settimana
-            loadingMessage.textContent = 'Turni non ancora generati per questa settimana. Contatta un admin.';
+            loadingMessage.textContent = 'Nessun turno di pulizia in programma. Contatta un admin per generarli.';
         }
     });
+
+    // --- EVENT LISTENERS GLOBALI ---
+    sessionsListContainer.addEventListener('change', (e) => {
+        if (e.target.classList.contains('task-checkbox')) {
+            const date = e.target.dataset.date;
+            const index = e.target.dataset.index;
+            const isDone = e.target.checked;
+            
+            const taskRef = ref(database, `cleaningSchedule/${date}/assignments/${index}/done`);
+            set(taskRef, isDone);
+        }
+    });
+
+    sessionsListContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('substitute-btn')) {
+            const data = e.target.dataset;
+            openSubstituteModal(data.date, data.index, data.memberId, data.memberName);
+        }
+    });
+
+    cancelSubBtn.addEventListener('click', closeSubstituteModal);
+    confirmSubBtn.addEventListener('click', handleConfirmSubstitution);
 });
