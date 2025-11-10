@@ -202,9 +202,9 @@ function initializeCalendar() {
 
     // Carica i membri per la lista partecipanti
     onValue(membersRef, (snapshot) => {
-        const rawMembers = snapshot.val() || [];
-        // Assicura che allMembers sia sempre un array di oggetti
-        const allMembers = Object.values(snapshot.val() || {});
+        // NEL TUO CODICE NUOVO (CORRETTO)
+        const membersObject = snapshot.val() || {};
+        const allMembers = Object.values(membersObject);
         
         participantsContainer.innerHTML = '';
         if (allMembers.length > 0) {
@@ -305,6 +305,7 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
+
 
 
 
