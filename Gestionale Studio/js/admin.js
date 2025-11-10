@@ -1,4 +1,4 @@
-// js/admin.js (VERSIONE COMPLETA, CON MODULO PULIZIE INTEGRATO)
+// js/admin.js (VERSIONE COMPLETA - Team Rotation con Conteggio)
 import { database } from './firebase-config.js';
 import { ref, onValue, get, set, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
@@ -13,9 +13,9 @@ const usersListEl = document.getElementById('users-list');
 
 // Riferimenti per il modulo PULIZIE
 const cleaningManagementSection = document.getElementById('cleaning-management-section');
-const weekSelect = document.getElementById('week-select');
 const generateCleaningBtn = document.getElementById('generate-cleaning-btn');
 const generationFeedback = document.getElementById('generation-feedback');
+const lastCleaningDayInfo = document.getElementById('last-cleaning-day-info');
 
 
 // --- RIFERIMENTI AI NODI DI FIREBASE ---
@@ -29,7 +29,7 @@ const calendarEventsRef = ref(database, 'calendarEvents');
 // Riferimenti per il modulo PULIZIE
 const membersRef = ref(database, 'members'); // Lista membri per attività
 const cleaningStateRef = ref(database, 'cleaningState');
-const cleaningScheduleBaseRef = ref(database, 'cleaningSchedule'); // Ref di base
+const cleaningScheduleRef = ref(database, 'cleaningSchedule');
 
 
 // --- FUNZIONI UTILITY ---
@@ -49,27 +49,11 @@ const ZONES = [
     "Sala Mix + Sala Rec"
 ];
 const NUM_ZONES = ZONES.length;
+const CLEANING_DAYS = [1, 3, 5]; // 1=Lunedì, 3=Mercoledì, 5=Venerdì
 
-// Utility per PULIZIE: Calcolo ID settimana
-function getWeekId(offset = 0) {
-    const date = new Date();
-    date.setDate(date.getDate() + 7 * offset); 
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
-}
-
-// Utility per PULIZIE: Calcolo date settimana
-function getWeekDateRange(weekId) {
-    const [year, weekNum] = weekId.split('-W').map(Number);
-    const d = new Date(Date.UTC(year, 0, 1 + (weekNum - 1) * 7));
-    d.setUTCDate(d.getUTCDate() + (1 - (d.getUTCDay() || 7))); // Lunedì
-    const start = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
-    d.setUTCDate(d.getUTCDate() + 6); // Domenica
-    const end = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
-    return `${start} - ${end}`;
+// Utility per PULIZIE: Calcolo data YYYY-MM-DD
+function getIsoDate(date) {
+    return date.toISOString().split('T')[0];
 }
 
 
@@ -241,110 +225,128 @@ const loadUsersForManagement = () => {
 
 
 // --- LOGICA PER GESTIONE PULIZIE (NUOVO MODULO) ---
-function initializeCleaningModule() {
-    // Mostra la sezione (il controllo permessi è già in initializeAdminPage)
+async function initializeCleaningModule() {
+    // Il controllo permessi è già in initializeAdminPage
     cleaningManagementSection.classList.remove('hidden'); 
 
-    // Popola il selettore con la settimana corrente e le 3 successive
-    weekSelect.innerHTML = ''; // Pulisci opzioni vecchie
-    for (let i = 0; i < 4; i++) {
-        const weekId = getWeekId(i);
-        const option = document.createElement('option');
-        option.value = weekId;
-        option.textContent = `Settimana ${weekId.split('-W')[1]} (${getWeekDateRange(weekId)})`;
-        weekSelect.appendChild(option);
+    // Mostra info sull'ultimo turno generato
+    try {
+        const stateSnapshot = await get(cleaningStateRef);
+        const lastDate = stateSnapshot.val()?.lastDateGenerated;
+        if (lastDate) {
+            lastCleaningDayInfo.innerHTML = `Ultima sessione generata: <strong>${lastDate}</strong>. Il prossimo turno sarà il primo giorno utile (Lun, Mer, Ven) dopo questa data.`;
+        } else {
+            lastCleaningDayInfo.textContent = "Nessun turno ancora generato. Il primo turno sarà il prossimo Lun, Mer o Ven.";
+        }
+    } catch (e) {
+        lastCleaningDayInfo.textContent = "Impossibile caricare lo stato.";
     }
 
-    // Aggiungi l'listener al pulsante
-    // Rimuovi listener vecchi per sicurezza se questa funzione viene chiamata più volte
     generateCleaningBtn.removeEventListener('click', handleGeneration); 
     generateCleaningBtn.addEventListener('click', handleGeneration);
 }
 
 async function handleGeneration() {
     generateCleaningBtn.disabled = true;
-    generationFeedback.textContent = "Sto generando i turni...";
+    generationFeedback.textContent = "Sto generando la sessione...";
     generationFeedback.className = "mt-4 text-sm text-yellow-600";
-    const selectedWeekId = weekSelect.value; 
-
+    
     try {
-        // 1. Controlla se i turni per quella settimana esistono GIÀ
-        const scheduleRef = ref(database, `cleaningSchedule/${selectedWeekId}`);
-        const scheduleSnapshot = await get(scheduleRef);
-        if (scheduleSnapshot.exists()) {
-            throw new Error(`I turni per la settimana ${selectedWeekId} esistono già.`);
-        }
+        // 1. Trova la prossima data utile
+        const stateSnapshot = await get(cleaningStateRef);
+        const lastDateGenerated = stateSnapshot.val()?.lastDateGenerated 
+                                  || getIsoDate(new Date(Date.now() - 86400000)); // Ieri
 
-        // 2. Recupera tutti i membri ('members') e lo stato attuale
-        const [membersSnapshot, stateSnapshot] = await Promise.all([
-            get(membersRef),
-            get(cleaningStateRef)
-        ]);
+        let nextCleaningDate = new Date(lastDateGenerated + 'T12:00:00Z');
+        let nextCleaningDateStr = "";
 
-        if (!membersSnapshot.exists() || membersSnapshot.val().length === 0) {
-            throw new Error("Lista 'members' non trovata o vuota in Firebase.");
-        }
-
-        const allMembers = Array.isArray(membersSnapshot.val()) 
-            ? membersSnapshot.val() 
-            : Object.values(membersSnapshot.val());
-
-        const currentState = stateSnapshot.val() || { lastMemberIndex: -1 };
-        let lastIndex = currentState.lastMemberIndex;
-
-        // 3. Seleziona i prossimi N membri
-        const membersForThisWeek = [];
-        for (let i = 0; i < NUM_ZONES; i++) {
-            lastIndex++;
-            if (lastIndex >= allMembers.length) {
-                lastIndex = 0;
+        // Trova il prossimo Lun/Mer/Ven partendo da DOMANI
+        while (true) {
+            nextCleaningDate.setDate(nextCleaningDate.getDate() + 1);
+            const dayOfWeek = nextCleaningDate.getUTCDay();
+            if (CLEANING_DAYS.includes(dayOfWeek)) {
+                nextCleaningDateStr = getIsoDate(nextCleaningDate);
+                break;
             }
-            membersForThisWeek.push(allMembers[lastIndex]);
         }
         
-        // 4. Calcola la rotazione delle ZONE
-        const weekNumber = parseInt(selectedWeekId.split('-W')[1], 10);
-        const zoneShift = weekNumber % NUM_ZONES; // 0, 1, 2, o 3
-
-        const assignments = [];
-        for (let i = 0; i < NUM_ZONES; i++) {
-            const member = membersForThisWeek[i];
-            const zoneIndex = (i + zoneShift) % NUM_ZONES; // Applica rotazione
-            const zoneName = ZONES[zoneIndex];
-
-            assignments.push({
-                zone: zoneName,
-                memberId: member.id || 'id_sconosciuto', // Assicurati che i membri abbiano 'id'
-                memberName: member.name,
-                done: false
-            });
+        // Controlla se esiste già (sicurezza)
+        const scheduleSnapshot = await get(ref(database, `cleaningSchedule/${nextCleaningDateStr}`));
+        if (scheduleSnapshot.exists()) {
+            throw new Error(`Un turno per ${nextCleaningDateStr} esiste già.`);
         }
 
-        // 5. Prepara l'oggetto da salvare
-        const weekDates = getWeekDateRange(selectedWeekId).split(' - ');
-        const newSchedule = {
-            startDate: weekDates[0],
-            endDate: weekDates[1],
+        // 2. Trova i 4 membri con il conteggio più basso
+        const membersSnapshot = await get(membersRef);
+        if (!membersSnapshot.exists()) {
+            throw new Error("Nessun membro trovato nel database in '/members'. Assicurati che esista e non sia vuoto.");
+        }
+        
+        const allMembers = membersSnapshot.val();
+        
+        // Converti in array e ordina per 'cleaningCount' (da 0 in su)
+        const sortedMembers = Object.entries(allMembers).sort((a, b) => {
+            const countA = a[1].cleaningCount || 0;
+            const countB = b[1].cleaningCount || 0;
+            return countA - countB;
+        });
+
+        // Prendi i primi 4
+        const team = sortedMembers.slice(0, NUM_ZONES);
+        if (team.length < NUM_ZONES) {
+            throw new Error(`Non ci sono abbastanza membri (servono ${NUM_ZONES}, trovati ${team.length}).`);
+        }
+
+        // 3. Prepara gli aggiornamenti
+        const updates = {};
+        const assignments = [];
+        
+        // Ruota le zone per varietà (usiamo il numero del giorno del mese)
+        const zoneShift = nextCleaningDate.getDate() % NUM_ZONES; 
+
+        for (let i = 0; i < NUM_ZONES; i++) {
+            const memberId = team[i][0]; // "uid-mario"
+            const memberData = team[i][1]; // { name: "Mario", ... }
+            const newCount = (memberData.cleaningCount || 0) + 1;
+
+            const zoneIndex = (i + zoneShift) % NUM_ZONES;
+            const zoneName = ZONES[zoneIndex];
+
+            // Aggiungi l'assignment
+            assignments.push({
+                zone: zoneName,
+                memberId: memberId,
+                memberName: memberData.name,
+                done: false
+            });
+            
+            // Aggiorna il conteggio del membro
+            updates[`members/${memberId}/cleaningCount`] = newCount;
+        }
+
+        // 4. Aggiungi il nuovo turno e lo stato
+        // La chiave ora è la data YYYY-MM-DD
+        updates[`cleaningSchedule/${nextCleaningDateStr}`] = {
+            date: nextCleaningDateStr,
             assignments: assignments
         };
+        updates[`cleaningState/lastDateGenerated`] = nextCleaningDateStr;
 
-        // 6. Scrivi i dati su Firebase
-        const updates = {};
-        updates[`cleaningSchedule/${selectedWeekId}`] = newSchedule;
-        updates[`cleaningState/lastMemberIndex`] = lastIndex;
-
+        // 5. Esegui l'aggiornamento
         await update(ref(database), updates);
 
-        // 7. Feedback finale
-        generationFeedback.textContent = `Turni per la settimana ${selectedWeekId} generati con successo!`;
+        // 6. Feedback
+        generationFeedback.textContent = `Turno generato per ${nextCleaningDateStr} con successo!`;
         generationFeedback.className = "mt-4 text-sm text-green-600 font-semibold";
+        // Aggiorna l'info
+        lastCleaningDayInfo.innerHTML = `Ultima sessione generata: <strong>${nextCleaningDateStr}</strong>.`;
 
     } catch (error) {
         console.error("Errore generazione turni:", error);
         generationFeedback.textContent = `Errore: ${error.message}`;
         generationFeedback.className = "mt-4 text-sm text-red-600 font-semibold";
     } finally {
-        generateCleaningBtn.disabled = false; // Riattiva il pulsante
+        generateCleaningBtn.disabled = false;
     }
 }
 
@@ -387,21 +389,23 @@ document.addEventListener('change', (e) => {
 
 document.addEventListener('click', async (e) => {
     const target = e.target;
-    const key = target.dataset.key;
-    if (!key) return; // Esce subito se non c'è un data-key (ignora il pulsante pulizie)
-
+    // Modificato per non uscire se non c'è data-key (serve per il pulsante pulizie)
     if (target.matches('.approve-expense-btn')) {
+        const key = target.dataset.key;
         const snapshot = await get(ref(database, `expenseRequests/${key}`));
         if (snapshot.exists()) approveExpenseRequest(key, snapshot.val());
     }
     if (target.matches('.reject-expense-btn')) {
+        const key = target.dataset.key;
         rejectExpenseRequest(key);
     }
     if (target.matches('.approve-calendar-btn')) {
+        const key = target.dataset.key;
         const snapshot = await get(ref(database, `pendingCalendarEvents/${key}`));
         if (snapshot.exists()) approveCalendarEvent(key, snapshot.val());
     }
     if (target.matches('.reject-calendar-btn')) {
+        const key = target.dataset.key;
         rejectCalendarEvent(key);
     }
 });
