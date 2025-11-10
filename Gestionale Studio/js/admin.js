@@ -1,4 +1,4 @@
-// js/admin.js (VERSIONE COMPLETA, CORRETTA E RISTRUTTURATA)
+// js/admin.js (VERSIONE COMPLETA, CON MODULO PULIZIE INTEGRATO)
 import { database } from './firebase-config.js';
 import { ref, onValue, get, set, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
@@ -11,6 +11,13 @@ const pendingEventsContainer = document.getElementById('pending-events-container
 const pendingFinanceContainer = document.getElementById('pending-finance-container');
 const usersListEl = document.getElementById('users-list');
 
+// Riferimenti per il modulo PULIZIE
+const cleaningManagementSection = document.getElementById('cleaning-management-section');
+const weekSelect = document.getElementById('week-select');
+const generateCleaningBtn = document.getElementById('generate-cleaning-btn');
+const generationFeedback = document.getElementById('generation-feedback');
+
+
 // --- RIFERIMENTI AI NODI DI FIREBASE ---
 const usersRef = ref(database, 'users');
 const expenseRequestsRef = ref(database, 'expenseRequests');
@@ -18,6 +25,12 @@ const variableExpensesRef = ref(database, 'variableExpenses');
 const cassaComuneRef = ref(database, 'cassaComune');
 const pendingCalendarEventsRef = ref(database, 'pendingCalendarEvents');
 const calendarEventsRef = ref(database, 'calendarEvents');
+
+// Riferimenti per il modulo PULIZIE
+const membersRef = ref(database, 'members'); // Lista membri per attività
+const cleaningStateRef = ref(database, 'cleaningState');
+const cleaningScheduleBaseRef = ref(database, 'cleaningSchedule'); // Ref di base
+
 
 // --- FUNZIONI UTILITY ---
 const displayDate = (dateString) => {
@@ -27,6 +40,38 @@ const displayDate = (dateString) => {
     const userTimezoneOffset = date.getTimezoneOffset() * 60000;
     return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
+
+// Utility per PULIZIE: Costanti
+const ZONES = [
+    "Ingresso + Bagno",
+    "Regia + Sala Gate",
+    "Scale + 1 Piano",
+    "Sala Mix + Sala Rec"
+];
+const NUM_ZONES = ZONES.length;
+
+// Utility per PULIZIE: Calcolo ID settimana
+function getWeekId(offset = 0) {
+    const date = new Date();
+    date.setDate(date.getDate() + 7 * offset); 
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+// Utility per PULIZIE: Calcolo date settimana
+function getWeekDateRange(weekId) {
+    const [year, weekNum] = weekId.split('-W').map(Number);
+    const d = new Date(Date.UTC(year, 0, 1 + (weekNum - 1) * 7));
+    d.setUTCDate(d.getUTCDate() + (1 - (d.getUTCDay() || 7))); // Lunedì
+    const start = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+    d.setUTCDate(d.getUTCDate() + 6); // Domenica
+    const end = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+    return `${start} - ${end}`;
+}
+
 
 // --- LOGICA PER APPROVAZIONE SPESE FINANZIARIE ---
 async function approveExpenseRequest(requestKey, requestData) {
@@ -194,10 +239,120 @@ const loadUsersForManagement = () => {
     });
 };
 
+
+// --- LOGICA PER GESTIONE PULIZIE (NUOVO MODULO) ---
+function initializeCleaningModule() {
+    // Mostra la sezione (il controllo permessi è già in initializeAdminPage)
+    cleaningManagementSection.classList.remove('hidden'); 
+
+    // Popola il selettore con la settimana corrente e le 3 successive
+    weekSelect.innerHTML = ''; // Pulisci opzioni vecchie
+    for (let i = 0; i < 4; i++) {
+        const weekId = getWeekId(i);
+        const option = document.createElement('option');
+        option.value = weekId;
+        option.textContent = `Settimana ${weekId.split('-W')[1]} (${getWeekDateRange(weekId)})`;
+        weekSelect.appendChild(option);
+    }
+
+    // Aggiungi l'listener al pulsante
+    // Rimuovi listener vecchi per sicurezza se questa funzione viene chiamata più volte
+    generateCleaningBtn.removeEventListener('click', handleGeneration); 
+    generateCleaningBtn.addEventListener('click', handleGeneration);
+}
+
+async function handleGeneration() {
+    generateCleaningBtn.disabled = true;
+    generationFeedback.textContent = "Sto generando i turni...";
+    generationFeedback.className = "mt-4 text-sm text-yellow-600";
+    const selectedWeekId = weekSelect.value; 
+
+    try {
+        // 1. Controlla se i turni per quella settimana esistono GIÀ
+        const scheduleRef = ref(database, `cleaningSchedule/${selectedWeekId}`);
+        const scheduleSnapshot = await get(scheduleRef);
+        if (scheduleSnapshot.exists()) {
+            throw new Error(`I turni per la settimana ${selectedWeekId} esistono già.`);
+        }
+
+        // 2. Recupera tutti i membri ('members') e lo stato attuale
+        const [membersSnapshot, stateSnapshot] = await Promise.all([
+            get(membersRef),
+            get(cleaningStateRef)
+        ]);
+
+        if (!membersSnapshot.exists() || membersSnapshot.val().length === 0) {
+            throw new Error("Lista 'members' non trovata o vuota in Firebase.");
+        }
+
+        const allMembers = Array.isArray(membersSnapshot.val()) 
+            ? membersSnapshot.val() 
+            : Object.values(membersSnapshot.val());
+
+        const currentState = stateSnapshot.val() || { lastMemberIndex: -1 };
+        let lastIndex = currentState.lastMemberIndex;
+
+        // 3. Seleziona i prossimi N membri
+        const membersForThisWeek = [];
+        for (let i = 0; i < NUM_ZONES; i++) {
+            lastIndex++;
+            if (lastIndex >= allMembers.length) {
+                lastIndex = 0;
+            }
+            membersForThisWeek.push(allMembers[lastIndex]);
+        }
+        
+        // 4. Calcola la rotazione delle ZONE
+        const weekNumber = parseInt(selectedWeekId.split('-W')[1], 10);
+        const zoneShift = weekNumber % NUM_ZONES; // 0, 1, 2, o 3
+
+        const assignments = [];
+        for (let i = 0; i < NUM_ZONES; i++) {
+            const member = membersForThisWeek[i];
+            const zoneIndex = (i + zoneShift) % NUM_ZONES; // Applica rotazione
+            const zoneName = ZONES[zoneIndex];
+
+            assignments.push({
+                zone: zoneName,
+                memberId: member.id || 'id_sconosciuto', // Assicurati che i membri abbiano 'id'
+                memberName: member.name,
+                done: false
+            });
+        }
+
+        // 5. Prepara l'oggetto da salvare
+        const weekDates = getWeekDateRange(selectedWeekId).split(' - ');
+        const newSchedule = {
+            startDate: weekDates[0],
+            endDate: weekDates[1],
+            assignments: assignments
+        };
+
+        // 6. Scrivi i dati su Firebase
+        const updates = {};
+        updates[`cleaningSchedule/${selectedWeekId}`] = newSchedule;
+        updates[`cleaningState/lastMemberIndex`] = lastIndex;
+
+        await update(ref(database), updates);
+
+        // 7. Feedback finale
+        generationFeedback.textContent = `Turni per la settimana ${selectedWeekId} generati con successo!`;
+        generationFeedback.className = "mt-4 text-sm text-green-600 font-semibold";
+
+    } catch (error) {
+        console.error("Errore generazione turni:", error);
+        generationFeedback.textContent = `Errore: ${error.message}`;
+        generationFeedback.className = "mt-4 text-sm text-red-600 font-semibold";
+    } finally {
+        generateCleaningBtn.disabled = false; // Riattiva il pulsante
+    }
+}
+
+
 // --- FUNZIONE DI INIZIALIZZAZIONE DELLA PAGINA ---
 function initializeAdminPage() {
-    // Controlla se siamo effettivamente nella pagina admin
-    if (!document.getElementById('user-management-section')) return;
+    // Controlla se siamo effettivamente nella pagina admin (usando un elemento che c'è solo lì)
+    if (!userManagementSection) return;
 
     console.log("Inizializzazione pannello Admin...");
 
@@ -205,12 +360,16 @@ function initializeAdminPage() {
         calendarApprovalSection?.classList.remove('hidden');
         financeApprovalSection?.classList.remove('hidden');
         userManagementSection?.classList.remove('hidden');
+        
         renderPendingCalendarEvents();
         renderPendingFinanceRequests();
         loadUsersForManagement();
+        initializeCleaningModule(); // AGGIUNTA CHIAMATA
+        
     } else if (currentUser.role === 'calendar_admin') {
         calendarApprovalSection?.classList.remove('hidden');
         renderPendingCalendarEvents();
+        initializeCleaningModule(); // AGGIUNTA CHIAMATA
     }
 }
 
@@ -229,7 +388,7 @@ document.addEventListener('change', (e) => {
 document.addEventListener('click', async (e) => {
     const target = e.target;
     const key = target.dataset.key;
-    if (!key) return;
+    if (!key) return; // Esce subito se non c'è un data-key (ignora il pulsante pulizie)
 
     if (target.matches('.approve-expense-btn')) {
         const snapshot = await get(ref(database, `expenseRequests/${key}`));
