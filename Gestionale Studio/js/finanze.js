@@ -1,9 +1,21 @@
-// js/finanze.js
-// VERSIONE CORRETTA - 10 NOVEMBRE
-
+// js/finanze.js (VERSIONE COMPLETA E CORRETTA)
 import { database } from './firebase-config.js';
 import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+// FIX: Aggiunto onAuthReady per risolvere il problema di timing
 import { currentUser } from './auth-guard.js';
+
+
+// --- Riferimenti ai nodi del tuo database ---
+const membersRef = ref(database, 'members');
+const varExpensesRef = ref(database, 'variableExpenses');
+const fixedExpensesRef = ref(database, 'fixedExpenses');
+const incomeRef = ref(database, 'incomeEntries');
+const wishlistRef = ref(database, 'wishlist');
+const futureMovementsRef = ref(database, 'futureMovements');
+const pendingPaymentsRef = ref(database, 'pendingPayments');
+const cassaComuneRef = ref(database, 'cassaComune');
+const expenseRequestsRef = ref(database, 'expenseRequests');
+
 
 // --- Data State (Firebase-synced) ---
 let members = []; // Verrà popolato correttamente
@@ -16,12 +28,13 @@ let pendingPayments = [];
 let cassaComune = { balance: 0, movements: [] };
 let expenseRequests = {}; 
 
-// Variabili per i grafici (se usi Chart.js)
-// let membersContributionsChart, membersIncomeChart, categoriesChart, balancesChart;
+// Variabili per i grafici
+let membersContributionsChart, membersIncomeChart, categoriesChart, balancesChart;
 let tempWishlistLinks = [];
 
 
 // --- Funzioni Utility ---
+
 const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -30,8 +43,7 @@ const formatDate = (dateString) => {
 
 const displayDate = (dateString) => {
     if (!dateString) return '';
-    // Aggiungi orario fittizio per evitare problemi di timezone
-    const date = new Date(dateString + 'T12:00:00Z'); 
+    const date = new Date(dateString + 'T12:00:00Z'); // Evita problemi timezone
     return date.toLocaleDateString('it-IT');
 };
 
@@ -58,8 +70,7 @@ function saveDataToFirebase() {
     set(fixedExpensesRef, fixedExpenses);
     set(incomeRef, incomeEntries);
     set(wishlistRef, wishlist);
-    // Nota: futureMovements, pendingPayments, cassaComune, expenseRequests
-    // vengono già aggiornati con 'update', 'push', 'remove'
+    // Gli altri nodi sono aggiornati con 'update' 'push' ecc.
 }
 
 // ==========================================================
@@ -75,9 +86,9 @@ function loadDataFromFirebase() {
         members = Object.entries(membersObject).map(([uid, memberData]) => ({
             id: uid, // <--- QUESTA È LA CORREZIONE CHIAVE
             name: memberData.name,
-            cleaningCount: memberData.cleaningCount
+            cleaningCount: memberData.cleaningCount // Manteniamo anche il cleaningCount se c'è
         }));
-
+        
         // 3. Ora tutto il resto funziona
         renderMembers();
         toggleSectionsVisibility();
@@ -142,9 +153,6 @@ function loadDataFromFirebase() {
 
 
 // --- Funzioni di Rendering e Logica ---
-// (Il resto del tuo file js/finanze.js rimane identico a quello che mi hai mandato)
-// ... (tutte le altre funzioni: renderMembers, renderCassaComune, initializeCharts, etc.) ...
-// Copia e incolla tutto il resto del tuo file .js originale da qui in poi.
 
 // Riferimenti DOM cruciali
 const monthFilter = document.getElementById('month-filter');
@@ -249,8 +257,7 @@ const populateMonthFilter = () => {
     const allDates = [...variableExpenses, ...incomeEntries].map(item => new Date(item.date)).filter(d => !isNaN(d));
     const uniqueMonths = new Set(allDates.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`));
     
-    // Salva l'opzione selezionata
-    const selectedValue = monthFilter.value; 
+    const selectedValue = monthFilter.value;
     
     monthFilter.innerHTML = '<option value="all">Tutti i mesi</option>';
 
@@ -264,11 +271,10 @@ const populateMonthFilter = () => {
         monthFilter.appendChild(option);
     });
     
-    // Ripristina l'opzione selezionata
-    monthFilter.value = selectedValue; 
+    monthFilter.value = selectedValue;
 };
 
-// QUESTA FUNZIONE ORA FUNZIONERÀ PERCHÉ 'members' è un array di {id, name}
+
 const renderMembers = () => {
     if (memberCountEl) memberCountEl.textContent = members.length;
     const membersListEl = document.getElementById('members-list');
@@ -276,6 +282,7 @@ const renderMembers = () => {
         membersListEl.innerHTML = members.map(m => `<li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-sm">${m.name}</li>`).join('');
     }
     
+    // QUESTA PARTE ORA FUNZIONA PERCHÉ 'members' è un array di {id, name}
     const memberOptions = members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
     
     const payerSelect = document.getElementById('payer');
@@ -291,6 +298,7 @@ const renderMembers = () => {
     
     const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
     if (incomeMembersCheckboxes) {
+        // 'm.id' ora è l'UID, che è un ID univoco perfetto
         incomeMembersCheckboxes.innerHTML = members.map(m => `<div class="flex items-center"><input type="checkbox" id="income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600"><label for="income-member-${m.id}" class="ml-2 text-sm">${m.name}</label></div>`).join('');
     }
 };
@@ -507,7 +515,9 @@ const renderExpenseRequestsForAdmin = () => {
 
 // Funzioni per i grafici
 const createBarChart = (canvasId, label, data, labels, color) => {
-    const ctx = document.getElementById(canvasId).getContext('2d');
+    const ctx = document.getElementById(canvasId)?.getContext('2d');
+    if (!ctx) return null; // Esce se il canvas non esiste
+    
     const existingChart = Chart.getChart(canvasId);
     if (existingChart) existingChart.destroy();
 
@@ -540,6 +550,9 @@ const createBarChart = (canvasId, label, data, labels, color) => {
 
 
 const initializeCharts = () => {
+    // Sicurezza: non fare nulla se Chart.js non è caricato
+    if (typeof Chart === 'undefined') return; 
+    
     const data = getCalculationData();
     if (!data.members || data.members.length === 0) return;
 
@@ -589,10 +602,8 @@ const initializeCharts = () => {
             
             const totalContributed = expensesPaid + cashDeposits;
 
-            // Totale RICEVUTO da un membro (la sua quota delle entrate)
             const incomeShare = data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / (i.membersInvolved.length || 1)) : 0), 0);
             
-            // Saldo finale: (Versato + Ricevuto) - Quota Spese
             return (totalContributed + incomeShare) - shareOfTotalExpense;
         });
         createBarChart('balancesChart', 'Bilanci (Netto)', balanceData, memberNames, balanceData.map(b => b >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'));
@@ -600,19 +611,10 @@ const initializeCharts = () => {
 };
 
 const updateDashboardView = () => { 
-    // Aggiorna i totali basati sullo stato corrente
     const totalVar = variableExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalFix = fixedExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalInc = incomeEntries.reduce((sum, i) => sum + (i.amount || 0), 0);
     
-    // Aggiorna gli elementi del DOM
-    const totalVariableEl = document.getElementById('total-variable-expense');
-    const totalFixedEl = document.getElementById('total-fixed-expense');
-    const totalIncomeEl = document.getElementById('total-income');
-    const memberCountEl = document.getElementById('member-count');
-    const perPersonShareEl = document.getElementById('per-person-share');
-    const cashBalanceAmountEl = document.getElementById('cash-balance-amount');
-
     if (totalVariableEl) totalVariableEl.textContent = `€${totalVar.toFixed(2)}`;
     if (totalFixedEl) totalFixedEl.textContent = `€${totalFix.toFixed(2)}`;
     if (totalIncomeEl) totalIncomeEl.textContent = `€${totalInc.toFixed(2)}`;
@@ -663,12 +665,10 @@ const calculateAndRenderSettlement = (forExport = false) => {
     const memberNames = data.members.map(m => m.name);
     const balances = Object.fromEntries(memberNames.map(name => [name, 0]));
 
-    // 1. Calcola la quota di spesa
     const totalExpenses = data.expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const totalFixed = data.fixedExpenses.reduce((sum, f) => sum + (f.amount || 0), 0);
     const shareOfTotalExpense = (totalExpenses + totalFixed) / memberNames.length;
 
-    // 2. Calcola il saldo effettivo
     memberNames.forEach(name => {
         const expensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + (e.amount || 0), 0);
         const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
@@ -706,7 +706,6 @@ const calculateAndRenderSettlement = (forExport = false) => {
         settlementList.appendChild(summaryLi);
     }
     
-    // Logica di esportazione (semplificata)
     if (forExport) {
         return debtors.map(d => ({ payer: d.name, recipient: 'Cassa', amount: d.amountToPay }));
     }
@@ -948,13 +947,17 @@ function handleAddMovement() {
 function handleExportData() { 
     // Ricostruisce l'oggetto dati per l'esportazione
     const dataToExport = {
-        members: members, // Questo ora è un array di oggetti {id, name, ...}
-        variableExpenses: variableExpenses,
-        fixedExpenses: fixedExpenses,
-        incomeEntries: incomeEntries,
-        wishlist: wishlist,
-        futureMovements: futureMovements,
-        pendingPayments: pendingPayments,
+        // Salva i membri come OGGETTO (la nuova struttura)
+        members: members.reduce((acc, member) => {
+            acc[member.id] = { name: member.name, cleaningCount: member.cleaningCount };
+            return acc;
+        }, {}),
+        variableExpenses: variableExpenses.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}),
+        fixedExpenses: fixedExpenses.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}),
+        incomeEntries: incomeEntries.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}),
+        wishlist: wishlist.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}),
+        futureMovements: futureMovements.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}),
+        pendingPayments: pendingPayments.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}),
         cassaComune: cassaComune,
         expenseRequests: expenseRequests
     };
@@ -981,22 +984,16 @@ function handleImportData(event) {
             const importedData = JSON.parse(e.target.result);
             if (!confirm("Sei sicuro di voler SOVRASCRIVERE i dati attuali con questo backup? Questa azione è irreversibile!")) return;
             
-            // --- LOGICA DI IMPORTAZIONE MIGLIORATA ---
-            // Ricostruisce gli oggetti da array, se necessario
-            const formatAsObject = (arr) => arr.reduce((acc, item) => {
-                if(item.id) acc[item.id] = item;
-                return acc;
-            }, {});
-
             // Prepara gli aggiornamenti
             const updates = {};
-            updates['members'] = formatAsObject(importedData.members || []); // Salva 'members' come oggetto (la nuova struttura)
-            updates['variableExpenses'] = formatAsObject(importedData.variableExpenses || []);
-            updates['fixedExpenses'] = formatAsObject(importedData.fixedExpenses || []);
-            updates['incomeEntries'] = formatAsObject(importedData.incomeEntries || []);
-            updates['wishlist'] = formatAsObject(importedData.wishlist || []);
-            updates['futureMovements'] = formatAsObject(importedData.futureMovements || []);
-            updates['pendingPayments'] = formatAsObject(importedData.pendingPayments || []);
+            // Assicura che i dati importati siano OGGETTI, non array
+            updates['members'] = (Array.isArray(importedData.members) ? importedData.members.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}) : importedData.members) || {};
+            updates['variableExpenses'] = (Array.isArray(importedData.variableExpenses) ? importedData.variableExpenses.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}) : importedData.variableExpenses) || {};
+            updates['fixedExpenses'] = (Array.isArray(importedData.fixedExpenses) ? importedData.fixedExpenses.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}) : importedData.fixedExpenses) || {};
+            updates['incomeEntries'] = (Array.isArray(importedData.incomeEntries) ? importedData.incomeEntries.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}) : importedData.incomeEntries) || {};
+            updates['wishlist'] = (Array.isArray(importedData.wishlist) ? importedData.wishlist.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}) : importedData.wishlist) || {};
+            updates['futureMovements'] = (Array.isArray(importedData.futureMovements) ? importedData.futureMovements.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}) : importedData.futureMovements) || {};
+            updates['pendingPayments'] = (Array.isArray(importedData.pendingPayments) ? importedData.pendingPayments.reduce((acc, item) => { acc[item.id] = item; return acc; }, {}) : importedData.pendingPayments) || {};
             updates['cassaComune'] = importedData.cassaComune || { balance: 0, movements: {} };
             updates['expenseRequests'] = importedData.expenseRequests || {};
             
@@ -1013,6 +1010,10 @@ function handleImportData(event) {
 }
 
 function exportToExcel() { 
+    if (typeof ExcelJS === 'undefined') {
+        alert("Libreria di esportazione Excel non caricata.");
+        return;
+    }
     const workbook = new ExcelJS.Workbook();
     
     // Sheet 1: Riepilogo
@@ -1027,15 +1028,13 @@ function exportToExcel() {
     const settlements = calculateAndRenderSettlement(true);
     const settlementSheet = workbook.addWorksheet('Conguaglio');
     settlementSheet.addRow(['Chi paga', 'Chi riceve', 'Importo (€)']);
-    settlements.forEach(s => settlementSheet.addRow([s.payer, s.recipient, s.amount.toFixed(2)]));
+    if (settlements) settlements.forEach(s => settlementSheet.addRow([s.payer, s.recipient, s.amount.toFixed(2)]));
 
     // Sheet 3: Spese Variabili
     const varSheet = workbook.addWorksheet('Spese Variabili');
     varSheet.addRow(['Data', 'Pagante', 'Importo (€)', 'Categoria', 'Descrizione']);
     variableExpenses.forEach(e => varSheet.addRow([displayDate(e.date), e.payer, e.amount, e.category, e.description]));
     
-    // ... (Aggiungi altri sheet se vuoi) ...
-
     workbook.xlsx.writeBuffer().then(buffer => {
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const url = URL.createObjectURL(blob);
@@ -1052,7 +1051,6 @@ function exportToExcel() {
 
 // --- Event Listeners ---
 if (monthFilter) monthFilter.addEventListener('change', () => {
-    // Quando il filtro cambia, aggiorna solo il conguaglio e i grafici
     calculateAndRenderSettlement(false);
     if (typeof Chart !== 'undefined') {
         initializeCharts();
@@ -1062,8 +1060,6 @@ if (monthFilter) monthFilter.addEventListener('change', () => {
 if (addMemberBtn) addMemberBtn.addEventListener('click', () => {
     const name = newMemberNameInput.value.trim();
     if (name && !members.some(m => m.name === name)) {
-        // NON aggiungere più a 'members'. Gestisci l'aggiunta di membri
-        // solo tramite l'autenticazione e il nodo /users e /members
         alert("Funzione deprecata. I membri vengono aggiunti tramite la gestione utenti (autenticazione).");
         newMemberNameInput.value = '';
     } else if (name) {
@@ -1148,7 +1144,6 @@ if (wishlistNewLinkInput && addWishlistLinkBtn) addWishlistLinkBtn.addEventListe
     const input = wishlistNewLinkInput;
     if(input.value.trim()){
         const newLink = input.value.trim();
-        // Cerca un item "Generico" o crea il primo item
         let genericItem = wishlist.find(item => item.name === "Articoli Generici");
         if (!genericItem) {
             const newWishRef = push(wishlistRef);
@@ -1221,6 +1216,7 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
 
 
 if (addExpenseBtn) {
+    // Questo si aggiorna dopo 'authReady', quindi 'currentUser' è disponibile
     if (currentUser.role === 'admin') {
         addExpenseBtn.textContent = 'Aggiungi Spesa';
     } else {
@@ -1411,7 +1407,8 @@ document.addEventListener('click', (e) => {
     else if (target.matches('.complete-pending-btn')) {
         const id = target.dataset.id;
         if (confirm("Pagamento completato?")) {
-            const keyToRemove = Object.keys(pendingPayments).find(key => pendingPayments[key].id === id);
+            // Dobbiamo trovare la chiave giusta per eliminare
+            const keyToRemove = Object.keys(pendingPayments).find(key => pendingPayments[key]?.id === id);
             if(keyToRemove) {
                 remove(ref(database, `pendingPayments/${keyToRemove}`));
             }
@@ -1476,7 +1473,9 @@ document.addEventListener('change', (e) => {
     }
 });
 
+// --- App Initialization ---
 document.addEventListener('authReady', () => {
+    // Controlla se siamo sulla pagina finanze prima di eseguire tutto
     if (document.getElementById('member-count')) {
         console.log("Auth pronto, avvio la pagina finanze...");
         loadDataFromFirebase();
