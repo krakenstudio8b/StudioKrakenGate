@@ -1,11 +1,13 @@
-// js/finanze.js (VERSIONE COMPLETA E CORRETTA)
+// js/finanze.js (VERSIONE CORRETTA - Filtra user_base)
+
 import { database } from './firebase-config.js';
-import { ref, set, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, set, onValue, push, update, remove, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 
 
 // --- Riferimenti ai nodi del tuo database ---
 const membersRef = ref(database, 'members');
+const usersRef = ref(database, 'users'); // <-- AGGIUNTO RIFERIMENTO AI RUOLI
 const varExpensesRef = ref(database, 'variableExpenses');
 const fixedExpensesRef = ref(database, 'fixedExpenses');
 const incomeRef = ref(database, 'incomeEntries');
@@ -73,34 +75,51 @@ function saveDataToFirebase() {
 }
 
 // ==========================================================
-// --- FUNZIONE loadDataFromFirebase (CORRETTA) ---
+// --- FUNZIONE loadDataFromFirebase (MODIFICATA) ---
 // ==========================================================
-function loadDataFromFirebase() {
+async function loadDataFromFirebase() {
+    
+    let allUsersData = {};
+    try {
+        // 1. Prima, carichiamo TUTTI i ruoli utente una sola volta
+        const usersSnap = await get(usersRef);
+        allUsersData = usersSnap.val() || {};
+    } catch (error) {
+        console.error("Errore critico: impossibile caricare i ruoli utente.", error);
+        alert("Errore nel caricamento dei permessi utente. La pagina potrebbe non funzionare.");
+        return; // Blocca il caricamento
+    }
+
+    // 2. Ora impostiamo il listener per i membri
     onValue(membersRef, (snapshot) => {
-        // 1. Prendiamo i dati come OGGETTO
         const membersObject = snapshot.val() || {};
         
-        // 2. Trasformiamo l'oggetto in un array di { id: "uid", name: "..." }
-        // che è la struttura che il resto di questo file si aspetta
-        members = Object.entries(membersObject).map(([uid, memberData]) => ({
-            id: uid, // <--- QUESTA È LA CORREZIONE CHIAVE
-            name: memberData.name,
-            cleaningCount: memberData.cleaningCount // Manteniamo anche il cleaningCount se c'è
-        }));
-        
-        // 3. Ora tutto il resto funziona
+        // 3. Trasformiamo l'oggetto in array E FILTRIAMO via i user_base
+        members = Object.entries(membersObject)
+            .map(([uid, memberData]) => {
+                // Troviamo il ruolo dell'utente, se non c'è, è 'user_base'
+                const role = allUsersData[uid]?.role || 'user_base';
+                return {
+                    id: uid,
+                    name: memberData.name,
+                    cleaningCount: memberData.cleaningCount,
+                    role: role // Aggiungiamo il ruolo all'oggetto
+                };
+            })
+            .filter(member => member.role !== 'user_base'); // <-- LA CORREZIONE CHIAVE È QUI
+
+        // 4. Ora tutto il resto funziona con la lista 'members' filtrata
         renderMembers();
         toggleSectionsVisibility();
         updateDashboardView();
     });
+    
     // ==========================================================
     // --- IL RESTO DELLA FUNZIONE È IDENTICO ---
     // ==========================================================
 
     onValue(varExpensesRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
-        // Converte sempre il risultato in un array per sicurezza
         variableExpenses = data ? Object.values(data) : [];
         renderVariableExpenses();
         updateDashboardView();
@@ -109,7 +128,6 @@ function loadDataFromFirebase() {
 
     onValue(fixedExpensesRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
         fixedExpenses = data ? Object.values(data) : [];
         renderFixedExpenses();
         updateDashboardView();
@@ -117,7 +135,6 @@ function loadDataFromFirebase() {
 
     onValue(incomeRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
         incomeEntries = data ? Object.values(data) : [];
         renderIncomeEntries();
         updateDashboardView();
@@ -126,22 +143,18 @@ function loadDataFromFirebase() {
 
     onValue(wishlistRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
         wishlist = data ? Object.values(data) : [];
         renderWishlist();
     });
 
     onValue(futureMovementsRef, (snapshot) => {
         const rawData = snapshot.val();
-        // Converti l'oggetto di oggetti in un array di oggetti, includendo l'ID come proprietà interna
-        // Se rawData è null, usa un array vuoto
         futureMovements = rawData ? Object.keys(rawData).map(key => ({ id: key, ...rawData[key] })) : [];
         renderFutureMovements();
     });
 
     onValue(pendingPaymentsRef, (snapshot) => {
         const data = snapshot.val();
-        // --- CORREZIONE CRUCIALE ---
         pendingPayments = data ? Object.values(data) : [];
         renderPendingPayments();
     });
@@ -158,7 +171,7 @@ function loadDataFromFirebase() {
     });
 }
 // ==========================================================
-// --- FINE FUNZIONE CORRETTA ---
+// --- FINE FUNZIONE MODIFICATA ---
 // ==========================================================
 
 
@@ -249,12 +262,14 @@ const toggleSectionsVisibility = () => {
     const hasMembers = members.length > 0;
     Object.values(sections).forEach(section => {
         if(section && section.id === 'admin-requests-section') {
-            if(currentUser.role === 'admin' && hasMembers){
+            // Mostra admin-requests solo se sei admin E ci sono membri
+            if(currentUser.role === 'admin' && hasMembers){ 
                 section.classList.remove('hidden');
             } else {
                 section.classList.add('hidden');
             }
         } else if(section) {
+            // Nasconde le altre sezioni se non ci sono membri (filtrati)
             section.classList.toggle('hidden', !hasMembers);
         }
     });
@@ -286,13 +301,13 @@ const populateMonthFilter = () => {
 
 
 const renderMembers = () => {
+    // Questa funzione ora usa la lista 'members' GIA FILTRATA
     if (memberCountEl) memberCountEl.textContent = members.length;
     const membersListEl = document.getElementById('members-list');
     if (membersListEl) {
         membersListEl.innerHTML = members.map(m => `<li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-sm">${m.name}</li>`).join('');
     }
     
-    // QUESTA PARTE ORA FUNZIONA PERCHÉ 'members' è un array di {id, name}
     const memberOptions = members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
     
     const payerSelect = document.getElementById('payer');
@@ -308,7 +323,6 @@ const renderMembers = () => {
     
     const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
     if (incomeMembersCheckboxes) {
-        // 'm.id' ora è l'UID, che è un ID univoco perfetto
         incomeMembersCheckboxes.innerHTML = members.map(m => `<div class="flex items-center"><input type="checkbox" id="income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600"><label for="income-member-${m.id}" class="ml-2 text-sm">${m.name}</label></div>`).join('');
     }
 };
@@ -498,8 +512,10 @@ const renderExpenseRequestsForAdmin = () => {
     }
 
     pendingRequests.forEach(([key, req]) => {
-        // Usa l'array 'members' globale (ora corretto) per trovare il nome
-        const requesterName = members.find(m => m.id === req.requesterUid)?.name || req.requesterName || 'N/D';
+        // La lista 'members' globale è già filtrata, ma per questo ci serve
+        // il nome dell'utente anche se è 'user_base'. 
+        // Lo prendiamo da 'req.requesterName' che 'auth-guard' ha salvato.
+        const requesterName = req.requesterName || 'N/D';
         const reqEl = document.createElement('div');
         reqEl.className = 'bg-white p-3 rounded-lg border flex justify-between items-center mb-2';
         reqEl.innerHTML = `
@@ -1121,7 +1137,7 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
             return { member: member.name, amount: costPerPerson, paid: false };
         });
     } catch (error) {
-        console.error("Errore durante la creazione delle quote:", error);
+        console.error("Errore during la creazione delle quote:", error);
         alert("Si è verificato un errore nel calcolo delle quote.");
         return;
     }
@@ -1146,7 +1162,7 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
         })
         .catch(error => {
             console.error("Errore aggiungendo movimento futuro:", error);
-            alert("Errore durante l'aggiunta del movimento futuro.");
+            alert("Errore during l'aggiunta del movimento futuro.");
         });
 });
 
