@@ -1,3 +1,6 @@
+// js/index.js (o come si chiama il JS della tua pagina Attività)
+// VERSIONE CORRETTA - 10 NOVEMBRE
+
 import { database } from './firebase-config.js';
 import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 
@@ -8,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Stato locale
     let allTasks = [];
-    let allMembers = [];
+    // 'allMembers' non è più usato globalmente, lo carichiamo solo nel modale
     let currentTaskId = null;
 
     // Riferimenti DOM
@@ -39,56 +42,54 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // FUNZIONI PRINCIPALI
-    // 1. SOSTITUISCI QUESTA FUNZIONE
-const createTaskCard = (task) => {
-    const card = document.createElement('div');
-    card.className = 'task-card';
-    card.dataset.taskId = task.id;
+    const createTaskCard = (task) => {
+        const card = document.createElement('div');
+        card.className = 'task-card';
+        card.dataset.taskId = task.id;
 
-    const priority = priorityMap[task.priority] || priorityMap.low;
+        const priority = priorityMap[task.priority] || priorityMap.low;
 
-    // --- MODIFICA QUI ---
-    // Ora il codice legge la proprietà .name dall'oggetto membro
-    const assignedMembersHtml = (task.assignedTo || [])
-        .map(memberName => `<div class="w-6 h-6 rounded-full bg-indigo-200 text-indigo-800 flex items-center justify-center text-xs font-bold" title="${memberName}">${memberName.substring(0, 2).toUpperCase()}</div>`)
-        .join('');
-    // --- FINE MODIFICA ---
+        // Questo codice ora funziona perché salviamo i nomi come array
+        const assignedMembersHtml = (task.assignedTo || [])
+            .map(memberName => `<div class="w-6 h-6 rounded-full bg-indigo-200 text-indigo-800 flex items-center justify-center text-xs font-bold" title="${memberName}">${memberName.substring(0, 2).toUpperCase()}</div>`)
+            .join('');
 
-    const dueDateHtml = task.dueDate 
-        ? `<div class="text-xs text-gray-500 flex items-center gap-1">
-             <i class="fa-regular fa-calendar"></i>
-             <span>${new Date(task.dueDate).toLocaleDateString('it-IT')}</span>
-           </div>` 
-        : '';
+        const dueDateHtml = task.dueDate 
+            ? `<div class="text-xs text-gray-500 flex items-center gap-1">
+                 <i class="fa-regular fa-calendar"></i>
+                 <span>${new Date(task.dueDate + 'T00:00:00').toLocaleDateString('it-IT')}</span>
+               </div>` 
+            : '';
 
-    const checklist = task.checklist || [];
-    const completedItems = checklist.filter(item => item.done).length;
-    const checklistProgressHtml = checklist.length > 0
-        ? `<div class="checklist-progress">
-             <i class="fa-regular fa-square-check"></i>
-             <span>${completedItems}/${checklist.length}</span>
-           </div>`
-        : '';
+        const checklist = task.checklist || [];
+        const completedItems = checklist.filter(item => item.done).length;
+        const checklistProgressHtml = checklist.length > 0
+            ? `<div class="checklist-progress">
+                 <i class="fa-regular fa-square-check"></i>
+                 <span>${completedItems}/${checklist.length}</span>
+               </div>`
+            : '';
 
-    card.innerHTML = `
-        <div class="priority-bar ${priority.color}"></div>
-        <div class="task-card-content">
-            <p class="task-card-title">${task.title}</p>
-            <div class="task-card-footer">
-                <div class="flex -space-x-2">
-                    ${assignedMembersHtml}
-                </div>
-                <div class="flex items-center gap-3">
-                    ${checklistProgressHtml}
-                    ${dueDateHtml}
+        card.innerHTML = `
+            <div class="priority-bar ${priority.color}"></div>
+            <div class="task-card-content">
+                <p class="task-card-title">${task.title}</p>
+                <div class="task-card-footer">
+                    <div class="flex -space-x-2">
+                        ${assignedMembersHtml}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        ${checklistProgressHtml}
+                        ${dueDateHtml}
+                    </div>
                 </div>
             </div>
-        </div>
-    `;
+        `;
 
-    card.addEventListener('click', () => openModalForEdit(task.id));
-    return card;
-};
+        card.addEventListener('click', () => openModalForEdit(task.id));
+        return card;
+    };
+    
     const renderTasks = () => {
         Object.values(columns).forEach(col => col.innerHTML = '');
         allTasks.forEach(task => {
@@ -117,7 +118,6 @@ const createTaskCard = (task) => {
         const text = newChecklistItemInput.value.trim();
         if (!text) return;
         const newItem = { text, done: false };
-        // Aggiungi visivamente l'elemento alla lista nel modale
         const itemEl = document.createElement('div');
         itemEl.className = 'checklist-item';
         itemEl.innerHTML = `
@@ -136,7 +136,7 @@ const createTaskCard = (task) => {
         dueDateInput.value = '';
         prioritySelect.value = 'low';
         membersCheckboxesContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
-        renderChecklist([]); // Pulisce la checklist
+        renderChecklist([]);
         deleteTaskBtn.classList.add('hidden');
         modal.classList.remove('hidden');
     };
@@ -238,25 +238,32 @@ const createTaskCard = (task) => {
         });
     });
 
-    // CARICAMENTO DATI DA FIREBASE
-    // 2. SOSTITUISCI QUESTO BLOCCO
+    // ==========================================================
+    // --- BLOCCO CARICAMENTO MEMBRI (CORRETTO) ---
+    // ==========================================================
     onValue(membersRef, (snapshot) => {
-        const rawMembers = snapshot.val() || [];
-        // Converte i dati in un array di oggetti, se non lo sono già
-        allMembers = Array.isArray(rawMembers) ? rawMembers : Object.values(rawMembers);
-    
+        // 1. Prendiamo i dati come OGGETTO
+        const membersObject = snapshot.val() || {};
+        
+        // 2. Trasformiamo l'oggetto in un array di [uid, {name: "...", ...}]
+        const allMemberEntries = Object.entries(membersObject);
+
         membersCheckboxesContainer.innerHTML = '';
-        if (allMembers.length > 0) {
-            allMembers.forEach(member => {
-                // --- MODIFICA QUI ---
-                // Ora il codice legge correttamente l'ID e il nome dall'oggetto membro
+        if (allMemberEntries.length > 0) {
+            
+            // 3. Iteriamo sul nuovo array
+            allMemberEntries.forEach(([uid, member]) => {
+                // 'uid' è la chiave (es. "eb3RJKU...")
+                // 'member' è l'oggetto (es. { name: "simone", ... })
+                
                 const div = document.createElement('div');
                 div.className = 'flex items-center';
+                
+                // 4. Usiamo l'UID per l'ID e member.name per il testo e il valore
                 div.innerHTML = `
-                    <input id="task-member-${member.id}" type="checkbox" value="${member.name}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                    <label for="task-member-${member.id}" class="ml-2 block text-sm text-gray-900">${member.name}</label>
+                    <input id="task-member-${uid}" type="checkbox" value="${member.name}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="task-member-${uid}" class="ml-2 block text-sm text-gray-900">${member.name}</label>
                 `;
-                // --- FINE MODIFICA ---
                 membersCheckboxesContainer.appendChild(div);
             });
         } else {
@@ -269,4 +276,3 @@ const createTaskCard = (task) => {
         renderTasks();
     });
 });
-
