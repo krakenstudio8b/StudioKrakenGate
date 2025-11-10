@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Stato locale
     let allTasks = [];
-    // 'allMembers' non è più usato globalmente, lo carichiamo solo nel modale
     let currentTaskId = null;
 
     // Riferimenti DOM
@@ -49,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const priority = priorityMap[task.priority] || priorityMap.low;
 
+        // Questo codice ora funziona perché salviamo i nomi come array
         const assignedMembersHtml = (task.assignedTo || [])
             .map(memberName => `<div class="w-6 h-6 rounded-full bg-indigo-200 text-indigo-800 flex items-center justify-center text-xs font-bold" title="${memberName}">${memberName.substring(0, 2).toUpperCase()}</div>`)
             .join('');
@@ -274,10 +274,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+    // ==========================================================
+    // --- FINE BLOCCO CORRETTO ---
+    // ==========================================================
 
     // Caricamento task
     onValue(tasksRef, (snapshot) => {
-        allTasks = snapshot.val() || [];
+        // Controlla se i task sono un array (vecchio formato) o un oggetto
+        const tasksData = snapshot.val();
+        if (Array.isArray(tasksData)) {
+            allTasks = tasksData;
+        } else if (typeof tasksData === 'object' && tasksData !== null) {
+            allTasks = Object.values(tasksData);
+        } else {
+            allTasks = [];
+        }
         renderTasks();
     });
 });
