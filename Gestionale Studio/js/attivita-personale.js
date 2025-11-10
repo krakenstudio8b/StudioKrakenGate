@@ -1,4 +1,4 @@
-// js/attivita-personale.js (VERSIONE CORRETTA)
+// js/attivita-personale.js (VERSIONE DEFINITIVA E CORRETTA)
 import { database } from './firebase-config.js';
 import { ref, onValue, query, orderByChild, startAt, equalTo } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
@@ -14,32 +14,22 @@ function getIsoDate(date) {
     return date.toISOString().split('T')[0];
 }
 
-// ==========================================================
-// --- FUNZIONE FORMAT EVENT DATE (CORRETTA) ---
-// ==========================================================
 function formatEventDate(dateString) {
-    if (!dateString) return null; // Restituisci null se la stringa è vuota
-
+    if (!dateString) return null; 
     let date;
     if (dateString.includes('T')) {
-        // È già un datetime (es. "2025-11-10T09:00")
         date = new Date(dateString);
     } else {
-        // È solo una data (es. "2025-11-10"), aggiungiamo l'orario fittizio
         date = new Date(dateString + 'T12:00:00Z');
     }
-
-    // Controlla se la data è valida
     if (isNaN(date.getTime())) {
         console.warn(`Data non valida ricevuta: ${dateString}`);
-        return null;
+        return "Data non valida"; // Restituisce stringa per evitare 'null'
     }
-    
     return date.toLocaleString('it-IT', {
         weekday: 'short', day: 'numeric', month: 'short'
     });
 }
-// ==========================================================
 
 // Funzione generica per renderizzare i risultati
 function renderItems(container, items, notFoundMessage) {
@@ -62,9 +52,7 @@ function renderItems(container, items, notFoundMessage) {
 
 // --- LOGICHE DI FETCH ---
 
-// ==========================================================
-// --- FUNZIONE CALENDARIO (CORRETTA PER MULTI-GIORNO) ---
-// ==========================================================
+// 1. Carica gli eventi del calendario (Già corretto)
 async function loadMyCalendarEvents(userName, today) {
     const eventsRef = ref(database, 'calendarEvents');
     const q = query(eventsRef, orderByChild('start'), startAt(today));
@@ -77,11 +65,9 @@ async function loadMyCalendarEvents(userName, today) {
                 if (event.participants && event.participants.includes(userName)) {
                     
                     const startDateStr = formatEventDate(event.start);
-                    const endDateStr = formatEventDate(event.end); // Prova a formattare anche la fine
+                    const endDateStr = formatEventDate(event.end);
 
                     let dateString = startDateStr;
-
-                    // Se la data di fine esiste ED è diversa dalla data di inizio
                     if (endDateStr && endDateStr !== startDateStr) {
                         dateString = `${startDateStr} - ${endDateStr}`;
                     }
@@ -96,13 +82,11 @@ async function loadMyCalendarEvents(userName, today) {
         renderItems(calendarContainer, myEvents, "Nessun evento in calendario.");
     });
 }
-// ==========================================================
 
 
-// 2. Carica i turni di pulizia
+// 2. Carica i turni di pulizia (Già corretto)
 async function loadMyCleaningTasks(userName, today) {
     const scheduleRef = ref(database, 'cleaningSchedule');
-    // Prendi tutte le sessioni future
     const q = query(scheduleRef, orderByChild('date'), startAt(today));
 
     onValue(q, (snapshot) => {
@@ -110,8 +94,7 @@ async function loadMyCleaningTasks(userName, today) {
         if (snapshot.exists()) {
             snapshot.forEach(childSnapshot => {
                 const session = childSnapshot.val();
-                // Filtra: cerca tra gli assegnatari della sessione
-                if (session.assignments) { // Aggiunto controllo di sicurezza
+                if (session.assignments) { 
                     session.assignments.forEach(task => {
                         if (task.memberName === userName) {
                             myTasks.push({
@@ -127,20 +110,30 @@ async function loadMyCleaningTasks(userName, today) {
     });
 }
 
-// 3. Carica le attività (da un nuovo nodo 'activities')
+// ==========================================================
+// --- FUNZIONE ATTIVITÀ (CORRETTA) ---
+// ==========================================================
 async function loadMyActivities(userName) {
-    const activitiesRef = ref(database, 'activities');
-    const q = query(activitiesRef, orderByChild('assignedToName'), equalTo(userName));
+    // 1. Riferimento corretto al nodo 'tasks'
+    const tasksRef = ref(database, 'tasks');
 
-    onValue(q, (snapshot) => {
+    // 2. Rimuoviamo la query, leggiamo tutti i task
+    onValue(tasksRef, (snapshot) => {
         const myActivities = [];
         if (snapshot.exists()) {
-            snapshot.forEach(childSnapshot => {
-                const activity = childSnapshot.val();
-                if (activity.status !== 'done' && activity.dueDate) { // Aggiunto controllo per dueDate
+            const allTasks = snapshot.val(); 
+
+            // 3. Iteriamo sui task (gestendo sia Array che Oggetto)
+            Object.values(allTasks).forEach(task => {
+                if (!task) return; // Salta elementi nulli
+
+                // 4. Controlla se l'utente è nell'array 'assignedTo' E se non è 'done'
+                if (task.assignedTo && Array.isArray(task.assignedTo) && task.assignedTo.includes(userName) && task.status !== 'done') {
+                    
+                    // 5. Aggiungiamo il task
                     myActivities.push({
-                        date: `Scadenza: ${formatEventDate(activity.dueDate)}`,
-                        title: activity.description
+                        date: `Scadenza: ${task.dueDate ? formatEventDate(task.dueDate) : 'N/D'}`,
+                        title: task.title // Usiamo il titolo del task
                     });
                 }
             });
@@ -148,6 +141,7 @@ async function loadMyActivities(userName) {
         renderItems(activitiesContainer, myActivities, "Nessuna attività assegnata.");
     });
 }
+// ==========================================================
 
 
 // --- PUNTO DI INGRESSO ---
@@ -169,5 +163,5 @@ document.addEventListener('authReady', () => {
     // Avvia le 3 query
     loadMyCalendarEvents(userName, today);
     loadMyCleaningTasks(userName, today);
-    loadMyActivities(userName); // Questa ora gestirà "Nessuna attività" da sola
+    loadMyActivities(userName); // Ora questa funzione è corretta
 });
