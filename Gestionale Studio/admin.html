@@ -55,22 +55,23 @@
             </div>
         </section>
 
-        <section id="cleaning-management-section" class="card hidden"> <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Gestione Turni Pulizie</h2>
+        <section id="cleaning-management-section" class="card hidden">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Gestione Turni Pulizie</h2>
             <p class="text-gray-600 mb-4">
-                Genera i turni di pulizia per le prossime settimane.
-                La rotazione di membri e zone è automatica.
+                Premi il pulsante per generare la <strong>prossima sessione di pulizia</strong> 
+                (es. per Lunedì, Mercoledì o Venerdì).
+                Il sistema sceglierà automaticamente i 4 membri con il minor numero di pulizie
+                effettuate e aggiornerà il loro conteggio.
             </p>
-    
-            <div class="mb-4">
-                <label for="week-select" class="block text-sm font-medium mb-1">Seleziona la settimana da generare:</label>
-                <select id="week-select" class="w-full p-2 border rounded-lg bg-white">
-                    </select>
+        
+            <div id="last-cleaning-day-info" class="mb-4 p-3 bg-gray-100 rounded-lg text-sm">
+                Caricamento stato...
             </div>
             
             <button id="generate-cleaning-btn" class="w-full bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors shadow disabled:bg-gray-400">
-                Genera Turni
+                Genera Prossima Sessione di Pulizia
             </button>
-    
+        
             <div id="generation-feedback" class="mt-4 text-sm"></div>
         </section>
 
