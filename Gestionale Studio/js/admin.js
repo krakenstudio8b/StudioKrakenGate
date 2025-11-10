@@ -279,7 +279,7 @@ async function handleGeneration() {
             throw new Error("Nessun membro trovato nel database in '/members'.");
         }
         
-        const allMembers = membersSnapshot.val(); // Ora è un OGGETTO
+        const allMembers = Object.values(snapshot.val() || {}); // Ora è un OGGETTO
         
         // Converti in array e ordina per 'cleaningCount'
         // USIAMO Object.entries() INVECE DI allMembers
