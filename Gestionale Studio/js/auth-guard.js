@@ -1,4 +1,4 @@
-// js/auth-guard.js (VERSIONE COMPLETA E CORRETTA CON NUOVA LOGICA PERMESSI)
+// js/auth-guard.js (VERSIONE COMPLETA E CORRETTA CON RUOLO 'user_base')
 
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 import { ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
@@ -13,11 +13,11 @@ let authReadyFired = false;
 // --- NUOVA LOGICA PERMESSI ---
 // Elenco delle pagine e i ruoli che NON possono vederle
 const pagePermissions = {
-    // Solo 'admin' può vedere le finanze
-    'finanze.html': ['user', 'calendar_admin'], 
+    // 'finanze.html' è vietata SOLO a 'user_base'
+    'finanze.html': ['user_base'], 
     
-    // 'admin' e 'calendar_admin' possono vedere l'admin panel
-    'admin.html': ['user'] 
+    // 'admin.html' è vietata a tutti TRANNE 'admin'
+    'admin.html': ['user', 'calendar_admin', 'user_base'] 
 };
 
 function getCurrentPage() {
@@ -54,18 +54,20 @@ onAuthStateChanged(auth, async (user) => {
                 get(memberRef)
             ]);
 
-            // Assegna ruolo (default 'user')
+            // Assegna ruolo (default 'user_base' se non specificato)
             if (userSnapshot.exists()) {
-                currentUser.role = userSnapshot.val().role || 'user';
+                currentUser.role = userSnapshot.val().role || 'user_base'; 
             } else {
-                currentUser.role = 'user';
+                currentUser.role = 'user_base'; // Default per nuovi utenti o non specificati
             }
             
             // Assegna nome (fallback a email)
             if (memberSnapshot.exists() && memberSnapshot.val().name) {
                 currentUser.name = memberSnapshot.val().name;
             } else {
+                // Se non è in 'members', usa l'email e assegna un ruolo restrittivo
                 currentUser.name = user.email; 
+                currentUser.role = 'user_base'; // Sicurezza: se non è membro, non vede finanze
             }
 
             console.log(`Accesso effettuato come: ${currentUser.name} (Ruolo: ${currentUser.role})`);
@@ -82,9 +84,9 @@ onAuthStateChanged(auth, async (user) => {
             // --- FINE BLOCCO CONTROLLO PERMESSI ---
 
 
-            // Mostra il link al pannello admin (logica esistente)
+            // Mostra il link al pannello admin (solo per 'admin')
             if (adminPanelLink) {
-                if (currentUser.role === 'admin' || currentUser.role === 'calendar_admin') {
+                if (currentUser.role === 'admin') {
                     adminPanelLink.classList.remove('hidden');
                 } else {
                     adminPanelLink.classList.add('hidden');
