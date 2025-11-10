@@ -1,5 +1,5 @@
 // js/index.js (o come si chiama il JS della tua pagina Attività)
-// VERSIONE CORRETTA - 10 NOVEMBRE
+// VERSIONE CORRETTA
 
 import { database } from './firebase-config.js';
 import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
@@ -49,7 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const priority = priorityMap[task.priority] || priorityMap.low;
 
-        // Questo codice ora funziona perché salviamo i nomi come array
         const assignedMembersHtml = (task.assignedTo || [])
             .map(memberName => `<div class="w-6 h-6 rounded-full bg-indigo-200 text-indigo-800 flex items-center justify-center text-xs font-bold" title="${memberName}">${memberName.substring(0, 2).toUpperCase()}</div>`)
             .join('');
@@ -91,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const renderTasks = () => {
+        if (!columns.todo) return; // Sicurezza se lo script carica sulla pagina sbagliata
         Object.values(columns).forEach(col => col.innerHTML = '');
         allTasks.forEach(task => {
             const card = createTaskCard(task);
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    addChecklistItemBtn.addEventListener('click', () => {
+    if (addChecklistItemBtn) addChecklistItemBtn.addEventListener('click', () => {
         const text = newChecklistItemInput.value.trim();
         if (!text) return;
         const newItem = { text, done: false };
@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const closeModal = () => modal.classList.add('hidden');
 
-    saveTaskBtn.addEventListener('click', () => {
+    if (saveTaskBtn) saveTaskBtn.addEventListener('click', () => {
         const title = titleInput.value.trim();
         if (!title) {
             alert('Il titolo è obbligatorio.');
@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
         checklistContainer.querySelectorAll('.checklist-item').forEach(itemEl => {
             const checkbox = itemEl.querySelector('input[type="checkbox"]');
             const label = itemEl.querySelector('label');
-            if (label.textContent) {
+            if (label && label.textContent) {
                 checklistItems.push({
                     text: label.textContent,
                     done: checkbox.checked
@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closeModal();
     });
 
-    deleteTaskBtn.addEventListener('click', () => {
+    if (deleteTaskBtn) deleteTaskBtn.addEventListener('click', () => {
         if (currentTaskId && confirm('Sei sicuro di voler eliminare questo task?')) {
             allTasks = allTasks.filter(t => t.id !== currentTaskId);
             saveData();
@@ -217,26 +217,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    cancelTaskBtn.addEventListener('click', closeModal);
-    addTaskBtn.addEventListener('click', openModalForNew);
+    if (cancelTaskBtn) cancelTaskBtn.addEventListener('click', closeModal);
+    if (addTaskBtn) addTaskBtn.addEventListener('click', openModalForNew);
 
     // INIZIALIZZAZIONE DI SORTABLEJS (DRAG-AND-DROP)
-    Object.values(columns).forEach(columnEl => {
-        new Sortable(columnEl, {
-            group: 'shared',
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            onEnd: (evt) => {
-                const taskId = evt.item.dataset.taskId;
-                const newStatus = evt.to.dataset.status;
-                const task = allTasks.find(t => t.id === taskId);
-                if (task && task.status !== newStatus) {
-                    task.status = newStatus;
-                    saveData();
+    if (columns.todo) { // Esegui solo se le colonne esistono
+        Object.values(columns).forEach(columnEl => {
+            new Sortable(columnEl, {
+                group: 'shared',
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                onEnd: (evt) => {
+                    const taskId = evt.item.dataset.taskId;
+                    const newStatus = evt.to.dataset.status;
+                    const task = allTasks.find(t => t.id === taskId);
+                    if (task && task.status !== newStatus) {
+                        task.status = newStatus;
+                        saveData();
+                    }
                 }
-            }
+            });
         });
-    });
+    }
 
     // ==========================================================
     // --- BLOCCO CARICAMENTO MEMBRI (CORRETTO) ---
@@ -248,29 +250,32 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Trasformiamo l'oggetto in un array di [uid, {name: "...", ...}]
         const allMemberEntries = Object.entries(membersObject);
 
-        membersCheckboxesContainer.innerHTML = '';
-        if (allMemberEntries.length > 0) {
-            
-            // 3. Iteriamo sul nuovo array
-            allMemberEntries.forEach(([uid, member]) => {
-                // 'uid' è la chiave (es. "eb3RJKU...")
-                // 'member' è l'oggetto (es. { name: "simone", ... })
+        if (membersCheckboxesContainer) {
+            membersCheckboxesContainer.innerHTML = '';
+            if (allMemberEntries.length > 0) {
                 
-                const div = document.createElement('div');
-                div.className = 'flex items-center';
-                
-                // 4. Usiamo l'UID per l'ID e member.name per il testo e il valore
-                div.innerHTML = `
-                    <input id="task-member-${uid}" type="checkbox" value="${member.name}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                    <label for="task-member-${uid}" class="ml-2 block text-sm text-gray-900">${member.name}</label>
-                `;
-                membersCheckboxesContainer.appendChild(div);
-            });
-        } else {
-            membersCheckboxesContainer.innerHTML = '<p class="text-gray-400">Nessun membro trovato.</p>';
+                // 3. Iteriamo sul nuovo array
+                allMemberEntries.forEach(([uid, member]) => {
+                    // 'uid' è la chiave (es. "eb3RJKU...")
+                    // 'member' è l'oggetto (es. { name: "simone", ... })
+                    
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center';
+                    
+                    // 4. Usiamo l'UID per l'ID e member.name per il testo e il valore
+                    div.innerHTML = `
+                        <input id="task-member-${uid}" type="checkbox" value="${member.name}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                        <label for="task-member-${uid}" class="ml-2 block text-sm text-gray-900">${member.name}</label>
+                    `;
+                    membersCheckboxesContainer.appendChild(div);
+                });
+            } else {
+                membersCheckboxesContainer.innerHTML = '<p class="text-gray-400">Nessun membro trovato.</p>';
+            }
         }
     });
 
+    // Caricamento task
     onValue(tasksRef, (snapshot) => {
         allTasks = snapshot.val() || [];
         renderTasks();
