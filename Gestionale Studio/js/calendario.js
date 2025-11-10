@@ -204,7 +204,7 @@ function initializeCalendar() {
     onValue(membersRef, (snapshot) => {
         const rawMembers = snapshot.val() || [];
         // Assicura che allMembers sia sempre un array di oggetti
-        const allMembers = Array.isArray(rawMembers) ? rawMembers : Object.values(rawMembers);
+        const allMembers = Object.values(snapshot.val() || {});
         
         participantsContainer.innerHTML = '';
         if (allMembers.length > 0) {
@@ -305,6 +305,7 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
+
 
 
 
