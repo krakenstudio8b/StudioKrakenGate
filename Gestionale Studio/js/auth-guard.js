@@ -1,32 +1,29 @@
-// js/auth-guard.js (VERSIONE COMPLETA E CORRETTA CON RUOLO 'user_base')
+// js/auth-guard.js (VERSIONE DEFINITIVA - con link navbar nascosti)
 
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 import { ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { auth, database } from './firebase-config.js';
 
+// Riferimenti ai link della navbar
 const logoutBtn = document.getElementById('logout-btn');
 const adminPanelLink = document.getElementById('admin-panel-link');
+const finanzeLink = document.querySelector('a[href="finanze.html"]'); // Aggiunto questo
 
 export let currentUser = {};
 let authReadyFired = false;
 
-// --- NUOVA LOGICA PERMESSI ---
-// Elenco delle pagine e i ruoli che NON possono vederle
+// --- LOGICA PERMESSI ---
 const pagePermissions = {
-    // 'finanze.html' è vietata SOLO a 'user_base'
     'finanze.html': ['user_base'], 
-    
-    // 'admin.html' è vietata a tutti TRANNE 'admin'
     'admin.html': ['user', 'calendar_admin', 'user_base'] 
 };
 
 function getCurrentPage() {
     const path = window.location.pathname;
     const page = path.split("/").pop();
-    // Gestisce il caso in cui sei su "index.html" o sulla root "/"
     return page === '' ? 'index.html' : page;
 }
-// --- FINE NUOVA LOGICA ---
+// --- FINE LOGICA PERMESSI ---
 
 
 onAuthStateChanged(auth, async (user) => {
@@ -35,7 +32,6 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!user) {
         // Utente NON LOGGATO
-        // Se la pagina non è 'login.html', rimanda al login
         if (currentPage !== 'login.html') {
             window.location.href = 'login.html';
         }
@@ -45,7 +41,6 @@ onAuthStateChanged(auth, async (user) => {
         currentUser.email = user.email;
 
         try {
-            // Recupera ruolo e nome in parallelo
             const userRef = ref(database, 'users/' + user.uid);
             const memberRef = ref(database, 'members/' + user.uid);
 
@@ -54,37 +49,36 @@ onAuthStateChanged(auth, async (user) => {
                 get(memberRef)
             ]);
 
-            // Assegna ruolo (default 'user_base' se non specificato)
+            // Assegna ruolo (default 'user_base')
             if (userSnapshot.exists()) {
                 currentUser.role = userSnapshot.val().role || 'user_base'; 
             } else {
-                currentUser.role = 'user_base'; // Default per nuovi utenti o non specificati
+                currentUser.role = 'user_base';
             }
             
-            // Assegna nome (fallback a email)
+            // Assegna nome
             if (memberSnapshot.exists() && memberSnapshot.val().name) {
                 currentUser.name = memberSnapshot.val().name;
             } else {
-                // Se non è in 'members', usa l'email e assegna un ruolo restrittivo
                 currentUser.name = user.email; 
-                currentUser.role = 'user_base'; // Sicurezza: se non è membro, non vede finanze
+                currentUser.role = 'user_base'; 
             }
 
             console.log(`Accesso effettuato come: ${currentUser.name} (Ruolo: ${currentUser.role})`);
 
-            // --- NUOVO BLOCCO DI CONTROLLO PERMESSI ---
+            // --- CONTROLLO ACCESSO PAGINA (BUTTAFUORI) ---
             const forbiddenRoles = pagePermissions[currentPage];
             if (forbiddenRoles && forbiddenRoles.includes(currentUser.role)) {
-                // L'utente è su una pagina che non può vedere
                 console.warn(`Accesso negato a ${currentPage} per ruolo: ${currentUser.role}`);
                 alert("Non hai i permessi per visualizzare questa pagina.");
-                window.location.href = 'index.html'; // Rimanda alla home
-                return; // Interrompi l'esecuzione
+                window.location.href = 'index.html'; 
+                return; 
             }
-            // --- FINE BLOCCO CONTROLLO PERMESSI ---
+            // --- FINE CONTROLLO ACCESSO ---
 
 
-            // Mostra il link al pannello admin (solo per 'admin')
+            // --- GESTIONE VISIBILITÀ LINK NAVBAR ---
+            // 1. Link Pannello Admin
             if (adminPanelLink) {
                 if (currentUser.role === 'admin') {
                     adminPanelLink.classList.remove('hidden');
@@ -92,6 +86,16 @@ onAuthStateChanged(auth, async (user) => {
                     adminPanelLink.classList.add('hidden');
                 }
             }
+            
+            // 2. Link Finanze (NASCONDE PER user_base)
+            if (finanzeLink) {
+                if (currentUser.role === 'user_base') {
+                    finanzeLink.classList.add('hidden');
+                } else {
+                    finanzeLink.classList.remove('hidden');
+                }
+            }
+            // --- FINE GESTIONE LINK ---
             
             // Se sei loggato e vai su login.html, ti rimanda alla home
             if (currentPage === 'login.html') {
@@ -101,18 +105,16 @@ onAuthStateChanged(auth, async (user) => {
 
         } catch (error) {
             console.error("Errore nel recuperare i dati dell'utente (ruolo/nome):", error);
-            // In caso di errore, esegui il logout per sicurezza
             signOut(auth);
             return;
         }
     }
 
-    // Se tutti i controlli sono passati, spara l'evento
     authReadyFired = true;
     document.dispatchEvent(new CustomEvent('authReady'));
 });
 
-// Listener per il bottone di logout (logica esistente)
+// Listener per il bottone di logout
 if (logoutBtn) {
     logoutBtn.addEventListener('click', () => {
         signOut(auth).catch((error) => console.error("Errore durante il logout:", error));
