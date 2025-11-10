@@ -1,10 +1,7 @@
-// js/calendario.js - VERSIONE COMPLETA CON LISTENER 'authReady' E FIX MEMBRI
-
+// js/calendario.js - VERSIONE COMPLETA E CORRETTA
 import { database } from './firebase-config.js';
 import { ref, set, onValue, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
-
-// Aspetta il segnale da auth-guard.js prima di fare QUALSIASI COSA.
 
 // --- FUNZIONE DI INIZIALIZZAZIONE ---
 function initializeCalendar() {
