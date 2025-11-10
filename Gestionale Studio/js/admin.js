@@ -246,21 +246,19 @@ async function initializeCleaningModule() {
     generateCleaningBtn.addEventListener('click', handleGeneration);
 }
 
+// In js/admin.js
 async function handleGeneration() {
     generateCleaningBtn.disabled = true;
     generationFeedback.textContent = "Sto generando la sessione...";
     generationFeedback.className = "mt-4 text-sm text-yellow-600";
     
     try {
-        // 1. Trova la prossima data utile
+        // 1. Trova la prossima data utile (Questa logica non cambia)
         const stateSnapshot = await get(cleaningStateRef);
         const lastDateGenerated = stateSnapshot.val()?.lastDateGenerated 
                                   || getIsoDate(new Date(Date.now() - 86400000)); // Ieri
-
         let nextCleaningDate = new Date(lastDateGenerated + 'T12:00:00Z');
         let nextCleaningDateStr = "";
-
-        // Trova il prossimo Lun/Mer/Ven partendo da DOMANI
         while (true) {
             nextCleaningDate.setDate(nextCleaningDate.getDate() + 1);
             const dayOfWeek = nextCleaningDate.getUTCDay();
@@ -270,62 +268,56 @@ async function handleGeneration() {
             }
         }
         
-        // Controlla se esiste già (sicurezza)
         const scheduleSnapshot = await get(ref(database, `cleaningSchedule/${nextCleaningDateStr}`));
         if (scheduleSnapshot.exists()) {
             throw new Error(`Un turno per ${nextCleaningDateStr} esiste già.`);
         }
 
-        // 2. Trova i 4 membri con il conteggio più basso
+        // 2. Trova i 4 membri con il conteggio più basso (LOGICA MODIFICATA)
         const membersSnapshot = await get(membersRef);
         if (!membersSnapshot.exists()) {
-            throw new Error("Nessun membro trovato nel database in '/members'. Assicurati che esista e non sia vuoto.");
+            throw new Error("Nessun membro trovato nel database in '/members'.");
         }
         
-        const allMembers = membersSnapshot.val();
+        const allMembers = membersSnapshot.val(); // Ora è un OGGETTO
         
-        // Converti in array e ordina per 'cleaningCount' (da 0 in su)
+        // Converti in array e ordina per 'cleaningCount'
+        // USIAMO Object.entries() INVECE DI allMembers
         const sortedMembers = Object.entries(allMembers).sort((a, b) => {
+            // a[0] è l'UID, a[1] è {name, cleaningCount}
             const countA = a[1].cleaningCount || 0;
             const countB = b[1].cleaningCount || 0;
             return countA - countB;
         });
 
-        // Prendi i primi 4
         const team = sortedMembers.slice(0, NUM_ZONES);
         if (team.length < NUM_ZONES) {
             throw new Error(`Non ci sono abbastanza membri (servono ${NUM_ZONES}, trovati ${team.length}).`);
         }
 
-        // 3. Prepara gli aggiornamenti
+        // 3. Prepara gli aggiornamenti (Questa logica non cambia)
         const updates = {};
         const assignments = [];
-        
-        // Ruota le zone per varietà (usiamo il numero del giorno del mese)
         const zoneShift = nextCleaningDate.getDate() % NUM_ZONES; 
 
         for (let i = 0; i < NUM_ZONES; i++) {
-            const memberId = team[i][0]; // "uid-mario"
-            const memberData = team[i][1]; // { name: "Mario", ... }
+            const memberId = team[i][0]; // "eb3RJKU..." (Questo ora è l'UID)
+            const memberData = team[i][1]; // { name: "simone", ... }
             const newCount = (memberData.cleaningCount || 0) + 1;
-
             const zoneIndex = (i + zoneShift) % NUM_ZONES;
             const zoneName = ZONES[zoneIndex];
 
-            // Aggiungi l'assignment
             assignments.push({
                 zone: zoneName,
-                memberId: memberId,
+                memberId: memberId, // SALVIAMO L'UID
                 memberName: memberData.name,
                 done: false
             });
             
-            // Aggiorna il conteggio del membro
             updates[`members/${memberId}/cleaningCount`] = newCount;
         }
 
-        // 4. Aggiungi il nuovo turno e lo stato
-        // La chiave ora è la data YYYY-MM-DD
+        // 4. Aggiungi il nuovo turno e lo stato (Questa logica non cambia)
         updates[`cleaningSchedule/${nextCleaningDateStr}`] = {
             date: nextCleaningDateStr,
             assignments: assignments
@@ -338,7 +330,6 @@ async function handleGeneration() {
         // 6. Feedback
         generationFeedback.textContent = `Turno generato per ${nextCleaningDateStr} con successo!`;
         generationFeedback.className = "mt-4 text-sm text-green-600 font-semibold";
-        // Aggiorna l'info
         lastCleaningDayInfo.innerHTML = `Ultima sessione generata: <strong>${nextCleaningDateStr}</strong>.`;
 
     } catch (error) {
