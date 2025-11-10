@@ -1,4 +1,4 @@
-// js/calendario.js - VERSIONE COMPLETA CON LISTENER 'authReady'
+// js/calendario.js - VERSIONE COMPLETA CON LISTENER 'authReady' E FIX MEMBRI
 
 import { database } from './firebase-config.js';
 import { ref, set, onValue, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
@@ -7,7 +7,6 @@ import { currentUser } from './auth-guard.js';
 // Aspetta il segnale da auth-guard.js prima di fare QUALSIASI COSA.
 
 // --- FUNZIONE DI INIZIALIZZAZIONE ---
-// Spostiamo tutta la logica dentro una funzione che chiameremo solo quando l'utente è pronto.
 function initializeCalendar() {
     // Riferimenti agli elementi del DOM
     const calendarEl = document.getElementById('calendar');
@@ -76,24 +75,18 @@ function initializeCalendar() {
         editable: true,
         selectable: true,
     
-        // --- INIZIO NUOVA CONFIGURAZIONE RESPONSIVE ---
-        
-        // Riduciamo lo spazio tra gli elementi per guadagnare spazio
         handleWindowResize: true,
         windowResizeDelay: 100,
         
-        // Definiamo DUE diverse barre degli strumenti
         headerToolbar: {
-            // Layout per schermi GRANDI (da 768px in su)
             start: 'prev,next today',
             center: 'title',
-            end: 'dayGridMonth,timeGridWeek' // Mese e Settimana in alto
+            end: 'dayGridMonth,timeGridWeek'
         },
         footerToolbar: {
-            // Layout per schermi PICCOLI (sotto i 768px)
             start: 'prev,next',
-            center: '', // Lasciamo il centro vuoto
-            end: 'listWeek' // Solo Agenda (lista) in basso
+            center: '',
+            end: 'listWeek'
         },
         buttonText: {
             today: 'Oggi',
@@ -102,7 +95,7 @@ function initializeCalendar() {
             day: 'Giorno',
             list: 'Agenda'
         },
-        height: 'auto', // Lasciamo che il contenitore gestisca l'altezza
+        height: 'auto',
         editable: true,
         selectable: true,
         
@@ -110,12 +103,7 @@ function initializeCalendar() {
             openModalForNewEvent({ start: info.startStr, end: info.endStr });
         },
 
-        // SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE calendario.js
-
-        // SOSTITUISCI QUESTA INTERA FUNZIONE NEL TUO FILE calendario.js
-
         eventClick: (info) => {
-            // Riempi il modale con i dati dell'evento per tutti gli utenti
             const event = info.event;
             const extendedProps = event.extendedProps || {};
             
@@ -136,28 +124,17 @@ function initializeCalendar() {
                 cb.checked = (extendedProps.participants || []).includes(cb.value);
             });
 
-            // Seleziona tutti i campi modificabili nel modale
             const formElements = eventModal.querySelectorAll('input, select, textarea');
 
-            // LOGICA MODIFICATA: Controlla il ruolo dell'utente
             if (currentUser.role === 'user') {
-                // Se è un utente base
                 modalTitle.textContent = 'Dettagli Evento';
                 saveEventBtn.classList.add('hidden');
                 deleteEventBtn.classList.add('hidden');
-                
-                // --- NUOVA AGGIUNTA ---
-                // Disabilita tutti i campi per renderli non modificabili
                 formElements.forEach(el => el.disabled = true);
-                
             } else {
-                // Se è un admin o admin del calendario
                 modalTitle.textContent = 'Modifica Evento';
                 saveEventBtn.classList.remove('hidden');
                 deleteEventBtn.classList.remove('hidden');
-                
-                // --- NUOVA AGGIUNTA ---
-                // Assicurati che tutti i campi siano abilitati per la modifica
                 formElements.forEach(el => el.disabled = false);
             }
 
@@ -197,25 +174,31 @@ function initializeCalendar() {
 
     calendar.render();
 
-    // Carica i membri per la lista partecipanti
-    // 1. SOSTITUISCI QUESTO BLOCCO NEL TUO FILE calendario.js
-
-    // Carica i membri per la lista partecipanti
+    // ==========================================================
+    // --- BLOCCO CARICAMENTO MEMBRI (CORRETTO) ---
+    // ==========================================================
     onValue(membersRef, (snapshot) => {
-        // NEL TUO CODICE NUOVO (CORRETTO)
+        // 1. Prendiamo i dati come OGGETTO
         const membersObject = snapshot.val() || {};
-        const allMembers = Object.values(membersObject);
+        
+        // 2. Trasformiamo l'oggetto in un array di [uid, {name: "...", ...}]
+        const allMemberEntries = Object.entries(membersObject);
         
         participantsContainer.innerHTML = '';
-        if (allMembers.length > 0) {
-            allMembers.forEach(member => {
-                // --- MODIFICA QUI ---
-                // Ora il codice usa member.id e member.name per creare i checkbox
+        if (allMemberEntries.length > 0) {
+            
+            // 3. Iteriamo sul nuovo array
+            allMemberEntries.forEach(([uid, member]) => {
+                // 'uid' è la chiave (es. "eb3RJKU...")
+                // 'member' è l'oggetto (es. { name: "simone", ... })
+
                 const div = document.createElement('div');
                 div.className = 'flex items-center';
+                
+                // 4. Usiamo l'UID per l'ID e member.name per il testo e il valore
                 div.innerHTML = `
-                    <input id="part-${member.id}" type="checkbox" value="${member.name}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
-                    <label for="part-${member.id}" class="ml-2 block text-sm text-gray-900">${member.name}</label>
+                    <input id="part-${uid}" type="checkbox" value="${member.name}" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <label for="part-${uid}" class="ml-2 block text-sm text-gray-900">${member.name}</label>
                 `;
                 participantsContainer.appendChild(div);
             });
@@ -223,6 +206,9 @@ function initializeCalendar() {
             participantsContainer.innerHTML = '<p class="text-gray-400">Nessun membro trovato.</p>';
         }
     });
+    // ==========================================================
+    // --- FINE BLOCCO CORRETTO ---
+    // ==========================================================
 
     // Carica gli eventi da Firebase
     onValue(eventsRef, (snapshot) => {
@@ -305,14 +291,3 @@ document.addEventListener('authReady', () => {
         initializeCalendar();
     }
 });
-
-
-
-
-
-
-
-
-
-
-
