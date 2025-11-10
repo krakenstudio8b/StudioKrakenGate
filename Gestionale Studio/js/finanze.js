@@ -1012,7 +1012,7 @@ function handleImportData(event) {
             alert("Dati importati con successo e salvati su Firebase! La pagina verrà aggiornata.");
             location.reload(); // Ricarica per vedere i nuovi dati
         } catch (error) {
-            console.error("Errore during l'importazione del file JSON:", error);
+            console.error("Errore durante l'importazione del file JSON:", error);
             alert("Errore nell'importazione: file non valido o corrotto.");
         }
     };
