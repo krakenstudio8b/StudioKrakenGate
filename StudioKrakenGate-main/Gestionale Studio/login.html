@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateradio - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+
+    <div class="card w-full max-w-md fade-in">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-indigo-600">Gateradio Gestionale</h1>
+            <p class="text-gray-500 mt-2">Accedi per continuare</p>
+        </div>
+        
+        <div class="space-y-4">
+            <div>
+                <label for="email" class="block text-sm font-medium">Email</label>
+                <input type="email" id="email" class="w-full p-3 border rounded-lg mt-1" placeholder="tua@email.com">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium">Password</label>
+                <input type="password" id="password" class="w-full p-3 border rounded-lg mt-1" placeholder="••••••••">
+            </div>
+        </div>
+
+        <div id="error-message" class="text-red-500 text-sm mt-4 text-center h-4"></div>
+
+        <button id="login-btn" class="mt-4 w-full bg-indigo-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors shadow">
+            Login
+        </button>
+    </div>
+
+    <script type="module" src="js/login.js"></script>
+</body>
+</html>
