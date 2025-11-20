@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateradio - Calendario</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+</head>
+<body class="text-gray-800">
+
+    <nav class="bg-white shadow-md mb-8">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center">
+    
+                <div class="text-2xl font-bold text-indigo-600 text-center md:text-left">
+                    Gateradio Gestionale
+                </div>
+    
+                <div class="flex flex-col items-center mt-4 space-y-2 md:flex-row md:mt-0 md:space-y-0 md:space-x-4">
+                    <a href="index.html" class="text-gray-500 hover:text-indigo-600">Attività</a>
+                    <a href="attivita-personale.html" class="text-gray-500 hover:text-indigo-600">Attività Personale</a> 
+                    <a href="calendario.html" class="text-gray-500 hover:text-indigo-600">Calendario</a>
+                    <a href="finanze.html" class="text-gray-500 hover:text-indigo-600">Dashboard Finanze</a>
+                    <a href="pulizie.html" class="text-gray-500 hover:text-indigo-600">Turni Pulizie</a>
+                    <a id="admin-panel-link" href="admin.html" class="text-gray-500 hover:text-indigo-600 hidden">Pannello Admin</a>
+                    <button id="logout-btn" class="bg-red-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-red-600 transition-colors mt-2 md:mt-0">Logout</button>
+                </div>
+    
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 md:p-6">
+        <div class="card fade-in">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <h1 class="text-3xl font-bold">Calendario Presenze e Riunioni</h1>
+                <div class="flex flex-wrap gap-2">
+                    <button id="google-auth-btn" class="bg-blue-600 text-white font-semibold text-sm py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors shadow">
+                        🔗 Connetti Google Calendar
+                    </button>
+                    <button id="google-sync-btn" class="bg-green-600 text-white font-semibold text-sm py-2 px-4 rounded-lg hover:bg-green-700 transition-colors shadow">
+                        🔄 Sincronizza
+                    </button>
+                    <button id="google-signout-btn" class="bg-gray-500 text-white font-semibold text-sm py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors shadow">
+                        🔓 Disconnetti
+                    </button>
+                    <button id="add-event-extern-btn" class="bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors shadow">
+                        Aggiungi Evento
+                    </button>
+                </div>
+            </div>
+            <div id='calendar-container' class="mt-4">
+                <div id='calendar'></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="event-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="card w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <h2 id="modal-title" class="text-2xl font-semibold mb-6">Aggiungi Evento</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="event-title" class="block text-sm font-medium">Titolo Evento</label>
+                    <input type="text" id="event-title" placeholder="Es. Riunione, Presenza Kiri" class="w-full p-2 border rounded-lg mt-1">
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="event-start" class="block text-sm font-medium">Inizio</label>
+                        <input type="datetime-local" id="event-start" class="w-full p-2 border rounded-lg mt-1">
+                    </div>
+                    <div>
+                        <label for="event-end" class="block text-sm font-medium">Fine</label>
+                        <input type="datetime-local" id="event-end" class="w-full p-2 border rounded-lg mt-1">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="event-room" class="block text-sm font-medium">Sala da Prenotare</label>
+                    <select id="event-room" class="w-full p-2 border rounded-lg mt-1 bg-white">
+                        <option value="">Nessuna</option>
+                        <option value="Studio Kraken">Studio Kraken</option>
+                        <option value="Sala Gate">Sala Gate</option>
+                        <option value="Podcast">Podcast</option>
+                        <option value="Regia">Regia</option>
+                        <option value="Studio Bis">Studio Bis</option>
+                        <option value="Chill">Chill</option>
+                        <option value="Studio completo">Studio completo</option>
+                        <option value="Evento Esterno">Evento Esterno</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium">Partecipanti</label>
+                    <div id="event-participants-checkboxes" class="p-3 border rounded-lg max-h-32 overflow-y-auto space-y-2 mt-1">
+                        <p class="text-gray-400">Caricamento membri...</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="event-description" class="block text-sm font-medium">Descrizione</label>
+                    <textarea id="event-description" rows="3" placeholder="Aggiungi dettagli o note..." class="w-full p-2 border rounded-lg mt-1"></textarea>
+                </div>
+
+                <div>
+                    <label for="event-priority" class="block text-sm font-medium">Priorità / Colore</label>
+                    <select id="event-priority" class="w-full p-2 border rounded-lg mt-1 bg-white">
+                        <option value="#3b82f6">Bassa (Blu)</option>
+                        <option value="#f97316">Media (Arancione)</option>
+                        <option value="#ef4444">Alta (Rosso)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-between items-center">
+                <button id="delete-event-btn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 hidden">Elimina</button>
+                <div class="flex gap-3">
+                    <button id="cancel-event-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Annulla</button>
+                    <button id="save-event-btn" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Salva</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/calendario.js"></script>
+    <script type="module" src="js/auth-guard.js"></script>
+</body>
+</html>
+
+
+
+
