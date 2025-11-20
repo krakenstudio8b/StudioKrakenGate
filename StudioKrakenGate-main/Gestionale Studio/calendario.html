@@ -180,18 +180,18 @@
                 fullDescription = `Sala: ${room}\n\n${description}`;
             }
 
-            // Costruisci URL Google Calendar
-            const baseUrl = 'https://calendar.google.com/calendar/render';
+            // Costruisci URL Google Calendar (forzando account gateradiorm@gmail.com)
             const params = new URLSearchParams({
                 action: 'TEMPLATE',
                 text: title,
                 dates: `${startFormatted}/${endFormatted}`,
                 details: fullDescription,
                 location: room || '',
+                add: 'gateradiorm@gmail.com', // Forza l'aggiunta a questo calendario
                 ctz: 'Europe/Rome'
             });
 
-            const googleCalendarUrl = `${baseUrl}?${params.toString()}`;
+            const googleCalendarUrl = `https://calendar.google.com/calendar/u/gateradiorm@gmail.com/r?${params.toString()}`;
 
             // Apri Google Calendar in nuova tab
             window.open(googleCalendarUrl, '_blank');
