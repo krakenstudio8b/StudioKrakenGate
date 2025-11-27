@@ -9,10 +9,16 @@ const memberSelect = document.getElementById('member-select');
 const cancelSubBtn = document.getElementById('cancel-sub-btn');
 const confirmSubBtn = document.getElementById('confirm-sub-btn');
 
-// Riferimenti alle 2 card
+// Riferimenti alle 4 card (settimana corrente + prossima)
 const dayCards = {
-    1: document.getElementById('day-card-1'), // Lunedì
-    4: document.getElementById('day-card-4')  // Giovedì
+    current: {
+        1: document.getElementById('day-card-1'), // Lunedì corrente
+        4: document.getElementById('day-card-4')  // Giovedì corrente
+    },
+    next: {
+        1: document.getElementById('day-card-next-1'), // Lunedì prossimo
+        4: document.getElementById('day-card-next-4')  // Giovedì prossimo
+    }
 };
 
 // --- STATO GLOBALE PER IL MODALE ---
@@ -23,7 +29,7 @@ function getIsoDate(date) {
     return date.toISOString().split('T')[0];
 }
 
-// Funzione per ottenere le date di Lun e Gio di QUESTA settimana
+// Funzione per ottenere le date di Lun e Gio di QUESTA settimana e della PROSSIMA
 function getWeekDates() {
     const today = new Date();
     const currentDay = today.getDay(); // 0=Dom, 1=Lun, ..., 6=Sab
@@ -36,9 +42,22 @@ function getWeekDates() {
     const thursday = new Date(monday);
     thursday.setDate(monday.getDate() + 3);
 
+    // Calcola Lunedì e Giovedì della settimana prossima
+    const nextMonday = new Date(monday);
+    nextMonday.setDate(monday.getDate() + 7);
+
+    const nextThursday = new Date(nextMonday);
+    nextThursday.setDate(nextMonday.getDate() + 3);
+
     return {
-        1: getIsoDate(monday), // "YYYY-MM-DD"
-        4: getIsoDate(thursday)
+        current: {
+            1: getIsoDate(monday), // "YYYY-MM-DD"
+            4: getIsoDate(thursday)
+        },
+        next: {
+            1: getIsoDate(nextMonday),
+            4: getIsoDate(nextThursday)
+        }
     };
 }
 
@@ -144,42 +163,69 @@ function renderTasksInCard(container, date, assignments) {
 
 
 document.addEventListener('authReady', () => {
-    const weekDates = getWeekDates(); // { 1: "YYYY-MM-DD", 4: "YYYY-MM-DD" }
+    const weekDates = getWeekDates(); // { current: { 1: "...", 4: "..." }, next: { 1: "...", 4: "..." } }
     const scheduleRef = ref(database, 'cleaningSchedule');
 
-    // Imposta i titoli delle card
-    dayCards[1].querySelector('h2').textContent = `Lunedì ${new Date(weekDates[1] + 'T12:00:00Z').toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}`;
-    dayCards[4].querySelector('h2').textContent = `Giovedì ${new Date(weekDates[4] + 'T12:00:00Z').toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}`;
+    // Imposta i titoli delle card per settimana corrente
+    dayCards.current[1].querySelector('h2').textContent = `Lunedì ${new Date(weekDates.current[1] + 'T12:00:00Z').toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}`;
+    dayCards.current[4].querySelector('h2').textContent = `Giovedì ${new Date(weekDates.current[4] + 'T12:00:00Z').toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}`;
+
+    // Imposta i titoli delle card per settimana prossima
+    dayCards.next[1].querySelector('h2').textContent = `Lunedì ${new Date(weekDates.next[1] + 'T12:00:00Z').toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}`;
+    dayCards.next[4].querySelector('h2').textContent = `Giovedì ${new Date(weekDates.next[4] + 'T12:00:00Z').toLocaleDateString('it-IT', {day: 'numeric', month: 'short'})}`;
 
     // Ascolta l'intero nodo 'cleaningSchedule'
     onValue(scheduleRef, (snapshot) => {
         const allSessions = snapshot.val() || {};
 
-        // Controlla e popola ogni card
-        Object.keys(dayCards).forEach(dayKey => { // dayKey è 1 o 4
-            const dateString = weekDates[dayKey];
-            const sessionData = allSessions[dateString]; // Cerca "2025-11-10"
-            const container = dayCards[dayKey].querySelector('.space-y-3');
+        // Popola le card della settimana corrente
+        ['current', 'next'].forEach(weekType => {
+            Object.keys(dayCards[weekType]).forEach(dayKey => { // dayKey è 1 o 4
+                const dateString = weekDates[weekType][dayKey];
+                const sessionData = allSessions[dateString]; // Cerca "2025-11-10"
+                const container = dayCards[weekType][dayKey].querySelector('.space-y-3');
 
-            renderTasksInCard(container, dateString, sessionData ? sessionData.assignments : null);
+                renderTasksInCard(container, dateString, sessionData ? sessionData.assignments : null);
+            });
         });
     });
 
     // --- EVENT LISTENERS GLOBALI ---
     const weekViewContainer = document.getElementById('cleaning-week-view');
+    const nextWeekViewContainer = document.getElementById('cleaning-next-week-view');
 
+    // Listener per settimana corrente
     weekViewContainer.addEventListener('change', (e) => {
         if (e.target.classList.contains('task-checkbox')) {
             const date = e.target.dataset.date;
             const index = e.target.dataset.index;
             const isDone = e.target.checked;
-            
+
             const taskRef = ref(database, `cleaningSchedule/${date}/assignments/${index}/done`);
             set(taskRef, isDone);
         }
     });
 
     weekViewContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('substitute-btn')) {
+            const data = e.target.dataset;
+            openSubstituteModal(data.date, data.index, data.memberId, data.memberName);
+        }
+    });
+
+    // Listener per settimana prossima
+    nextWeekViewContainer.addEventListener('change', (e) => {
+        if (e.target.classList.contains('task-checkbox')) {
+            const date = e.target.dataset.date;
+            const index = e.target.dataset.index;
+            const isDone = e.target.checked;
+
+            const taskRef = ref(database, `cleaningSchedule/${date}/assignments/${index}/done`);
+            set(taskRef, isDone);
+        }
+    });
+
+    nextWeekViewContainer.addEventListener('click', (e) => {
         if (e.target.classList.contains('substitute-btn')) {
             const data = e.target.dataset;
             openSubstituteModal(data.date, data.index, data.memberId, data.memberName);
