@@ -203,53 +203,65 @@ function renderDocuments(files) {
 // Crea la card per un singolo file
 function createFileCard(file) {
     const card = document.createElement('div');
-    card.className = 'card hover:shadow-lg transition-shadow cursor-pointer';
+    const isFolderType = isFolder(file.mimeType);
+
+    // Stile diverso per cartelle
+    const cardClasses = isFolderType
+        ? 'card hover:shadow-lg transition-shadow cursor-pointer flex flex-col h-full border-2 border-amber-400 bg-amber-50'
+        : 'card hover:shadow-lg transition-shadow cursor-pointer flex flex-col h-full';
+
+    card.className = cardClasses;
 
     const icon = getFileIcon(file.mimeType);
+    const iconColor = isFolderType ? 'text-amber-500' : 'text-indigo-600';
     const fileSize = file.size ? formatFileSize(parseInt(file.size)) : 'N/A';
     const modifiedDate = new Date(file.modifiedTime).toLocaleDateString('it-IT', {
         day: 'numeric',
         month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        year: 'numeric'
     });
 
     const owner = file.owners && file.owners[0] ? file.owners[0].displayName : 'Sconosciuto';
 
     card.innerHTML = `
-        <div class="flex items-start gap-4">
-            <div class="flex-shrink-0">
-                <i class="${icon} text-4xl text-indigo-600"></i>
+        <div class="flex flex-col items-center text-center flex-grow">
+            ${isFolderType ? '<span class="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded-full mb-2">CARTELLA</span>' : ''}
+            <div class="mb-3">
+                <i class="${icon} text-5xl ${iconColor}"></i>
             </div>
-            <div class="flex-grow min-w-0">
-                <h3 class="text-lg font-semibold mb-1 truncate">${escapeHtml(file.name)}</h3>
-                <div class="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">
-                    <span><i class="fas fa-user mr-1"></i>${escapeHtml(owner)}</span>
-                    <span><i class="fas fa-clock mr-1"></i>${modifiedDate}</span>
-                    <span><i class="fas fa-database mr-1"></i>${fileSize}</span>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    ${file.webViewLink ? `
-                        <button onclick="window.open('${file.webViewLink}', '_blank')"
-                                class="bg-indigo-500 text-white text-sm font-semibold py-1 px-3 rounded hover:bg-indigo-600 transition-colors">
-                            <i class="fas fa-eye mr-1"></i>Visualizza
-                        </button>
-                    ` : ''}
-                    ${isGoogleDoc(file.mimeType) ? `
-                        <button onclick="window.open('${file.webViewLink}', '_blank')"
-                                class="bg-green-500 text-white text-sm font-semibold py-1 px-3 rounded hover:bg-green-600 transition-colors">
-                            <i class="fas fa-edit mr-1"></i>Modifica
-                        </button>
-                    ` : ''}
-                    ${file.webContentLink ? `
-                        <a href="${file.webContentLink}"
-                           class="bg-blue-500 text-white text-sm font-semibold py-1 px-3 rounded hover:bg-blue-600 transition-colors inline-block">
-                            <i class="fas fa-download mr-1"></i>Scarica
-                        </a>
-                    ` : ''}
-                </div>
+            <h3 class="text-base font-semibold mb-2 px-2 line-clamp-2" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</h3>
+            <div class="flex flex-col gap-1 text-xs text-gray-600 mb-4 w-full px-2">
+                <span class="truncate"><i class="fas fa-user mr-1"></i>${escapeHtml(owner)}</span>
+                <span><i class="fas fa-clock mr-1"></i>${modifiedDate}</span>
+                ${!isFolderType ? `<span><i class="fas fa-database mr-1"></i>${fileSize}</span>` : ''}
             </div>
+        </div>
+        <div class="flex flex-col gap-2 mt-auto border-t pt-3">
+            ${isFolderType ? `
+                <button onclick="window.open('${file.webViewLink}', '_blank')"
+                        class="bg-amber-500 text-white text-xs font-semibold py-2 px-3 rounded hover:bg-amber-600 transition-colors w-full">
+                    <i class="fas fa-folder-open mr-1"></i>Apri Cartella
+                </button>
+            ` : `
+                ${file.webViewLink ? `
+                    <button onclick="window.open('${file.webViewLink}', '_blank')"
+                            class="bg-indigo-500 text-white text-xs font-semibold py-2 px-3 rounded hover:bg-indigo-600 transition-colors w-full">
+                        <i class="fas fa-eye mr-1"></i>Visualizza
+                    </button>
+                ` : ''}
+                ${isGoogleDoc(file.mimeType) ? `
+                    <button onclick="window.open('${file.webViewLink}', '_blank')"
+                            class="bg-green-500 text-white text-xs font-semibold py-2 px-3 rounded hover:bg-green-600 transition-colors w-full">
+                        <i class="fas fa-edit mr-1"></i>Modifica
+                    </button>
+                ` : ''}
+                ${file.webContentLink ? `
+                    <a href="${file.webContentLink}"
+                       class="bg-blue-500 text-white text-xs font-semibold py-2 px-3 rounded hover:bg-blue-600 transition-colors inline-block text-center w-full">
+                        <i class="fas fa-download mr-1"></i>Scarica
+                    </a>
+                ` : ''}
+            `}
         </div>
     `;
 
@@ -258,7 +270,10 @@ function createFileCard(file) {
 
 // Determina l'icona in base al tipo MIME
 function getFileIcon(mimeType) {
-    if (mimeType.includes('document') || mimeType.includes('word')) {
+    // Cartelle
+    if (mimeType === 'application/vnd.google-apps.folder') {
+        return 'fas fa-folder';
+    } else if (mimeType.includes('document') || mimeType.includes('word')) {
         return 'fas fa-file-word';
     } else if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
         return 'fas fa-file-excel';
@@ -279,6 +294,11 @@ function getFileIcon(mimeType) {
     } else {
         return 'fas fa-file';
     }
+}
+
+// Controlla se è una cartella
+function isFolder(mimeType) {
+    return mimeType === 'application/vnd.google-apps.folder';
 }
 
 // Controlla se è un documento Google nativo
