@@ -25,12 +25,36 @@ let gisInited = false;
 
 // --- INIZIALIZZAZIONE ---
 document.addEventListener('authReady', () => {
-    gapiLoaded();
-    gisLoaded();
+    console.log('Auth ready, inizializzazione Google APIs...');
+    // Attende che gapi sia caricato
+    waitForGapi();
+    // Attende che GIS sia caricato
+    waitForGis();
 });
+
+// Attende che gapi sia disponibile
+function waitForGapi() {
+    if (typeof gapi !== 'undefined') {
+        gapiLoaded();
+    } else {
+        console.log('In attesa di gapi...');
+        setTimeout(waitForGapi, 100);
+    }
+}
+
+// Attende che Google Identity Services sia disponibile
+function waitForGis() {
+    if (typeof google !== 'undefined' && google.accounts) {
+        gisLoaded();
+    } else {
+        console.log('In attesa di Google Identity Services...');
+        setTimeout(waitForGis, 100);
+    }
+}
 
 // Callback quando gapi.client è pronto
 function gapiLoaded() {
+    console.log('GAPI caricato, inizializzazione client...');
     gapi.load('client', initializeGapiClient);
 }
 
@@ -38,30 +62,39 @@ function gapiLoaded() {
 async function initializeGapiClient() {
     try {
         await gapi.client.init({
-            apiKey: GOOGLE_CONFIG.CLIENT_ID,
             discoveryDocs: [GOOGLE_CONFIG.DRIVE_DISCOVERY_DOC]
         });
         gapiInited = true;
         maybeEnableButtons();
     } catch (error) {
         console.error('Errore inizializzazione GAPI:', error);
+        alert('Errore durante l\'inizializzazione di Google Drive API. Controlla la console per dettagli.');
     }
 }
 
 // Callback quando Google Identity Services è pronto
 function gisLoaded() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CONFIG.CLIENT_ID,
-        scope: GOOGLE_CONFIG.DRIVE_SCOPES,
-        callback: '' // definito in seguito
-    });
-    gisInited = true;
-    maybeEnableButtons();
+    try {
+        console.log('GIS caricato, inizializzazione token client...');
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CONFIG.CLIENT_ID,
+            scope: GOOGLE_CONFIG.DRIVE_SCOPES,
+            callback: '' // definito in seguito
+        });
+        gisInited = true;
+        console.log('Token client inizializzato');
+        maybeEnableButtons();
+    } catch (error) {
+        console.error('Errore inizializzazione GIS:', error);
+        alert('Errore durante l\'inizializzazione dell\'autenticazione Google. Ricarica la pagina.');
+    }
 }
 
 // Abilita i pulsanti quando tutto è pronto
 function maybeEnableButtons() {
+    console.log('Controllo inizializzazione: GAPI =', gapiInited, ', GIS =', gisInited);
     if (gapiInited && gisInited) {
+        console.log('Tutto pronto! Pulsante autorizzazione abilitato.');
         authorizeBtn.disabled = false;
     }
 }
@@ -70,6 +103,8 @@ function maybeEnableButtons() {
 authorizeBtn.addEventListener('click', handleAuthClick);
 
 function handleAuthClick() {
+    console.log('Bottone autenticazione cliccato');
+
     tokenClient.callback = async (resp) => {
         if (resp.error !== undefined) {
             console.error('Errore autenticazione:', resp);
@@ -77,6 +112,7 @@ function handleAuthClick() {
             return;
         }
 
+        console.log('Autenticazione riuscita!');
         // Autenticazione riuscita
         authSection.classList.add('hidden');
         documentsSection.classList.remove('hidden');
@@ -89,9 +125,11 @@ function handleAuthClick() {
 
     // Controlla se abbiamo già un token valido
     if (gapi.client.getToken() === null) {
+        console.log('Nessun token presente, richiesta nuovo token...');
         // Richiedi un nuovo token
         tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
+        console.log('Token già presente, utilizzo token esistente');
         // Abbiamo già un token, usa quello
         authSection.classList.add('hidden');
         documentsSection.classList.remove('hidden');
