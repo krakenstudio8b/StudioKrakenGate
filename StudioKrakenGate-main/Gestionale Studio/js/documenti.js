@@ -24,76 +24,79 @@ let gapiInited = false;
 let gisInited = false;
 
 // --- INIZIALIZZAZIONE ---
+// Aspetta che sia Firebase che Google siano pronti
+let firebaseReady = false;
 document.addEventListener('authReady', () => {
-    console.log('Auth ready, inizializzazione Google APIs...');
-    // Attende che gapi sia caricato
-    waitForGapi();
-    // Attende che GIS sia caricato
-    waitForGis();
+    console.log('Firebase auth ready');
+    firebaseReady = true;
+    maybeEnableButtons();
 });
 
-// Attende che gapi sia disponibile
-function waitForGapi() {
-    if (typeof gapi !== 'undefined') {
-        gapiLoaded();
-    } else {
-        console.log('In attesa di gapi...');
-        setTimeout(waitForGapi, 100);
-    }
+// Inizializza GAPI quando il documento è pronto
+function initGapi() {
+    console.log('Inizializzazione GAPI...');
+    gapi.load('client', async () => {
+        try {
+            await gapi.client.init({
+                discoveryDocs: [GOOGLE_CONFIG.DRIVE_DISCOVERY_DOC]
+            });
+            console.log('GAPI client inizializzato');
+            gapiInited = true;
+            maybeEnableButtons();
+        } catch (error) {
+            console.error('Errore inizializzazione GAPI:', error);
+            alert('Errore durante l\'inizializzazione di Google Drive API. Assicurati di aver abilitato l\'API nella console Google Cloud.');
+        }
+    });
 }
 
-// Attende che Google Identity Services sia disponibile
-function waitForGis() {
-    if (typeof google !== 'undefined' && google.accounts) {
-        gisLoaded();
-    } else {
-        console.log('In attesa di Google Identity Services...');
-        setTimeout(waitForGis, 100);
-    }
-}
-
-// Callback quando gapi.client è pronto
-function gapiLoaded() {
-    console.log('GAPI caricato, inizializzazione client...');
-    gapi.load('client', initializeGapiClient);
-}
-
-// Inizializza il client gapi
-async function initializeGapiClient() {
+// Inizializza GIS quando il documento è pronto
+function initGis() {
+    console.log('Inizializzazione Google Identity Services...');
     try {
-        await gapi.client.init({
-            discoveryDocs: [GOOGLE_CONFIG.DRIVE_DISCOVERY_DOC]
-        });
-        gapiInited = true;
-        maybeEnableButtons();
-    } catch (error) {
-        console.error('Errore inizializzazione GAPI:', error);
-        alert('Errore durante l\'inizializzazione di Google Drive API. Controlla la console per dettagli.');
-    }
-}
-
-// Callback quando Google Identity Services è pronto
-function gisLoaded() {
-    try {
-        console.log('GIS caricato, inizializzazione token client...');
         tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_CONFIG.CLIENT_ID,
             scope: GOOGLE_CONFIG.DRIVE_SCOPES,
             callback: '' // definito in seguito
         });
-        gisInited = true;
         console.log('Token client inizializzato');
+        gisInited = true;
         maybeEnableButtons();
     } catch (error) {
         console.error('Errore inizializzazione GIS:', error);
-        alert('Errore durante l\'inizializzazione dell\'autenticazione Google. Ricarica la pagina.');
+        alert('Errore durante l\'inizializzazione dell\'autenticazione Google.');
     }
 }
 
+// Espone le funzioni globalmente per gli script Google
+window.initGapi = initGapi;
+window.initGis = initGis;
+
+// Prova a inizializzare quando la pagina è caricata
+window.addEventListener('load', () => {
+    console.log('Pagina caricata, tentativo inizializzazione...');
+
+    // Attendi che gapi sia disponibile
+    const waitForGapi = setInterval(() => {
+        if (typeof gapi !== 'undefined') {
+            clearInterval(waitForGapi);
+            initGapi();
+        }
+    }, 100);
+
+    // Attendi che Google Identity Services sia disponibile
+    const waitForGis = setInterval(() => {
+        if (typeof google !== 'undefined' && google.accounts) {
+            clearInterval(waitForGis);
+            initGis();
+        }
+    }, 100);
+});
+
 // Abilita i pulsanti quando tutto è pronto
 function maybeEnableButtons() {
-    console.log('Controllo inizializzazione: GAPI =', gapiInited, ', GIS =', gisInited);
-    if (gapiInited && gisInited) {
+    console.log('Controllo: Firebase =', firebaseReady, ', GAPI =', gapiInited, ', GIS =', gisInited);
+    if (firebaseReady && gapiInited && gisInited) {
         console.log('Tutto pronto! Pulsante autorizzazione abilitato.');
         authorizeBtn.disabled = false;
     }
@@ -104,6 +107,12 @@ authorizeBtn.addEventListener('click', handleAuthClick);
 
 function handleAuthClick() {
     console.log('Bottone autenticazione cliccato');
+
+    if (!tokenClient) {
+        console.error('Token client non inizializzato');
+        alert('Errore: sistema di autenticazione non pronto. Ricarica la pagina.');
+        return;
+    }
 
     tokenClient.callback = async (resp) => {
         if (resp.error !== undefined) {
