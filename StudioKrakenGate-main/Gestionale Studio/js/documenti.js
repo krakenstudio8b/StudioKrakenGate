@@ -161,18 +161,41 @@ async function listDocuments() {
         if (GOOGLE_CONFIG.DRIVE_FOLDER_ID) {
             query += ` and '${GOOGLE_CONFIG.DRIVE_FOLDER_ID}' in parents`;
         } else {
-            // Mostra solo i file condivisi con me o di mia proprietà
-            query += " and (sharedWithMe=true or 'me' in owners)";
+            // Mostra solo il primo livello: root del Drive + file condivisi direttamente
+            query += " and ('root' in parents or sharedWithMe=true)";
         }
 
         const response = await gapi.client.drive.files.list({
             q: query,
             pageSize: 100,
-            orderBy: 'modifiedTime desc',
-            fields: 'files(id, name, mimeType, modifiedTime, iconLink, webViewLink, webContentLink, size, owners)',
+            orderBy: 'folder,modifiedTime desc',
+            fields: 'files(id, name, mimeType, modifiedTime, iconLink, webViewLink, webContentLink, size, owners, parents)',
         });
 
-        const files = response.result.files;
+        let files = response.result.files;
+
+        // Se non c'è un DRIVE_FOLDER_ID, filtra per mostrare solo primo livello
+        if (!GOOGLE_CONFIG.DRIVE_FOLDER_ID && files) {
+            // Ottieni gli ID di tutte le cartelle visualizzate
+            const folderIds = files
+                .filter(f => isFolder(f.mimeType))
+                .map(f => f.id);
+
+            // Filtra i file: mantieni solo quelli che:
+            // 1. Sono cartelle, oppure
+            // 2. Non hanno come parent nessuna delle cartelle visualizzate (sono al primo livello)
+            files = files.filter(file => {
+                if (isFolder(file.mimeType)) return true; // Mantieni tutte le cartelle
+
+                // Per i file, controlla se il parent è una cartella visualizzata
+                if (!file.parents || file.parents.length === 0) return true; // File senza parent
+
+                // Se il parent è 'root' o non è tra le cartelle visualizzate, mostra il file
+                return file.parents.some(parentId =>
+                    parentId === 'root' || !folderIds.includes(parentId)
+                );
+            });
+        }
 
         if (!files || files.length === 0) {
             loadingSection.classList.add('hidden');
