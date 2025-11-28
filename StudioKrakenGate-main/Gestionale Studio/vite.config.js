@@ -15,7 +15,27 @@ export default defineConfig({
         'attivita-personale': './attivita-personale.html'
       }
     },
-    outDir: 'dist'
+    outDir: 'dist',
+    // Minificazione e offuscazione avanzata
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,      // Rimuove console.log
+        drop_debugger: true,     // Rimuove debugger
+        passes: 3                // Più passaggi = più compressione
+      },
+      mangle: {
+        toplevel: true,          // Offusca anche variabili globali
+        properties: {
+          regex: /^_/            // Offusca proprietà che iniziano con _
+        }
+      },
+      format: {
+        comments: false          // Rimuove tutti i commenti
+      }
+    },
+    // Disabilita source maps in produzione (rende impossibile debuggare)
+    sourcemap: false
   },
   // Configurazione per il dev server
   server: {
