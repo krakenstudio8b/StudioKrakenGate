@@ -1,14 +1,11 @@
 // js/google-calendar-config.js
 // CONFIGURAZIONE GOOGLE CALENDAR API E GOOGLE DRIVE API
 
-// ⚠️ ATTENZIONE: NON CARICARE QUESTO FILE SU REPOSITORY PUBBLICI!
-// Aggiungi questo file a .gitignore
+import { ENV } from './env-config.js';
 
 export const GOOGLE_CONFIG = {
-    // Credenziali OAuth 2.0
-    // IMPORTANTE: Per le web app client-side, serve SOLO il CLIENT_ID
-    // Il client secret NON va usato lato client (è solo per app server-side)
-    CLIENT_ID: '637673514104-747b0d7vsiev6e4rbvlfk8jfps1ttutb.apps.googleusercontent.com',
+    // Credenziali OAuth 2.0 caricate da variabili d'ambiente
+    CLIENT_ID: ENV.GOOGLE_CLIENT_ID,
 
     // Scope necessari per Google Calendar
     SCOPES: 'https://www.googleapis.com/auth/calendar',

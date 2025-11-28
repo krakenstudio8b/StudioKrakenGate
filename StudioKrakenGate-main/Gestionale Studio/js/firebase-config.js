@@ -2,23 +2,24 @@
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js"; // Importa la funzione getAuth
+import { getAuth } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+import { ENV } from './env-config.js';
 
-// La tua configurazione Firebase (è corretta)
+// Configurazione Firebase caricata da variabili d'ambiente
 const firebaseConfig = {
-    apiKey: "AIzaSyBtQZkX6r4F2W0BsIo6nsD27dUZHv3e8RU",
-    authDomain: "studio-kraken-gate.firebaseapp.com",
-    projectId: "studio-kraken-gate",
-    storageBucket: "studio-kraken-gate.firebasestorage.app",
-    messagingSenderId: "744360512833",
-    appId: "1:744360512833:web:ed0952f304c37bd5ee25c0",
-    measurementId: "G-39RLC549LJ",
-    databaseURL: "https://studio-kraken-gate-default-rtdb.firebaseio.com"
+    apiKey: ENV.FIREBASE_API_KEY,
+    authDomain: ENV.FIREBASE_AUTH_DOMAIN,
+    projectId: ENV.FIREBASE_PROJECT_ID,
+    storageBucket: ENV.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: ENV.FIREBASE_MESSAGING_SENDER_ID,
+    appId: ENV.FIREBASE_APP_ID,
+    measurementId: ENV.FIREBASE_MEASUREMENT_ID,
+    databaseURL: ENV.FIREBASE_DATABASE_URL
 };
 
 // Inizializza Firebase
 const app = initializeApp(firebaseConfig);
 
-// Crea ed ESPORTA le istanze dei servizi che useremo in tutta l'app
+// Crea ed esporta le istanze dei servizi
 export const database = getDatabase(app);
-export const auth = getAuth(app); // <-- QUESTA RIGA MANCAVA O ERA ERRATA
+export const auth = getAuth(app);
