@@ -9,6 +9,7 @@ let tokenClient;
 let gapiInited = false;
 let gisInited = false;
 let isAuthorized = false;
+let customAuthCallback = null; // Callback personalizzato dopo l'autenticazione
 
 // Riferimenti Firebase
 const eventsRef = ref(database, 'calendarEvents');
@@ -59,11 +60,21 @@ function loadGisScript() {
                 callback: (response) => {
                     if (response.error !== undefined) {
                         console.error('Errore autenticazione:', response);
-                        throw response;
+                        alert('Errore durante l\'autenticazione con Google Calendar.');
+                        return;
                     }
                     isAuthorized = true;
                     console.log('Autenticazione Google riuscita');
-                    syncFromGoogleToFirebase();
+
+                    // Chiama il callback personalizzato se impostato
+                    if (customAuthCallback) {
+                        const callback = customAuthCallback;
+                        customAuthCallback = null; // Resetta il callback
+                        callback();
+                    } else {
+                        // Comportamento predefinito: sincronizza da Google a Firebase
+                        syncFromGoogleToFirebase();
+                    }
                 },
             });
             gisInited = true;
@@ -88,32 +99,17 @@ export function handleAuthClick(onSuccessCallback) {
     if (gapi.client.getToken() === null) {
         console.log('Richiedo nuovo token...');
 
-        // Salva il callback se fornito
-        if (onSuccessCallback) {
-            tokenClient.callback = (response) => {
-                if (response.error !== undefined) {
-                    console.error('Errore autenticazione:', response);
-                    alert('Errore durante l\'autenticazione con Google Calendar.');
-                    return;
-                }
-                isAuthorized = true;
-                console.log('Autenticazione Google riuscita');
+        // Salva il callback personalizzato
+        customAuthCallback = onSuccessCallback;
 
-                // Chiama il callback personalizzato se fornito
-                if (onSuccessCallback) {
-                    onSuccessCallback();
-                }
-            };
-        }
-
-        // Richiedi nuovo token
+        // Richiedi nuovo token (il callback verrà chiamato automaticamente quando l'auth completa)
         tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
         console.log('Già autenticato');
         // Già autenticato
         isAuthorized = true;
 
-        // Chiama il callback se fornito
+        // Chiama il callback immediatamente se fornito
         if (onSuccessCallback) {
             onSuccessCallback();
         }
