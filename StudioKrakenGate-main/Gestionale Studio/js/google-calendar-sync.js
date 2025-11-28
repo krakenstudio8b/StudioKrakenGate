@@ -17,6 +17,16 @@ const eventsRef = ref(database, 'calendarEvents');
 export async function initGoogleCalendar() {
     await loadGapiScript();
     await loadGisScript();
+
+    // Controlla se esiste già un token valido
+    checkExistingAuth();
+}
+
+function checkExistingAuth() {
+    if (gapiInited && gapi.client.getToken() !== null) {
+        isAuthorized = true;
+        console.log('Token Google esistente trovato, utente già autenticato');
+    }
 }
 
 function loadGapiScript() {
@@ -65,7 +75,7 @@ function loadGisScript() {
 }
 
 // --- AUTENTICAZIONE ---
-export function handleAuthClick() {
+export function handleAuthClick(onSuccessCallback) {
     console.log('handleAuthClick chiamato');
     console.log('gapiInited:', gapiInited, 'gisInited:', gisInited);
 
@@ -77,13 +87,36 @@ export function handleAuthClick() {
 
     if (gapi.client.getToken() === null) {
         console.log('Richiedo nuovo token...');
+
+        // Salva il callback se fornito
+        if (onSuccessCallback) {
+            tokenClient.callback = (response) => {
+                if (response.error !== undefined) {
+                    console.error('Errore autenticazione:', response);
+                    alert('Errore durante l\'autenticazione con Google Calendar.');
+                    return;
+                }
+                isAuthorized = true;
+                console.log('Autenticazione Google riuscita');
+
+                // Chiama il callback personalizzato se fornito
+                if (onSuccessCallback) {
+                    onSuccessCallback();
+                }
+            };
+        }
+
         // Richiedi nuovo token
         tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
         console.log('Già autenticato');
         // Già autenticato
         isAuthorized = true;
-        syncFromGoogleToFirebase();
+
+        // Chiama il callback se fornito
+        if (onSuccessCallback) {
+            onSuccessCallback();
+        }
     }
 }
 
