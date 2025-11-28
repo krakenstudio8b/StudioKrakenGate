@@ -193,6 +193,7 @@ export async function syncEventToGoogle(firebaseEvent, firebaseEventId) {
                 calendarId: GOOGLE_CONFIG.CALENDAR_ID,
                 eventId: firebaseEvent.googleEventId,
                 resource: googleEvent,
+                sendUpdates: 'all' // Invia notifiche email a tutti i partecipanti
             });
             console.log(`Evento aggiornato su Google: ${firebaseEvent.title}`);
         } else {
@@ -200,6 +201,7 @@ export async function syncEventToGoogle(firebaseEvent, firebaseEventId) {
             response = await gapi.client.calendar.events.insert({
                 calendarId: GOOGLE_CONFIG.CALENDAR_ID,
                 resource: googleEvent,
+                sendUpdates: 'all' // Invia notifiche email a tutti i partecipanti
             });
             console.log(`Evento creato su Google: ${firebaseEvent.title}`);
         }
@@ -247,6 +249,24 @@ function convertGoogleToFirebase(gEvent, firebaseId) {
 }
 
 function convertFirebaseToGoogle(fEvent) {
+    // Email del gruppo staff (riceverà sempre le notifiche)
+    const STAFF_GROUP_EMAIL = 'staff-gateradio@googlegroups.com';
+
+    // Aggiungi il gruppo staff come partecipante
+    const attendees = [
+        { email: STAFF_GROUP_EMAIL }
+    ];
+
+    // Aggiungi eventuali altri partecipanti se presenti
+    if (fEvent.participants && fEvent.participants.length > 0) {
+        fEvent.participants.forEach(participant => {
+            // Se il partecipante è un'email, aggiungilo
+            if (participant.includes('@')) {
+                attendees.push({ email: participant });
+            }
+        });
+    }
+
     return {
         summary: fEvent.title,
         description: fEvent.description || '',
@@ -259,7 +279,9 @@ function convertFirebaseToGoogle(fEvent) {
             dateTime: fEvent.end,
             timeZone: 'Europe/Rome',
         },
-        attendees: (fEvent.participants || []).map(name => ({ displayName: name })),
+        attendees: attendees,
+        // Invia notifiche email ai partecipanti
+        sendUpdates: 'all'
     };
 }
 
