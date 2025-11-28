@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "buildCommand": "echo 'No build needed'",
+  "outputDirectory": "StudioKrakenGate-main/Gestionale Studio",
+  "builds": [
+    {
+      "src": "StudioKrakenGate-main/Gestionale Studio/**/*",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/StudioKrakenGate-main/Gestionale Studio/$1"
+    }
+  ]
+}
