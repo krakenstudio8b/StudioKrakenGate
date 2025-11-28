@@ -9,7 +9,6 @@ let tokenClient;
 let gapiInited = false;
 let gisInited = false;
 let isAuthorized = false;
-let customAuthCallback = null; // Callback personalizzato dopo l'autenticazione
 
 // Riferimenti Firebase
 const eventsRef = ref(database, 'calendarEvents');
@@ -57,25 +56,7 @@ function loadGisScript() {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: GOOGLE_CONFIG.CLIENT_ID,
                 scope: GOOGLE_CONFIG.SCOPES,
-                callback: (response) => {
-                    if (response.error !== undefined) {
-                        console.error('Errore autenticazione:', response);
-                        alert('Errore durante l\'autenticazione con Google Calendar.');
-                        return;
-                    }
-                    isAuthorized = true;
-                    console.log('Autenticazione Google riuscita');
-
-                    // Chiama il callback personalizzato se impostato
-                    if (customAuthCallback) {
-                        const callback = customAuthCallback;
-                        customAuthCallback = null; // Resetta il callback
-                        callback();
-                    } else {
-                        // Comportamento predefinito: sincronizza da Google a Firebase
-                        syncFromGoogleToFirebase();
-                    }
-                },
+                callback: '', // Callback verrà impostato dinamicamente
             });
             gisInited = true;
             console.log('Google Identity Services inizializzato');
@@ -99,10 +80,28 @@ export function handleAuthClick(onSuccessCallback) {
     if (gapi.client.getToken() === null) {
         console.log('Richiedo nuovo token...');
 
-        // Salva il callback personalizzato
-        customAuthCallback = onSuccessCallback;
+        // Imposta il callback dinamicamente PRIMA di richiedere il token
+        tokenClient.callback = async (response) => {
+            if (response.error !== undefined) {
+                console.error('Errore autenticazione:', response);
+                alert('Errore durante l\'autenticazione con Google Calendar.');
+                return;
+            }
 
-        // Richiedi nuovo token (il callback verrà chiamato automaticamente quando l'auth completa)
+            isAuthorized = true;
+            console.log('Autenticazione Google riuscita');
+
+            // Chiama il callback personalizzato se fornito
+            if (onSuccessCallback) {
+                console.log('Eseguo callback personalizzato');
+                onSuccessCallback();
+            } else {
+                // Comportamento predefinito: sincronizza da Google a Firebase
+                syncFromGoogleToFirebase();
+            }
+        };
+
+        // Richiedi nuovo token
         tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
         console.log('Già autenticato');
