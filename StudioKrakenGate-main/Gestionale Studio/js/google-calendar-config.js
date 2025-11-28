@@ -8,7 +8,7 @@ export const GOOGLE_CONFIG = {
     // Credenziali OAuth 2.0
     // IMPORTANTE: Per le web app client-side, serve SOLO il CLIENT_ID
     // Il client secret NON va usato lato client (è solo per app server-side)
-    CLIENT_ID: '739994757288-0gv73ihiajeu0fpujlcn0moatnds0c9n.apps.googleusercontent.com',
+    CLIENT_ID: '637673514104-747b0d7vsiev6e4rbvlfk8jfps1ttutb.apps.googleusercontent.com',
 
     // Scope necessari per Google Calendar
     SCOPES: 'https://www.googleapis.com/auth/calendar',
