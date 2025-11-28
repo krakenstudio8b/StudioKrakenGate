@@ -40,24 +40,13 @@
                     <h1 class="text-3xl font-bold mb-2">Calendario Presenze e Riunioni</h1>
                     <p class="text-gray-600 text-sm">Gli eventi vengono salvati automaticamente e sincronizzati con Google Calendar</p>
                 </div>
-                <button id="add-event-btn" class="bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors shadow whitespace-nowrap">
-                    ➕ Aggiungi Evento
-                </button>
-            </div>
-
-            <!-- Banner informativo -->
-            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4 rounded">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-3">
-                        <p class="text-sm text-blue-700">
-                            <strong>Nuovo sistema di inserimento eventi!</strong> Gli eventi vengono ora salvati direttamente nel sistema e sincronizzati automaticamente con Google Calendar. Non è più necessario confermare manualmente su Google Calendar.
-                        </p>
-                    </div>
+                <div class="flex gap-3">
+                    <button id="refresh-calendar-btn" class="bg-gray-500 text-white font-semibold py-2 px-5 rounded-lg hover:bg-gray-600 transition-colors shadow whitespace-nowrap">
+                        🔄 Aggiorna
+                    </button>
+                    <button id="add-event-btn" class="bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors shadow whitespace-nowrap">
+                        ➕ Aggiungi Evento
+                    </button>
                 </div>
             </div>
 
@@ -198,6 +187,7 @@
         const eventModal = document.getElementById('event-modal');
         const authModal = document.getElementById('auth-modal');
         const addEventBtn = document.getElementById('add-event-btn');
+        const refreshCalendarBtn = document.getElementById('refresh-calendar-btn');
         const cancelEventBtn = document.getElementById('cancel-event-btn');
         const createBtn = document.getElementById('create-event-btn');
         const googleAuthBtn = document.getElementById('google-auth-btn');
@@ -212,6 +202,11 @@
         // Inizializza Google Calendar API
         initGoogleCalendar().then(() => {
             console.log('Google Calendar API pronto per la sincronizzazione');
+        });
+
+        // Pulsante Aggiorna Calendario
+        refreshCalendarBtn.addEventListener('click', () => {
+            location.reload();
         });
 
         // Funzione per aprire la modale evento
