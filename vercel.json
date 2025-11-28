@@ -1,17 +1,4 @@
 {
-  "version": 2,
-  "buildCommand": "cd 'StudioKrakenGate-main/Gestionale Studio' && node build-env.js",
-  "outputDirectory": "StudioKrakenGate-main/Gestionale Studio",
-  "builds": [
-    {
-      "src": "StudioKrakenGate-main/Gestionale Studio/**/*",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/StudioKrakenGate-main/Gestionale Studio/$1"
-    }
-  ]
+  "buildCommand": "cd 'StudioKrakenGate-main/Gestionale Studio' && npm install && npm run build",
+  "outputDirectory": "StudioKrakenGate-main/Gestionale Studio/dist"
 }
