@@ -2,40 +2,45 @@ body {
     font-family: 'Inter', sans-serif;
     background-color: #f3f4f6;
 }
+
 .fade-in {
     animation: fadeIn 0.5s ease-in-out;
 }
+
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
 .card {
     background-color: white;
     border-radius: 0.75rem;
     padding: 1.5rem;
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
 }
+
 .action-btn.active {
-    background-color: #4f46e5; /* indigo-600 */
+    background-color: #4f46e5;
     color: white;
 }
+
 #edit-modal {
     transition: opacity 0.3s ease;
-
 }
-/* Stili Aggiuntivi per FullCalendar e Modale */
 
-/* Personalizzazione di FullCalendar */
+/* ============================================
+   FULLCALENDAR STYLES
+   ============================================ */
 :root {
-  --fc-border-color: #e5e7eb;
-  --fc-daygrid-event-dot-width: 8px;
-  --fc-list-event-dot-width: 10px;
-  --fc-event-bg-color: #3b82f6;
-  --fc-event-border-color: #3b82f6;
-  --fc-event-text-color: #ffffff;
-  --fc-button-bg-color: #4f46e5;
-  --fc-button-active-bg-color: #4338ca;
-  --fc-today-bg-color: rgba(239, 246, 255, 0.7);
+    --fc-border-color: #e5e7eb;
+    --fc-daygrid-event-dot-width: 8px;
+    --fc-list-event-dot-width: 10px;
+    --fc-event-bg-color: #3b82f6;
+    --fc-event-border-color: #3b82f6;
+    --fc-event-text-color: #ffffff;
+    --fc-button-bg-color: #4f46e5;
+    --fc-button-active-bg-color: #4338ca;
+    --fc-today-bg-color: rgba(239, 246, 255, 0.7);
 }
 
 .fc-daygrid-day.fc-day-today {
@@ -45,131 +50,222 @@ body {
 #event-modal {
     transition: opacity 0.3s ease;
 }
-/* Stili per il contenitore del calendario */
+
 #calendar-container {
-    height: 75vh; /* Imposta l'altezza a 75% dell'altezza della finestra */
+    height: 75vh;
 }
-/* Stili Aggiuntivi per la Board Attività (Trello) */
+
+.fc-daygrid-event .fc-event-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 768px) {
+    .fc {
+        font-size: 0.85em;
+    }
+    .fc .fc-toolbar-title {
+        font-size: 1.2em;
+    }
+}
+
+/* ============================================
+   KANBAN BOARD - COLONNE MIGLIORATE
+   ============================================ */
+#kanban-board {
+    gap: 1.5rem;
+}
+
+#kanban-board > div {
+    min-height: 500px;
+    border: 2px solid #e5e7eb;
+    background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+}
+
+#kanban-board h2 {
+    font-size: 1.1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 1rem;
+}
 
 .card-container {
-    padding-bottom: 20px; /* Spazio extra per il drop */
+    padding-bottom: 20px;
+    min-height: 300px;
 }
 
+/* ============================================
+   TASK CARD - DESIGN MIGLIORATO
+   ============================================ */
 .task-card {
     background-color: white;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
     cursor: grab;
-    transition: box-shadow 0.2s ease-in-out;
+    transition: all 0.2s ease-in-out;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
 }
 
 .task-card:hover {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    box-shadow: 0 8px 16px rgb(0 0 0 / 0.12);
+    transform: translateY(-2px);
+    border-color: #c7d2fe;
 }
 
-.sortable-ghost {
-    opacity: 0.4;
-    background: #c7d2fe; /* Colore dell'ombra durante il trascinamento */
+.task-card:active {
+    cursor: grabbing;
 }
 
-.priority-badge {
-    width: 1.75rem;
-    height: 0.25rem;
-    border-radius: 9999px;
-    margin-bottom: 0.5rem;
-}
-
-/* Stili Aggiuntivi per la Board Attività (Trello) */
-
-.card-container {
-    padding-bottom: 20px; /* Spazio extra per il drop */
-}
-
-/* Stile della card principale - RESA PIÙ COMPATTA */
-.task-card {
-    background-color: white;
-    border-radius: 0.5rem;
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    cursor: grab;
-    transition: box-shadow 0.2s ease-in-out;
-    overflow: hidden; /* Nasconde la barra di priorità che esce */
-}
-
-.task-card:hover {
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-}
-
-/* NUOVO Stile per la barra di priorità - PIÙ VISIBILE */
+/* Barra priorità più visibile */
 .priority-bar {
     width: 100%;
-    height: 5px;
+    height: 6px;
+}
+
+.priority-bar.bg-blue-500 {
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.priority-bar.bg-orange-500 {
+    background: linear-gradient(90deg, #f97316, #fb923c);
+}
+
+.priority-bar.bg-red-500 {
+    background: linear-gradient(90deg, #ef4444, #f87171);
 }
 
 .task-card-content {
-    padding: 0.75rem; /* Padding ridotto */
+    padding: 1rem;
 }
 
+/* Titolo più grande e leggibile */
 .task-card-title {
-    font-semibold: 600;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+    line-height: 1.4;
     margin-bottom: 0.5rem;
 }
 
-/* Stili per la sezione inferiore della card (avatar, data, checklist) */
+/* Owner badge migliorato */
+.owner-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+}
+
+/* Footer card */
 .task-card-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #f3f4f6;
 }
 
+/* Checklist progress più visibile */
+.checklist-progress {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #4f46e5;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #eef2ff;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+}
+
+/* Date styling */
+.task-card-footer .text-xs {
+    font-size: 0.8rem;
+}
+
+/* Avatar members */
+.task-card-footer .w-6 {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.7rem;
+}
+
+/* Drag ghost */
 .sortable-ghost {
-    opacity: 0.4;
-    background: #c7d2fe; 
+    opacity: 0.5;
+    background: #c7d2fe;
+    border: 2px dashed #4f46e5;
 }
 
-/* NUOVI Stili per la Checklist */
+/* ============================================
+   CHECKLIST NEL MODALE
+   ============================================ */
 .checklist-item {
     display: flex;
     align-items: center;
-    padding: 0.25rem 0;
+    padding: 0.5rem;
+    background: #f9fafb;
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
 }
 
 .checklist-item input[type="checkbox"] {
-    width: 1rem;
-    height: 1rem;
-    margin-right: 0.5rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    margin-right: 0.75rem;
+    accent-color: #4f46e5;
 }
 
 .checklist-item label {
     flex-grow: 1;
+    font-size: 0.95rem;
     transition: color 0.2s;
 }
 
 .checklist-item input[type="checkbox"]:checked + label {
     text-decoration: line-through;
-    color: #9ca3af; /* text-gray-400 */
+    color: #9ca3af;
 }
 
-.checklist-progress {
-    font-size: 0.75rem;
-    color: #6b7280; /* text-gray-500 */
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-.fc-daygrid-event .fc-event-title {
-    white-space: nowrap;      /* Impedisce al testo di andare a capo */
-    overflow: hidden;         /* Nasconde il testo che esce dal contenitore */
-    text-overflow: ellipsis;  /* Aggiunge i puntini "..." alla fine */
-}
+/* ============================================
+   RESPONSIVE IMPROVEMENTS
+   ============================================ */
 @media (max-width: 768px) {
-  .fc {
-    font-size: 0.85em; /* Riduci la dimensione del font generale del calendario su schermi piccoli */
-  }
+    #kanban-board {
+        gap: 1rem;
+    }
 
-  .fc .fc-toolbar-title {
-    font-size: 1.2em; /* Mantieni il titolo un po' più grande */
-  }
+    #kanban-board > div {
+        min-height: 300px;
+    }
+
+    .task-card-content {
+        padding: 0.875rem;
+    }
+
+    .task-card-title {
+        font-size: 0.95rem;
+    }
 }
 
+/* ============================================
+   OBIETTIVI PAGE - MACRO TASKS
+   ============================================ */
+.macro-task-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.macro-task-card:hover {
+    background-color: #eef2ff !important;
+    transform: translateX(4px);
+}
+
+/* Progress bar animata */
+.macro-task-card .bg-green-500,
+.macro-task-card .bg-yellow-500,
+.macro-task-card .bg-blue-500 {
+    transition: width 0.5s ease-out;
+}

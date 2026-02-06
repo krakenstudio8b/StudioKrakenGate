@@ -11,6 +11,7 @@ let completionRateChart = null;
 let trendChart = null;
 let currentMonthFilter = 'current';
 let currentOwnerFilter = 'all';
+let currentEditingTaskId = null;
 
 // ============================================
 // PLACEHOLDER OBIETTIVI (da collegare a Firebase)
@@ -420,16 +421,143 @@ function renderMacroTasks(tasks) {
             </div>
         `;
 
-        // Event listener per cambio owner
+        // Event listener per cambio owner (stopPropagation per evitare apertura modale)
         const ownerDropdown = card.querySelector('.owner-dropdown');
+        ownerDropdown.addEventListener('click', (e) => e.stopPropagation());
         ownerDropdown.addEventListener('change', async (e) => {
+            e.stopPropagation();
             const taskId = e.target.dataset.taskId;
             const newOwner = e.target.value;
             await updateTaskOwner(taskId, newOwner);
         });
 
+        // Click sulla card per aprire modale modifica
+        card.addEventListener('click', () => {
+            openEditModal(task.id);
+        });
+
         container.appendChild(card);
     });
+}
+
+// ============================================
+// MODALE MODIFICA TASK
+// ============================================
+
+function openEditModal(taskId) {
+    const task = allTasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    currentEditingTaskId = taskId;
+
+    const modal = document.getElementById('edit-task-modal');
+    const titleInput = document.getElementById('edit-title');
+    const descriptionInput = document.getElementById('edit-description');
+    const ownerSelect = document.getElementById('edit-owner');
+    const statusSelect = document.getElementById('edit-status');
+    const dueDateInput = document.getElementById('edit-dueDate');
+    const prioritySelect = document.getElementById('edit-priority');
+    const checklistContainer = document.getElementById('edit-checklist');
+
+    // Popola i campi
+    titleInput.value = task.title || '';
+    descriptionInput.value = task.description || '';
+    statusSelect.value = task.status || 'todo';
+    dueDateInput.value = task.dueDate || '';
+    prioritySelect.value = task.priority || 'low';
+
+    // Popola select owner
+    ownerSelect.innerHTML = '<option value="">-- Nessuno --</option>';
+    allMembers.forEach(member => {
+        const option = document.createElement('option');
+        option.value = member.name;
+        option.textContent = member.name;
+        if (task.owner === member.name) option.selected = true;
+        ownerSelect.appendChild(option);
+    });
+
+    // Popola checklist
+    const checklist = task.checklist || [];
+    checklistContainer.innerHTML = checklist.length > 0
+        ? checklist.map((item, index) => `
+            <div class="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                <input type="checkbox" id="edit-check-${index}" ${item.done ? 'checked' : ''}
+                    class="w-5 h-5 accent-indigo-600">
+                <label for="edit-check-${index}" class="flex-1 text-sm ${item.done ? 'line-through text-gray-400' : ''}">${item.text}</label>
+            </div>
+        `).join('')
+        : '<p class="text-gray-400 text-sm text-center py-4">Nessuna sotto-attività</p>';
+
+    modal.classList.remove('hidden');
+}
+
+function closeEditModal() {
+    const modal = document.getElementById('edit-task-modal');
+    modal.classList.add('hidden');
+    currentEditingTaskId = null;
+}
+
+async function saveEditedTask() {
+    if (!currentEditingTaskId) return;
+
+    const taskIndex = allTasks.findIndex(t => t.id === currentEditingTaskId);
+    if (taskIndex === -1) return;
+
+    const task = allTasks[taskIndex];
+
+    // Raccogli i valori dai campi
+    const updatedData = {
+        title: document.getElementById('edit-title').value.trim(),
+        description: document.getElementById('edit-description').value.trim(),
+        owner: document.getElementById('edit-owner').value,
+        status: document.getElementById('edit-status').value,
+        dueDate: document.getElementById('edit-dueDate').value,
+        priority: document.getElementById('edit-priority').value
+    };
+
+    // Aggiorna checklist
+    const checklistContainer = document.getElementById('edit-checklist');
+    const checkboxes = checklistContainer.querySelectorAll('input[type="checkbox"]');
+    if (task.checklist && task.checklist.length > 0) {
+        checkboxes.forEach((checkbox, index) => {
+            if (task.checklist[index]) {
+                task.checklist[index].done = checkbox.checked;
+            }
+        });
+        updatedData.checklist = task.checklist;
+    }
+
+    // Aggiorna task locale
+    allTasks[taskIndex] = { ...task, ...updatedData };
+
+    // Salva su Firebase
+    try {
+        const tasksRef = ref(database, 'tasks');
+        await set(tasksRef, allTasks);
+        console.log('Task aggiornato:', currentEditingTaskId);
+        closeEditModal();
+    } catch (error) {
+        console.error('Errore salvataggio:', error);
+        alert('Errore durante il salvataggio');
+    }
+}
+
+function initEditModal() {
+    const closeBtn = document.getElementById('close-edit-modal');
+    const cancelBtn = document.getElementById('cancel-edit-btn');
+    const saveBtn = document.getElementById('save-edit-btn');
+    const modal = document.getElementById('edit-task-modal');
+
+    if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
+    if (saveBtn) saveBtn.addEventListener('click', saveEditedTask);
+
+    // Chiudi cliccando fuori
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeEditModal();
+        });
+    }
 }
 
 async function updateTaskOwner(taskId, newOwner) {
@@ -932,7 +1060,8 @@ function initLoadButton() {
     });
 }
 
-// Inizializza pulsante al DOM ready
+// Inizializza pulsante e modale al DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     initLoadButton();
+    initEditModal();
 });

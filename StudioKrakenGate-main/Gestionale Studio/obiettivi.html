@@ -178,6 +178,80 @@
 
     </main>
 
+    <!-- MODALE MODIFICA TASK -->
+    <div id="edit-task-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800">Modifica Task</h2>
+                    <button id="close-edit-modal" class="text-gray-400 hover:text-gray-600">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label for="edit-title" class="block text-sm font-medium text-gray-700 mb-1">Titolo</label>
+                        <input type="text" id="edit-title" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+
+                    <div>
+                        <label for="edit-description" class="block text-sm font-medium text-gray-700 mb-1">Descrizione / Note</label>
+                        <textarea id="edit-description" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Aggiungi note o dettagli..."></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="edit-owner" class="block text-sm font-medium text-gray-700 mb-1">Responsabile</label>
+                            <select id="edit-owner" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                                <option value="">-- Nessuno --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="edit-status" class="block text-sm font-medium text-gray-700 mb-1">Stato</label>
+                            <select id="edit-status" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                                <option value="todo">Da Fare</option>
+                                <option value="inprogress">In Corso</option>
+                                <option value="done">Completato</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="edit-dueDate" class="block text-sm font-medium text-gray-700 mb-1">Scadenza</label>
+                            <input type="date" id="edit-dueDate" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label for="edit-priority" class="block text-sm font-medium text-gray-700 mb-1">Priorità</label>
+                            <select id="edit-priority" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                                <option value="low">Bassa</option>
+                                <option value="medium">Media</option>
+                                <option value="high">Alta</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Checklist</label>
+                        <div id="edit-checklist" class="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex gap-3">
+                    <button id="save-edit-btn" class="flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
+                        <i class="fa-solid fa-save mr-2"></i>Salva Modifiche
+                    </button>
+                    <button id="cancel-edit-btn" class="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+                        Annulla
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- SCRIPTS -->
     <script type="module" src="js/obiettivi.js"></script>
     <script type="module" src="js/auth-guard.js"></script>
