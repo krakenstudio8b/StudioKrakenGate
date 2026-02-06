@@ -12,6 +12,7 @@ let trendChart = null;
 let currentMonthFilter = 'current';
 let currentOwnerFilter = 'all';
 let currentEditingTaskId = null;
+let currentEditingTargetId = null;
 
 // ============================================
 // PLACEHOLDER OBIETTIVI (da collegare a Firebase)
@@ -612,7 +613,10 @@ function renderTargets(targets) {
             : target.targetValue + ' ' + target.unit;
 
         return `
-            <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow">
+            <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow relative group cursor-pointer" data-target-id="${target.id}">
+                <button class="edit-target-btn absolute top-3 right-3 w-8 h-8 bg-gray-100 hover:bg-indigo-100 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" data-target-id="${target.id}">
+                    <i class="fa-solid fa-pen text-gray-500 hover:text-indigo-600 text-sm"></i>
+                </button>
                 <div class="flex items-start justify-between mb-4">
                     <div class="w-12 h-12 rounded-lg bg-gradient-to-br ${companyColor} flex items-center justify-center">
                         <i class="fa-solid ${target.icon} text-white text-lg"></i>
@@ -632,6 +636,23 @@ function renderTargets(targets) {
             </div>
         `;
     }).join('');
+
+    // Aggiungi event listeners per i pulsanti modifica
+    container.querySelectorAll('.edit-target-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openTargetModal(btn.dataset.targetId);
+        });
+    });
+
+    // Click sulla card per modificare
+    container.querySelectorAll('[data-target-id]').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (!e.target.closest('.edit-target-btn')) {
+                openTargetModal(card.dataset.targetId);
+            }
+        });
+    });
 }
 
 function renderTrendChart(currentTasks, previousTasks) {
@@ -1060,8 +1081,159 @@ function initLoadButton() {
     });
 }
 
-// Inizializza pulsante e modale al DOM ready
+// ============================================
+// MODALE OBIETTIVI (TARGETS)
+// ============================================
+
+function openTargetModal(targetId = null) {
+    const modal = document.getElementById('target-modal');
+    const title = document.getElementById('target-modal-title');
+    const deleteBtn = document.getElementById('delete-target-btn');
+
+    const titleInput = document.getElementById('target-title');
+    const companySelect = document.getElementById('target-company');
+    const iconSelect = document.getElementById('target-icon');
+    const currentInput = document.getElementById('target-current');
+    const valueInput = document.getElementById('target-value');
+    const unitInput = document.getElementById('target-unit');
+    const periodInput = document.getElementById('target-period');
+
+    if (targetId) {
+        // Modifica obiettivo esistente
+        const target = allTargets.find(t => t.id === targetId);
+        if (!target) return;
+
+        currentEditingTargetId = targetId;
+        title.textContent = 'Modifica Obiettivo';
+        deleteBtn.classList.remove('hidden');
+
+        titleInput.value = target.title || '';
+        companySelect.value = target.company || 'kraken';
+        iconSelect.value = target.icon || 'fa-microphone';
+        currentInput.value = target.currentValue || 0;
+        valueInput.value = target.targetValue || 100;
+        unitInput.value = target.unit || '';
+        periodInput.value = target.period || '';
+    } else {
+        // Nuovo obiettivo
+        currentEditingTargetId = null;
+        title.textContent = 'Nuovo Obiettivo';
+        deleteBtn.classList.add('hidden');
+
+        titleInput.value = '';
+        companySelect.value = 'kraken';
+        iconSelect.value = 'fa-microphone';
+        currentInput.value = '';
+        valueInput.value = '';
+        unitInput.value = '';
+        periodInput.value = '2026';
+    }
+
+    modal.classList.remove('hidden');
+}
+
+function closeTargetModal() {
+    const modal = document.getElementById('target-modal');
+    modal.classList.add('hidden');
+    currentEditingTargetId = null;
+}
+
+async function saveTarget() {
+    const titleInput = document.getElementById('target-title');
+    const companySelect = document.getElementById('target-company');
+    const iconSelect = document.getElementById('target-icon');
+    const currentInput = document.getElementById('target-current');
+    const valueInput = document.getElementById('target-value');
+    const unitInput = document.getElementById('target-unit');
+    const periodInput = document.getElementById('target-period');
+
+    const title = titleInput.value.trim();
+    if (!title) {
+        alert('Il titolo è obbligatorio');
+        return;
+    }
+
+    const targetData = {
+        title: title,
+        company: companySelect.value,
+        icon: iconSelect.value,
+        currentValue: parseFloat(currentInput.value) || 0,
+        targetValue: parseFloat(valueInput.value) || 100,
+        unit: unitInput.value.trim(),
+        period: periodInput.value.trim()
+    };
+
+    try {
+        const targetsRef = ref(database, 'targets');
+
+        if (currentEditingTargetId) {
+            // Modifica esistente
+            const targetIndex = allTargets.findIndex(t => t.id === currentEditingTargetId);
+            if (targetIndex !== -1) {
+                allTargets[targetIndex] = { ...allTargets[targetIndex], ...targetData };
+            }
+        } else {
+            // Nuovo obiettivo
+            const newTarget = {
+                id: 'target_' + Date.now(),
+                ...targetData
+            };
+            allTargets.push(newTarget);
+        }
+
+        await set(targetsRef, allTargets);
+        console.log('Obiettivo salvato');
+        closeTargetModal();
+        renderTargets(allTargets);
+
+    } catch (error) {
+        console.error('Errore salvataggio obiettivo:', error);
+        alert('Errore durante il salvataggio');
+    }
+}
+
+async function deleteTarget() {
+    if (!currentEditingTargetId) return;
+
+    if (!confirm('Sei sicuro di voler eliminare questo obiettivo?')) return;
+
+    try {
+        const targetsRef = ref(database, 'targets');
+        allTargets = allTargets.filter(t => t.id !== currentEditingTargetId);
+        await set(targetsRef, allTargets);
+        console.log('Obiettivo eliminato');
+        closeTargetModal();
+        renderTargets(allTargets);
+
+    } catch (error) {
+        console.error('Errore eliminazione obiettivo:', error);
+        alert('Errore durante l\'eliminazione');
+    }
+}
+
+function initTargetModal() {
+    const addBtn = document.getElementById('add-target-btn');
+    const closeBtn = document.getElementById('close-target-modal');
+    const saveBtn = document.getElementById('save-target-btn');
+    const deleteBtn = document.getElementById('delete-target-btn');
+    const modal = document.getElementById('target-modal');
+
+    if (addBtn) addBtn.addEventListener('click', () => openTargetModal());
+    if (closeBtn) closeBtn.addEventListener('click', closeTargetModal);
+    if (saveBtn) saveBtn.addEventListener('click', saveTarget);
+    if (deleteBtn) deleteBtn.addEventListener('click', deleteTarget);
+
+    // Chiudi cliccando fuori
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeTargetModal();
+        });
+    }
+}
+
+// Inizializza pulsante e modali al DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     initLoadButton();
     initEditModal();
+    initTargetModal();
 });
