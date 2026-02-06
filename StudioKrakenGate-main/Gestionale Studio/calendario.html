@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateradio - Calendario</title>
+    <link rel="icon" type="image/png" href="logogate.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="text-gray-800">
+
+    <nav class="bg-white shadow-md mb-8">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center">
+    
+                <div class="text-2xl font-bold text-indigo-600 text-center md:text-left">
+                    Gateradio Gestionale
+                </div>
+    
+                <div class="flex flex-col items-center mt-4 space-y-2 md:flex-row md:mt-0 md:space-y-0 md:space-x-4">
+                    <a href="index.html" class="text-gray-500 hover:text-indigo-600">Attività</a>
+                    <a href="attivita-personale.html" class="text-gray-500 hover:text-indigo-600">Attività Personale</a>
+                    <a href="calendario.html" class="text-indigo-600 border-b-2 border-indigo-600 font-semibold">Calendario</a>
+                    <a href="obiettivi.html" class="text-gray-500 hover:text-indigo-600">Obiettivi</a>
+                    <a id="finanze-link" href="finanze.html" class="text-gray-500 hover:text-indigo-600">Dashboard Finanze</a>
+                    <a href="pulizie.html" class="text-gray-500 hover:text-indigo-600">Turni Pulizie</a>
+                    <a href="documenti.html" class="text-gray-500 hover:text-indigo-600">Documenti</a>
+                    <a id="admin-panel-link" href="admin.html" class="text-gray-500 hover:text-indigo-600 hidden">Pannello Admin</a>
+                    <button id="logout-btn" class="bg-red-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-red-600 transition-colors mt-2 md:mt-0">Logout</button>
+                </div>
+    
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4 md:p-6">
+        <div class="card fade-in">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <div>
+                    <h1 class="text-3xl font-bold mb-2">Calendario Presenze e Riunioni</h1>
+                    <p class="text-gray-600 text-sm">Gli eventi vengono salvati automaticamente e sincronizzati con Google Calendar</p>
+                </div>
+                <div class="flex gap-3">
+                    <button id="refresh-calendar-btn" class="bg-gray-500 text-white font-semibold py-2 px-5 rounded-lg hover:bg-gray-600 transition-colors shadow whitespace-nowrap">
+                        🔄 Aggiorna
+                    </button>
+                    <button id="add-event-btn" class="bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors shadow whitespace-nowrap">
+                        ➕ Aggiungi Evento
+                    </button>
+                </div>
+            </div>
+
+            <!-- Google Calendar Embed -->
+            <div class="w-full overflow-hidden rounded-lg shadow-lg">
+                <iframe
+                    src="https://calendar.google.com/calendar/embed?src=gateradiorm%40gmail.com&ctz=Europe%2FRome"
+                    style="border: 0"
+                    class="w-full h-[600px] md:h-[700px]"
+                    frameborder="0"
+                    scrolling="no">
+                </iframe>
+            </div>
+
+            <!-- Link per aprire in Google Calendar -->
+            <div class="mt-4 text-center">
+                <a href="https://calendar.google.com/calendar/u/0?cid=Z2F0ZXJhZGlvcm1AZ21haWwuY29t"
+                   target="_blank"
+                   class="inline-flex items-center gap-2 bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors shadow">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+                        <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
+                    </svg>
+                    Apri in Google Calendar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Autenticazione Google Calendar -->
+    <div id="auth-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="card w-full max-w-md">
+            <div class="text-center mb-6">
+                <svg class="w-16 h-16 mx-auto mb-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                <h2 class="text-2xl font-semibold mb-2">Autenticazione Google Calendar</h2>
+                <p class="text-gray-600">Per aggiungere eventi al calendario è necessario autenticarsi con Google Calendar</p>
+            </div>
+
+            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6 rounded">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-blue-700">
+                            L'autenticazione è sicura e gestita direttamente da Google. Potrai sempre visualizzare il calendario senza autenticazione.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-3">
+                <button id="google-auth-btn" class="w-full bg-white border-2 border-gray-300 text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center gap-3">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Accedi con Google Calendar
+                </button>
+                <button id="cancel-auth-btn" class="w-full bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+                    Annulla
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Aggiungi Evento -->
+    <div id="event-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="card w-full max-w-lg">
+            <h2 class="text-2xl font-semibold mb-6">➕ Aggiungi Evento</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="event-title" class="block text-sm font-medium mb-1">Titolo Evento *</label>
+                    <input type="text" id="event-title" placeholder="Es. Riunione, Presenza Studio" class="w-full p-2 border rounded-lg" required>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="event-start" class="block text-sm font-medium mb-1">Data/Ora Inizio *</label>
+                        <input type="datetime-local" id="event-start" class="w-full p-2 border rounded-lg" required>
+                    </div>
+                    <div>
+                        <label for="event-end" class="block text-sm font-medium mb-1">Data/Ora Fine *</label>
+                        <input type="datetime-local" id="event-end" class="w-full p-2 border rounded-lg" required>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="event-room" class="block text-sm font-medium mb-1">Sala da Prenotare</label>
+                    <select id="event-room" class="w-full p-2 border rounded-lg bg-white">
+                        <option value="">Nessuna</option>
+                        <option value="Studio Kraken">Studio Kraken</option>
+                        <option value="Sala Gate">Sala Gate</option>
+                        <option value="Podcast">Podcast</option>
+                        <option value="Regia">Regia</option>
+                        <option value="Studio Bis">Studio Bis</option>
+                        <option value="Chill">Chill</option>
+                        <option value="Studio completo">Studio completo</option>
+                        <option value="Evento Esterno">Evento Esterno</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="event-description" class="block text-sm font-medium mb-1">Descrizione</label>
+                    <textarea id="event-description" rows="3" placeholder="Aggiungi dettagli o note..." class="w-full p-2 border rounded-lg"></textarea>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="cancel-event-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">
+                    Annulla
+                </button>
+                <button id="create-event-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700">
+                    Crea Evento
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/auth-guard.js"></script>
+    <script type="module">
+        // Importa Firebase e funzioni di sincronizzazione
+        import { database } from './js/firebase-config.js';
+        import { ref, set, push, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+        import { currentUser } from './js/auth-guard.js';
+        import { syncEventToGoogle, initGoogleCalendar, handleAuthClick, isGoogleAuthorized } from './js/google-calendar-sync.js';
+
+        // Riferimenti Firebase
+        const eventsRef = ref(database, 'calendarEvents');
+
+        // Gestione modali
+        const eventModal = document.getElementById('event-modal');
+        const authModal = document.getElementById('auth-modal');
+        const addEventBtn = document.getElementById('add-event-btn');
+        const refreshCalendarBtn = document.getElementById('refresh-calendar-btn');
+        const cancelEventBtn = document.getElementById('cancel-event-btn');
+        const createBtn = document.getElementById('create-event-btn');
+        const googleAuthBtn = document.getElementById('google-auth-btn');
+        const cancelAuthBtn = document.getElementById('cancel-auth-btn');
+
+        const titleInput = document.getElementById('event-title');
+        const startInput = document.getElementById('event-start');
+        const endInput = document.getElementById('event-end');
+        const roomInput = document.getElementById('event-room');
+        const descriptionInput = document.getElementById('event-description');
+
+        // Inizializza Google Calendar API
+        initGoogleCalendar().then(() => {
+            console.log('Google Calendar API pronto per la sincronizzazione');
+        });
+
+        // Pulsante Aggiorna Calendario
+        refreshCalendarBtn.addEventListener('click', () => {
+            location.reload();
+        });
+
+        // Funzione per aprire la modale evento
+        function openEventModal() {
+            eventModal.classList.remove('hidden');
+            // Imposta data/ora corrente come default
+            const now = new Date();
+            const nowString = now.toISOString().slice(0, 16);
+            startInput.value = nowString;
+            const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+            endInput.value = oneHourLater.toISOString().slice(0, 16);
+        }
+
+        // Apri modale evento (con controllo autenticazione)
+        addEventBtn.addEventListener('click', () => {
+            // Controlla se l'utente è autenticato con Google Calendar
+            if (isGoogleAuthorized()) {
+                // Utente già autenticato, apri direttamente la modale evento
+                openEventModal();
+            } else {
+                // Utente non autenticato, mostra modale di autenticazione
+                authModal.classList.remove('hidden');
+            }
+        });
+
+        // Gestione pulsante autenticazione Google
+        googleAuthBtn.addEventListener('click', () => {
+            // Avvia autenticazione con callback per aprire la modale evento dopo il successo
+            handleAuthClick(() => {
+                // Chiudi modale autenticazione
+                authModal.classList.add('hidden');
+                // Apri modale evento
+                openEventModal();
+            });
+        });
+
+        // Chiudi modale autenticazione
+        cancelAuthBtn.addEventListener('click', () => {
+            authModal.classList.add('hidden');
+        });
+
+        // Chiudi modale evento
+        cancelEventBtn.addEventListener('click', () => {
+            eventModal.classList.add('hidden');
+            clearForm();
+        });
+
+        // Crea evento DIRETTAMENTE su Firebase e sincronizza con Google Calendar
+        createBtn.addEventListener('click', async () => {
+            const title = titleInput.value.trim();
+            const start = startInput.value;
+            const end = endInput.value;
+            const room = roomInput.value;
+            const description = descriptionInput.value.trim();
+
+            if (!title || !start || !end) {
+                alert('Titolo, data inizio e data fine sono obbligatori!');
+                return;
+            }
+
+            // Disabilita il pulsante per evitare click multipli
+            createBtn.disabled = true;
+            createBtn.textContent = 'Creazione in corso...';
+
+            try {
+                // Converti date in formato ISO completo
+                const startISO = new Date(start).toISOString();
+                const endISO = new Date(end).toISOString();
+
+                // Crea oggetto evento
+                const eventData = {
+                    title: title,
+                    start: startISO,
+                    end: endISO,
+                    room: room,
+                    description: description,
+                    participants: [],
+                    backgroundColor: '#3b82f6',
+                    borderColor: '#3b82f6',
+                    createdBy: currentUser.uid,
+                    requesterEmail: currentUser.email
+                };
+
+                // Salva su Firebase
+                const newEventRef = push(eventsRef);
+                await set(newEventRef, eventData);
+
+                // Sincronizza con Google Calendar automaticamente
+                const googleEventId = await syncEventToGoogle(eventData, newEventRef.key);
+                if (googleEventId) {
+                    // Aggiorna l'evento su Firebase con l'ID di Google Calendar
+                    await update(newEventRef, { googleEventId: googleEventId });
+                    alert('✅ Evento creato con successo!\n\nL\'evento è stato salvato e sincronizzato automaticamente con Google Calendar.');
+                } else {
+                    alert('✅ Evento salvato!\n\nNota: L\'evento è stato salvato localmente ma non è stato possibile sincronizzarlo con Google Calendar. Potrebbe essere necessario autenticarsi.');
+                }
+
+                // Chiudi modale e pulisci form
+                eventModal.classList.add('hidden');
+                clearForm();
+
+                // Ricarica la pagina per mostrare il nuovo evento nell'iframe
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+
+            } catch (error) {
+                console.error('Errore durante la creazione dell\'evento:', error);
+                alert('❌ Errore durante la creazione dell\'evento. Controlla la console per i dettagli.');
+            } finally {
+                // Riabilita il pulsante
+                createBtn.disabled = false;
+                createBtn.textContent = 'Crea Evento';
+            }
+        });
+
+        function clearForm() {
+            titleInput.value = '';
+            startInput.value = '';
+            endInput.value = '';
+            roomInput.value = '';
+            descriptionInput.value = '';
+        }
+
+        // Chiudi modale evento cliccando fuori
+        eventModal.addEventListener('click', (e) => {
+            if (e.target === eventModal) {
+                eventModal.classList.add('hidden');
+                clearForm();
+            }
+        });
+
+        // Chiudi modale autenticazione cliccando fuori
+        authModal.addEventListener('click', (e) => {
+            if (e.target === authModal) {
+                authModal.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+

@@ -1,0 +1,126 @@
+[
+  {
+    "id": "1738886400000",
+    "title": "Showcase Asse",
+    "description": "Evento showcase per Asse - Setup completo e produzione clip",
+    "dueDate": "2026-02-07",
+    "priority": "high",
+    "status": "todo",
+    "owner": "",
+    "assignedTo": [],
+    "createdAt": "2026-02-01T10:00:00.000Z",
+    "checklist": [
+      { "text": "Post Instagram", "done": false },
+      { "text": "Setup Attrezzatura", "done": false },
+      { "text": "Setup Telecamere", "done": false },
+      { "text": "Setup Studio", "done": false },
+      { "text": "Clip Video (Scadenza: 14/02)", "done": false }
+    ]
+  },
+  {
+    "id": "1738886400001",
+    "title": "Riprese Scomodo",
+    "description": "Riprese esterne per Scomodo - Attrezzatura mobile",
+    "dueDate": "2026-02-08",
+    "priority": "high",
+    "status": "todo",
+    "owner": "",
+    "assignedTo": [],
+    "createdAt": "2026-02-01T10:00:01.000Z",
+    "checklist": [
+      { "text": "Setup Attrezzatura mobile", "done": false },
+      { "text": "Setup Telecamere", "done": false },
+      { "text": "Clip Video (Scadenza: 15/02)", "done": false }
+    ]
+  },
+  {
+    "id": "1738886400002",
+    "title": "Live DEDO",
+    "description": "Live session con DEDO - Produzione completa",
+    "dueDate": "2026-02-13",
+    "priority": "high",
+    "status": "todo",
+    "owner": "",
+    "assignedTo": [],
+    "createdAt": "2026-02-01T10:00:02.000Z",
+    "checklist": [
+      { "text": "Post Instagram", "done": false },
+      { "text": "Setup Attrezzatura", "done": false },
+      { "text": "Setup Telecamere", "done": false },
+      { "text": "Setup Studio", "done": false },
+      { "text": "Clip Video (Scadenza: 20/02)", "done": false }
+    ]
+  },
+  {
+    "id": "1738886400003",
+    "title": "Live Ladymaru & 5QM",
+    "description": "Live session doppia con Ladymaru e 5QM",
+    "dueDate": "2026-02-20",
+    "priority": "high",
+    "status": "todo",
+    "owner": "",
+    "assignedTo": [],
+    "createdAt": "2026-02-01T10:00:03.000Z",
+    "checklist": [
+      { "text": "Post Instagram", "done": false },
+      { "text": "Setup Attrezzatura", "done": false },
+      { "text": "Setup Telecamere", "done": false },
+      { "text": "Setup Studio", "done": false },
+      { "text": "Clip Video (Scadenza: 27/02)", "done": false }
+    ]
+  },
+  {
+    "id": "1738886400004",
+    "title": "Live GIANNA",
+    "description": "Live session con GIANNA - Produzione completa",
+    "dueDate": "2026-02-21",
+    "priority": "high",
+    "status": "todo",
+    "owner": "",
+    "assignedTo": [],
+    "createdAt": "2026-02-01T10:00:04.000Z",
+    "checklist": [
+      { "text": "Post Instagram", "done": false },
+      { "text": "Setup Attrezzatura", "done": false },
+      { "text": "Setup Telecamere", "done": false },
+      { "text": "Setup Studio", "done": false },
+      { "text": "Clip Video (Scadenza: 28/02)", "done": false }
+    ]
+  },
+  {
+    "id": "1738886400005",
+    "title": "Serata Gateradio (Serena De Marchi + BLEACH)",
+    "description": "Evento serale Gateradio con Serena De Marchi e BLEACH",
+    "dueDate": "2026-02-27",
+    "priority": "high",
+    "status": "todo",
+    "owner": "",
+    "assignedTo": [],
+    "createdAt": "2026-02-01T10:00:05.000Z",
+    "checklist": [
+      { "text": "Post Instagram", "done": false },
+      { "text": "Setup Attrezzatura", "done": false },
+      { "text": "Setup Telecamere", "done": false },
+      { "text": "Setup Studio", "done": false },
+      { "text": "Clip Video (Scadenza: 06/03)", "done": false }
+    ]
+  },
+  {
+    "id": "1738886400006",
+    "title": "Showcase Resistance",
+    "description": "Evento showcase per Resistance - Produzione completa",
+    "dueDate": "2026-02-28",
+    "priority": "high",
+    "status": "todo",
+    "owner": "",
+    "assignedTo": [],
+    "createdAt": "2026-02-01T10:00:06.000Z",
+    "checklist": [
+      { "text": "Post Instagram", "done": false },
+      { "text": "Setup Attrezzatura", "done": false },
+      { "text": "Setup Telecamere", "done": false },
+      { "text": "Setup Studio", "done": false },
+      { "text": "Clip Video (Scadenza: 07/03)", "done": false }
+    ]
+  }
+]

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateradio - Obiettivi e KPI</title>
+    <link rel="icon" type="image/png" href="logogate.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen">
+
+    <!-- NAVBAR -->
+    <nav class="bg-white shadow-md mb-8">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-center">
+                <div class="text-2xl font-bold text-indigo-600 text-center md:text-left">
+                    Gateradio Gestionale
+                </div>
+                <div class="flex flex-col items-center mt-4 space-y-2 md:flex-row md:mt-0 md:space-y-0 md:space-x-4">
+                    <a href="index.html" class="text-gray-500 hover:text-indigo-600">Attività</a>
+                    <a href="attivita-personale.html" class="text-gray-500 hover:text-indigo-600">Attività Personale</a>
+                    <a href="calendario.html" class="text-gray-500 hover:text-indigo-600">Calendario</a>
+                    <a href="obiettivi.html" class="text-indigo-600 border-b-2 border-indigo-600 font-semibold">Obiettivi</a>
+                    <a id="finanze-link" href="finanze.html" class="text-gray-500 hover:text-indigo-600">Dashboard Finanze</a>
+                    <a href="pulizie.html" class="text-gray-500 hover:text-indigo-600">Turni Pulizie</a>
+                    <a href="documenti.html" class="text-gray-500 hover:text-indigo-600">Documenti</a>
+                    <a id="admin-panel-link" href="admin.html" class="text-gray-500 hover:text-indigo-600 hidden">Pannello Admin</a>
+                    <button id="logout-btn" class="bg-red-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-red-600 transition-colors mt-2 md:mt-0">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT -->
+    <main class="container mx-auto p-4 md:p-6">
+
+        <!-- HEADER CON FILTRO MESE -->
+        <div class="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Cruscotto Obiettivi</h1>
+                <p class="text-gray-500 mt-1">Monitora la visione e le performance del team</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <button id="load-february-btn" class="bg-indigo-600 text-white font-semibold text-sm py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-plus" id="load-icon"></i>
+                    <span id="load-btn-text">Carica Task Febbraio</span>
+                </button>
+                <div class="w-px h-6 bg-gray-300 hidden md:block"></div>
+                <label for="month-filter" class="text-sm font-medium text-gray-600">Periodo:</label>
+                <select id="month-filter" class="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="current">Mese Corrente</option>
+                    <option value="previous">Mese Precedente</option>
+                </select>
+                <span id="selected-period" class="text-sm text-gray-500 font-medium"></span>
+                <div class="w-px h-6 bg-gray-300 hidden md:block"></div>
+                <div id="owner-filter-container" class="flex items-center gap-2">
+                    <!-- Popolato da JS -->
+                </div>
+            </div>
+        </div>
+
+
+        <!-- SEZIONE 1: KPI PERFORMANCE MENSILE -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-chart-line text-indigo-600"></i>
+                Performance Mensile
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- COMPLETION RATE (Principale) -->
+                <div class="bg-white rounded-xl shadow-md p-6 md:col-span-2">
+                    <div class="flex flex-col md:flex-row items-center gap-6">
+                        <div id="completion-rate-chart" class="w-64 h-64"></div>
+                        <div class="flex-1 text-center md:text-left">
+                            <h3 class="text-lg font-semibold text-gray-700">Completion Rate</h3>
+                            <p class="text-gray-500 text-sm mb-4">Task completati rispetto al totale del mese</p>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <p class="text-2xl font-bold text-green-600" id="tasks-done">0</p>
+                                    <p class="text-xs text-gray-500">Completati</p>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <p class="text-2xl font-bold text-gray-700" id="tasks-total">0</p>
+                                    <p class="text-xs text-gray-500">Totali</p>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <p class="text-2xl font-bold text-yellow-600" id="tasks-inprogress">0</p>
+                                    <p class="text-xs text-gray-500">In Corso</p>
+                                </div>
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <p class="text-2xl font-bold text-blue-600" id="tasks-todo">0</p>
+                                    <p class="text-xs text-gray-500">Da Fare</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STATISTICHE RAPIDE -->
+                <div class="bg-white rounded-xl shadow-md p-6 flex flex-col justify-between">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-4">Statistiche Rapide</h3>
+                    <div class="space-y-4 flex-1">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Alta Priorità</span>
+                            <span class="text-sm font-bold text-red-500" id="high-priority-count">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Media Priorità</span>
+                            <span class="text-sm font-bold text-orange-500" id="medium-priority-count">0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Bassa Priorità</span>
+                            <span class="text-sm font-bold text-blue-500" id="low-priority-count">0</span>
+                        </div>
+                        <hr class="border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Task Scaduti</span>
+                            <span class="text-sm font-bold text-red-600" id="overdue-count">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEZIONE 2: MACRO-IMPEGNI (Checklist Progress) -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-indigo-600"></i>
+                Macro-Impegni (Sotto-Attività)
+            </h2>
+            <p class="text-gray-500 text-sm mb-4">Task con checklist interne - visualizza il progresso effettivo oltre allo stato della card</p>
+
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div id="macro-tasks-container" class="space-y-4">
+                    <!-- Populated by JS -->
+                    <p class="text-gray-400 text-center py-8" id="no-macro-tasks">Nessun task con sotto-attività nel periodo selezionato</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEZIONE 3: VISIONE LUNGO TERMINE -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-bullseye text-indigo-600"></i>
+                Visione (Obiettivi 6-12 Mesi)
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Gli obiettivi verranno popolati qui -->
+                <div id="targets-container" class="contents">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Placeholder se non ci sono obiettivi -->
+            <div id="no-targets" class="hidden bg-white rounded-xl shadow-md p-8 text-center">
+                <i class="fa-solid fa-flag-checkered text-4xl text-gray-300 mb-4"></i>
+                <p class="text-gray-500">Nessun obiettivo definito</p>
+                <p class="text-gray-400 text-sm">Collega la collezione Firebase "targets" per visualizzare gli obiettivi</p>
+            </div>
+        </section>
+
+        <!-- SEZIONE 4: CONFRONTO MESI (Trend) -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-arrow-trend-up text-indigo-600"></i>
+                Trend Mensile
+            </h2>
+
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div id="trend-chart" class="w-full h-64"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- SCRIPTS -->
+    <script type="module" src="js/obiettivi.js"></script>
+    <script type="module" src="js/auth-guard.js"></script>
+</body>
+</html>
