@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const prioritySelect = document.getElementById('task-priority');
     const checklistContainer = document.getElementById('checklist-container');
     const newChecklistItemInput = document.getElementById('new-checklist-item-input');
+    const newChecklistAssignee = document.getElementById('new-checklist-assignee');
     const addChecklistItemBtn = document.getElementById('add-checklist-item-btn');
 
     const priorityMap = {
@@ -135,9 +136,27 @@ document.addEventListener('DOMContentLoaded', () => {
         checklist.forEach((item, index) => {
             const itemEl = document.createElement('div');
             itemEl.className = 'checklist-item';
+
+            // Badge assegnatario
+            const assigneeBadge = item.assignee
+                ? `<span class="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">${item.assignee}</span>`
+                : '';
+
+            // Select per cambiare assegnatario
+            const assigneeOptions = allMembers.map(m =>
+                `<option value="${m.name}" ${item.assignee === m.name ? 'selected' : ''}>${m.name}</option>`
+            ).join('');
+
             itemEl.innerHTML = `
                 <input type="checkbox" id="check-${index}" ${item.done ? 'checked' : ''}>
-                <label for="check-${index}" class="text-sm">${item.text}</label>
+                <label for="check-${index}" class="text-sm flex-1">${item.text}</label>
+                <select class="checklist-assignee-select text-xs p-1 border rounded bg-white ml-2" data-index="${index}">
+                    <option value="">Nessuno</option>
+                    ${assigneeOptions}
+                </select>
+                <button type="button" class="checklist-delete-btn ml-2 text-red-500 hover:text-red-700" data-index="${index}">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
             `;
             checklistContainer.appendChild(itemEl);
         });
@@ -146,14 +165,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (addChecklistItemBtn) addChecklistItemBtn.addEventListener('click', () => {
         const text = newChecklistItemInput.value.trim();
         if (!text) return;
+
+        const assignee = newChecklistAssignee ? newChecklistAssignee.value : '';
+        const index = checklistContainer.querySelectorAll('.checklist-item').length;
+        const id = `check-new-${Date.now()}`;
+
+        const assigneeOptions = allMembers.map(m =>
+            `<option value="${m.name}" ${assignee === m.name ? 'selected' : ''}>${m.name}</option>`
+        ).join('');
+
         const itemEl = document.createElement('div');
         itemEl.className = 'checklist-item';
         itemEl.innerHTML = `
-            <input type="checkbox" id="check-new-${Date.now()}">
-            <label for="check-new-${Date.now()}" class="text-sm">${text}</label>
+            <input type="checkbox" id="${id}">
+            <label for="${id}" class="text-sm flex-1">${text}</label>
+            <select class="checklist-assignee-select text-xs p-1 border rounded bg-white ml-2" data-index="${index}">
+                <option value="">Nessuno</option>
+                ${assigneeOptions}
+            </select>
+            <button type="button" class="checklist-delete-btn ml-2 text-red-500 hover:text-red-700" data-index="${index}">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
         `;
         checklistContainer.appendChild(itemEl);
         newChecklistItemInput.value = '';
+        if (newChecklistAssignee) newChecklistAssignee.value = '';
     });
 
     const openModalForNew = () => {
@@ -202,10 +238,12 @@ document.addEventListener('DOMContentLoaded', () => {
         checklistContainer.querySelectorAll('.checklist-item').forEach(itemEl => {
             const checkbox = itemEl.querySelector('input[type="checkbox"]');
             const label = itemEl.querySelector('label');
+            const assigneeSelect = itemEl.querySelector('.checklist-assignee-select');
             if (label && label.textContent) {
                 checklistItems.push({
                     text: label.textContent,
-                    done: checkbox.checked
+                    done: checkbox.checked,
+                    assignee: assigneeSelect ? assigneeSelect.value : ''
                 });
             }
         });
@@ -307,7 +345,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Popola select Owner
         populateOwnerSelect();
+
+        // Popola select assegnatario checklist
+        if (newChecklistAssignee) {
+            newChecklistAssignee.innerHTML = '<option value="">Nessuno</option>';
+            allMembers.forEach(member => {
+                const option = document.createElement('option');
+                option.value = member.name;
+                option.textContent = member.name;
+                newChecklistAssignee.appendChild(option);
+            });
+        }
     });
+
+    // Event delegation per eliminare item checklist
+    if (checklistContainer) {
+        checklistContainer.addEventListener('click', (e) => {
+            if (e.target.closest('.checklist-delete-btn')) {
+                const btn = e.target.closest('.checklist-delete-btn');
+                const itemEl = btn.closest('.checklist-item');
+                if (itemEl) {
+                    itemEl.remove();
+                }
+            }
+        });
+    }
 
     // Caricamento task
     onValue(tasksRef, (snapshot) => {
