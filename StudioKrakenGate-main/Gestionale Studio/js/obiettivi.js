@@ -580,6 +580,39 @@ async function updateTaskOwner(taskId, newOwner) {
     }
 }
 
+function formatDateIT(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function getTimeRemaining(endDateStr) {
+    if (!endDateStr) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(endDateStr + 'T00:00:00');
+
+    const diffTime = endDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+        return { text: 'Scaduto', class: 'bg-red-100 text-red-700', icon: 'fa-exclamation-circle' };
+    } else if (diffDays === 0) {
+        return { text: 'Scade oggi', class: 'bg-red-100 text-red-700', icon: 'fa-clock' };
+    } else if (diffDays <= 7) {
+        return { text: `${diffDays} giorni`, class: 'bg-orange-100 text-orange-700', icon: 'fa-clock' };
+    } else if (diffDays <= 30) {
+        return { text: `${diffDays} giorni`, class: 'bg-yellow-100 text-yellow-700', icon: 'fa-calendar' };
+    } else if (diffDays <= 90) {
+        const weeks = Math.ceil(diffDays / 7);
+        return { text: `${weeks} settimane`, class: 'bg-blue-100 text-blue-700', icon: 'fa-calendar' };
+    } else {
+        const months = Math.ceil(diffDays / 30);
+        return { text: `${months} mesi`, class: 'bg-gray-100 text-gray-600', icon: 'fa-calendar' };
+    }
+}
+
 function renderTargets(targets) {
     const container = document.getElementById('targets-container');
     const noTargetsMsg = document.getElementById('no-targets');
@@ -612,6 +645,18 @@ function renderTargets(targets) {
             ? formatNumber(target.targetValue) + '€'
             : target.targetValue + ' ' + target.unit;
 
+        // Gestione date e tempo rimanente
+        const timeRemaining = getTimeRemaining(target.endDate);
+        const periodHtml = target.startDate && target.endDate
+            ? `<div class="flex items-center justify-between text-xs text-gray-500 mb-3">
+                 <span>${formatDateIT(target.startDate)} - ${formatDateIT(target.endDate)}</span>
+                 ${timeRemaining ? `<span class="px-2 py-0.5 rounded-full ${timeRemaining.class} flex items-center gap-1">
+                     <i class="fa-solid ${timeRemaining.icon} text-[10px]"></i>
+                     ${timeRemaining.text}
+                 </span>` : ''}
+               </div>`
+            : (target.period ? `<p class="text-sm text-gray-500 mb-4">${target.period}</p>` : '');
+
         return `
             <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow relative group cursor-pointer" data-target-id="${target.id}">
                 <button class="edit-target-btn absolute top-3 right-3 w-8 h-8 bg-gray-100 hover:bg-indigo-100 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" data-target-id="${target.id}">
@@ -624,7 +669,7 @@ function renderTargets(targets) {
                     <span class="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-600">${companyLabel}</span>
                 </div>
                 <h3 class="font-semibold text-gray-800 mb-1">${target.title}</h3>
-                <p class="text-sm text-gray-500 mb-4">${target.period}</p>
+                ${periodHtml}
                 <div class="flex items-end justify-between mb-2">
                     <span class="text-2xl font-bold text-gray-900">${displayCurrent}</span>
                     <span class="text-sm text-gray-400">/ ${displayTarget}</span>
@@ -1096,7 +1141,8 @@ function openTargetModal(targetId = null) {
     const currentInput = document.getElementById('target-current');
     const valueInput = document.getElementById('target-value');
     const unitInput = document.getElementById('target-unit');
-    const periodInput = document.getElementById('target-period');
+    const startDateInput = document.getElementById('target-start-date');
+    const endDateInput = document.getElementById('target-end-date');
 
     if (targetId) {
         // Modifica obiettivo esistente
@@ -1113,7 +1159,8 @@ function openTargetModal(targetId = null) {
         currentInput.value = target.currentValue || 0;
         valueInput.value = target.targetValue || 100;
         unitInput.value = target.unit || '';
-        periodInput.value = target.period || '';
+        startDateInput.value = target.startDate || '';
+        endDateInput.value = target.endDate || '';
     } else {
         // Nuovo obiettivo
         currentEditingTargetId = null;
@@ -1126,7 +1173,10 @@ function openTargetModal(targetId = null) {
         currentInput.value = '';
         valueInput.value = '';
         unitInput.value = '';
-        periodInput.value = '2026';
+        // Default: da oggi a fine anno
+        const today = new Date();
+        startDateInput.value = today.toISOString().split('T')[0];
+        endDateInput.value = `${today.getFullYear()}-12-31`;
     }
 
     modal.classList.remove('hidden');
@@ -1145,7 +1195,8 @@ async function saveTarget() {
     const currentInput = document.getElementById('target-current');
     const valueInput = document.getElementById('target-value');
     const unitInput = document.getElementById('target-unit');
-    const periodInput = document.getElementById('target-period');
+    const startDateInput = document.getElementById('target-start-date');
+    const endDateInput = document.getElementById('target-end-date');
 
     const title = titleInput.value.trim();
     if (!title) {
@@ -1160,7 +1211,8 @@ async function saveTarget() {
         currentValue: parseFloat(currentInput.value) || 0,
         targetValue: parseFloat(valueInput.value) || 100,
         unit: unitInput.value.trim(),
-        period: periodInput.value.trim()
+        startDate: startDateInput.value,
+        endDate: endDateInput.value
     };
 
     try {
