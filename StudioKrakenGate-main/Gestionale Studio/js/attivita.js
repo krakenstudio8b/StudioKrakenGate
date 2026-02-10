@@ -65,8 +65,19 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(memberName => `<div class="w-6 h-6 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold" title="${memberName}">${memberName.substring(0, 2).toUpperCase()}</div>`)
             .join('');
 
+        // Calcola stato scadenza
+        let dueDateClass = 'text-gray-500';
+        if (task.dueDate && task.status !== 'done') {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(task.dueDate + 'T00:00:00');
+            const diffDays = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+            if (diffDays < 0) dueDateClass = 'text-red-600 font-semibold';
+            else if (diffDays <= 3) dueDateClass = 'text-orange-500 font-semibold';
+        }
+
         const dueDateHtml = task.dueDate
-            ? `<div class="text-xs text-gray-500 flex items-center gap-1">
+            ? `<div class="text-xs ${dueDateClass} flex items-center gap-1">
                  <i class="fa-regular fa-calendar"></i>
                  <span>${new Date(task.dueDate + 'T00:00:00').toLocaleDateString('it-IT')}</span>
                </div>`
@@ -104,13 +115,73 @@ document.addEventListener('DOMContentLoaded', () => {
         return card;
     };
 
+    // Ordina i task per scadenza (più vicina prima, senza scadenza in fondo)
+    const sortByDueDate = (tasks) => {
+        return [...tasks].sort((a, b) => {
+            if (!a.dueDate && !b.dueDate) return 0;
+            if (!a.dueDate) return 1;
+            if (!b.dueDate) return -1;
+            return a.dueDate.localeCompare(b.dueDate);
+        });
+    };
+
+    // Calcola le attività in scadenza questa settimana (non completate)
+    const getThisWeekTasks = () => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const endOfWeek = new Date(today);
+        endOfWeek.setDate(today.getDate() + (7 - today.getDay())); // fine domenica
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        return allTasks.filter(task => {
+            if (!task.dueDate || task.status === 'done') return false;
+            const due = new Date(task.dueDate + 'T00:00:00');
+            return due >= today && due <= endOfWeek;
+        });
+    };
+
+    const renderWeekAlert = () => {
+        const existing = document.getElementById('week-alert');
+        if (existing) existing.remove();
+
+        const weekTasks = getThisWeekTasks();
+        if (weekTasks.length === 0) return;
+
+        const alertDiv = document.createElement('div');
+        alertDiv.id = 'week-alert';
+        alertDiv.className = 'week-alert';
+
+        const taskList = weekTasks
+            .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+            .map(t => {
+                const dateStr = new Date(t.dueDate + 'T00:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+                const isOverdue = new Date(t.dueDate + 'T00:00:00') < new Date(new Date().toDateString());
+                const badge = isOverdue ? '<span class="overdue-badge">SCADUTO</span>' : '';
+                return `<li>${badge}<strong>${t.title}</strong> — ${dateStr}</li>`;
+            })
+            .join('');
+
+        alertDiv.innerHTML = `
+            <div class="week-alert-header">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>${weekTasks.length} attività in scadenza questa settimana</span>
+            </div>
+            <ul class="week-alert-list">${taskList}</ul>
+        `;
+
+        const board = document.getElementById('kanban-board');
+        board.parentNode.insertBefore(alertDiv, board);
+    };
+
     const renderTasks = () => {
         if (!columns.todo) return;
         Object.values(columns).forEach(col => col.innerHTML = '');
-        allTasks.forEach(task => {
+        const sorted = sortByDueDate(allTasks);
+        sorted.forEach(task => {
             const card = createTaskCard(task);
             columns[task.status]?.appendChild(card);
         });
+        renderWeekAlert();
     };
 
     const saveData = () => set(tasksRef, allTasks);

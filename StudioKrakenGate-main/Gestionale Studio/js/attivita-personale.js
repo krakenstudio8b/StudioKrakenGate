@@ -129,15 +129,24 @@ async function loadMyActivities(userName) {
 
                 // 4. Controlla se l'utente è nell'array 'assignedTo' E se non è 'done'
                 if (task.assignedTo && Array.isArray(task.assignedTo) && task.assignedTo.includes(userName) && task.status !== 'done') {
-                    
-                    // 5. Aggiungiamo il task
+
+                    // 5. Aggiungiamo il task con dueDate raw per ordinamento
                     myActivities.push({
                         date: `Scadenza: ${task.dueDate ? formatEventDate(task.dueDate) : 'N/D'}`,
-                        title: task.title // Usiamo il titolo del task
+                        title: task.title,
+                        _dueDate: task.dueDate || ''
                     });
                 }
             });
         }
+        // Ordina per scadenza (più vicina prima, senza scadenza in fondo)
+        myActivities.sort((a, b) => {
+            if (!a._dueDate && !b._dueDate) return 0;
+            if (!a._dueDate) return 1;
+            if (!b._dueDate) return -1;
+            return a._dueDate.localeCompare(b._dueDate);
+        });
+
         renderItems(activitiesContainer, myActivities, "Nessuna attività assegnata.");
     });
 }
