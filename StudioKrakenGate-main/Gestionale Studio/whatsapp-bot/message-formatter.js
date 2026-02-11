@@ -53,7 +53,7 @@ function formatTaskLine(task) {
  */
 function formatDailyReminder(tasksByMember, overdueByMember, todayDate) {
     let msg = `📋 *TASK DI OGGI* - ${formatDate(todayDate)}\n`;
-    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+    msg += '--------------------\n';
 
     let hasContent = false;
 
@@ -88,7 +88,7 @@ function formatDailyReminder(tasksByMember, overdueByMember, todayDate) {
  */
 function formatWeeklyOverview(tasks, overdueTasks) {
     let msg = `📋 *SCADENZE SETTIMANA*\n`;
-    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+    msg += '--------------------\n';
 
     if (tasks.length === 0 && overdueTasks.length === 0) {
         msg += '\n✅ Nessun task in scadenza questa settimana!';
@@ -120,7 +120,7 @@ function formatWeeklyOverview(tasks, overdueTasks) {
 function formatMonthlyOverview(tasks, overdueTasks) {
     const monthName = new Date().toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
     let msg = `📋 *TASK DI ${monthName.toUpperCase()}*\n`;
-    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+    msg += '--------------------\n';
 
     if (tasks.length === 0 && overdueTasks.length === 0) {
         msg += '\n✅ Nessun task questo mese!';
@@ -150,7 +150,7 @@ function formatMonthlyOverview(tasks, overdueTasks) {
  */
 function formatPersonTasks(name, tasks, overdueTasks) {
     let msg = `👤 *TASK DI ${name.toUpperCase()}*\n`;
-    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+    msg += '--------------------\n';
 
     if (tasks.length === 0 && overdueTasks.length === 0) {
         msg += `\n✅ ${name} non ha task attivi!`;
@@ -211,7 +211,7 @@ function formatStatusChange(task, oldStatus, newStatus) {
         inprogress: 'In Corso 🔄',
         done: 'Completato ✅'
     };
-    return `🔄 *${task.title}*\n${statusLabels[oldStatus] || oldStatus} → ${statusLabels[newStatus] || newStatus}`;
+    return `🔄 *${task.title}*\n${statusLabels[oldStatus] || oldStatus} -> ${statusLabels[newStatus] || newStatus}`;
 }
 
 /**
