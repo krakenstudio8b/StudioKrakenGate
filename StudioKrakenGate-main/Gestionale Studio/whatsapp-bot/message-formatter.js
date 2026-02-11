@@ -7,22 +7,25 @@ const PRIORITY_EMOJI = {
     low: '🔵'
 };
 
-const PRIORITY_LABEL = {
-    high: 'ALTA',
-    medium: 'MEDIA',
-    low: 'BASSA'
-};
+/**
+ * Formatta la data corta (es. "lun 10 feb")
+ */
+function formatDateShort(dateStr) {
+    if (!dateStr) return 'N/D';
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('it-IT', {
+        weekday: 'short', day: 'numeric', month: 'short'
+    });
+}
 
 /**
- * Formatta la data in italiano (es. "10 febbraio 2026")
+ * Formatta la data lunga (es. "10 febbraio 2026")
  */
 function formatDate(dateStr) {
     if (!dateStr) return 'Nessuna scadenza';
     const date = new Date(dateStr + 'T00:00:00');
     return date.toLocaleDateString('it-IT', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
+        day: 'numeric', month: 'long', year: 'numeric'
     });
 }
 
@@ -33,64 +36,141 @@ function daysOverdue(dueDate) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const due = new Date(dueDate + 'T00:00:00');
-    const diff = Math.floor((today - due) / (1000 * 60 * 60 * 24));
-    return diff;
+    return Math.floor((today - due) / (1000 * 60 * 60 * 24));
 }
 
 /**
- * Formatta un singolo task come stringa
+ * Formatta una riga task compatta
  */
-function formatTask(task) {
+function formatTaskLine(task) {
     const emoji = PRIORITY_EMOJI[task.priority] || '⚪';
-    const priority = PRIORITY_LABEL[task.priority] || '';
-    const dueStr = task.dueDate ? ` - Scadenza: ${formatDate(task.dueDate)}` : '';
-
-    let line = `${emoji} *${task.title}* (${priority})${dueStr}`;
-
-    // Checklist progress
-    if (task.checklist && task.checklist.length > 0) {
-        const done = task.checklist.filter(i => i.done).length;
-        line += `\n   Checklist: ${done}/${task.checklist.length} completati`;
-    }
-
-    return line;
+    const date = formatDateShort(task.dueDate);
+    return `${emoji} *${task.title}* - ${date}`;
 }
 
 /**
- * Messaggio di reminder giornaliero
+ * !oggi - Task in scadenza oggi
  */
 function formatDailyReminder(tasksByMember, overdueByMember, todayDate) {
-    const dateStr = formatDate(todayDate);
-    let msg = `📋 *RIEPILOGO GIORNALIERO*\n📅 ${dateStr}\n`;
+    let msg = `📋 *TASK DI OGGI* - ${formatDate(todayDate)}\n`;
     msg += '━━━━━━━━━━━━━━━━━━━━\n';
 
     let hasContent = false;
 
-    // Task in scadenza oggi per membro
     for (const [member, tasks] of Object.entries(tasksByMember)) {
         if (tasks.length === 0) continue;
         hasContent = true;
-        msg += `\n👤 *${member}* - ${tasks.length} task oggi:\n`;
-        tasks.forEach(task => {
-            msg += `  ${formatTask(task)}\n`;
-        });
+        msg += `\n👤 *${member}*:\n`;
+        tasks.forEach(t => { msg += `  ${formatTaskLine(t)}\n`; });
     }
 
-    // Task scaduti
-    for (const [member, tasks] of Object.entries(overdueByMember)) {
-        if (tasks.length === 0) continue;
+    const overdueList = Object.entries(overdueByMember).filter(([, t]) => t.length > 0);
+    if (overdueList.length > 0) {
         hasContent = true;
-        msg += `\n⚠️ *${member}* - ${tasks.length} task SCADUTI:\n`;
-        tasks.forEach(task => {
-            const days = daysOverdue(task.dueDate);
-            msg += `  🔴 *${task.title}* - scaduto da ${days} giorn${days === 1 ? 'o' : 'i'}\n`;
-        });
+        msg += `\n⚠️ *SCADUTI:*\n`;
+        for (const [member, tasks] of overdueList) {
+            tasks.forEach(t => {
+                const days = daysOverdue(t.dueDate);
+                msg += `  🔴 *${t.title}* (${member}) - ${days}g di ritardo\n`;
+            });
+        }
     }
 
     if (!hasContent) {
-        msg += '\n✅ Nessun task in scadenza oggi e nessun arretrato!\nBuona giornata team! 💪';
-    } else {
-        msg += '\n━━━━━━━━━━━━━━━━━━━━\nDai che spacchiamo! 💪';
+        msg += '\n✅ Nessun task oggi e nessun arretrato!\nBuona giornata! 💪';
+    }
+
+    return msg;
+}
+
+/**
+ * !settimana - Task in scadenza questa settimana (lista compatta)
+ */
+function formatWeeklyOverview(tasks, overdueTasks) {
+    let msg = `📋 *SCADENZE SETTIMANA*\n`;
+    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+
+    if (tasks.length === 0 && overdueTasks.length === 0) {
+        msg += '\n✅ Nessun task in scadenza questa settimana!';
+        return msg;
+    }
+
+    // Ordina per data
+    tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+    tasks.forEach(t => {
+        const assignees = (t.assignedTo || []).join(', ');
+        msg += `\n${formatTaskLine(t)}`;
+        if (assignees) msg += `\n   👥 ${assignees}`;
+    });
+
+    if (overdueTasks.length > 0) {
+        msg += `\n\n⚠️ *SCADUTI:*`;
+        overdueTasks.forEach(t => {
+            const days = daysOverdue(t.dueDate);
+            msg += `\n  🔴 *${t.title}* - ${days}g di ritardo`;
+        });
+    }
+
+    return msg;
+}
+
+/**
+ * !mese - Task del mese (lista compatta)
+ */
+function formatMonthlyOverview(tasks, overdueTasks) {
+    const monthName = new Date().toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+    let msg = `📋 *TASK DI ${monthName.toUpperCase()}*\n`;
+    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+
+    if (tasks.length === 0 && overdueTasks.length === 0) {
+        msg += '\n✅ Nessun task questo mese!';
+        return msg;
+    }
+
+    tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+    tasks.forEach(t => {
+        const assignees = (t.assignedTo || []).join(', ');
+        msg += `\n${formatTaskLine(t)}`;
+        if (assignees) msg += `\n   👥 ${assignees}`;
+    });
+
+    if (overdueTasks.length > 0) {
+        msg += `\n\n⚠️ *SCADUTI:*`;
+        overdueTasks.forEach(t => {
+            const days = daysOverdue(t.dueDate);
+            msg += `\n  🔴 *${t.title}* - ${days}g di ritardo`;
+        });
+    }
+
+    return msg;
+}
+
+/**
+ * !task nome - Task di una persona specifica
+ */
+function formatPersonTasks(name, tasks, overdueTasks) {
+    let msg = `👤 *TASK DI ${name.toUpperCase()}*\n`;
+    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+
+    if (tasks.length === 0 && overdueTasks.length === 0) {
+        msg += `\n✅ ${name} non ha task attivi!`;
+        return msg;
+    }
+
+    if (tasks.length > 0) {
+        tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+        tasks.forEach(t => {
+            const status = t.status === 'inprogress' ? '🔄' : '⬜';
+            msg += `\n${status} ${formatTaskLine(t)}`;
+        });
+    }
+
+    if (overdueTasks.length > 0) {
+        msg += `\n\n⚠️ *SCADUTI:*`;
+        overdueTasks.forEach(t => {
+            const days = daysOverdue(t.dueDate);
+            msg += `\n  🔴 *${t.title}* - ${days}g di ritardo`;
+        });
     }
 
     return msg;
@@ -105,23 +185,21 @@ function formatNewTaskAlert(task) {
     const owner = task.owner ? `\n👑 Responsabile: *${task.owner}*` : '';
     const dueStr = task.dueDate ? `\n📅 Scadenza: ${formatDate(task.dueDate)}` : '';
 
-    return `🆕 *NUOVO TASK ASSEGNATO*\n\n` +
+    return `🆕 *NUOVO TASK*\n\n` +
         `${emoji} *${task.title}*\n` +
         `${task.description ? task.description + '\n' : ''}` +
         `👥 Assegnato a: *${assignees || 'Nessuno'}*` +
-        owner +
-        dueStr;
+        owner + dueStr;
 }
 
 /**
- * Messaggio per task che sta per scadere (tra 1 giorno)
+ * Messaggio per task che scade domani
  */
 function formatDeadlineWarning(task) {
     const assignees = (task.assignedTo || []).join(', ');
-    return `⏰ *PROMEMORIA SCADENZA*\n\n` +
-        `Il task *${task.title}* scade *domani*!\n` +
-        `👥 Assegnato a: *${assignees || 'Nessuno'}*\n` +
-        `📊 Stato: ${task.status === 'todo' ? 'Da fare' : 'In corso'}`;
+    return `⏰ *SCADE DOMANI*\n\n` +
+        `*${task.title}*\n` +
+        `👥 ${assignees || 'Nessuno'}`;
 }
 
 /**
@@ -133,111 +211,27 @@ function formatStatusChange(task, oldStatus, newStatus) {
         inprogress: 'In Corso 🔄',
         done: 'Completato ✅'
     };
-    const oldLabel = statusLabels[oldStatus] || oldStatus;
-    const newLabel = statusLabels[newStatus] || newStatus;
-
-    return `🔄 *AGGIORNAMENTO TASK*\n\n` +
-        `*${task.title}*\n` +
-        `${oldLabel} → ${newLabel}\n` +
-        `${task.owner ? `👑 ${task.owner}` : ''}`;
+    return `🔄 *${task.title}*\n${statusLabels[oldStatus] || oldStatus} → ${statusLabels[newStatus] || newStatus}`;
 }
 
 /**
  * Messaggio per task completato
  */
 function formatTaskCompleted(task) {
-    return `✅ *TASK COMPLETATO!*\n\n` +
-        `*${task.title}*\n` +
-        `${task.owner ? `Completato da: *${task.owner}*` : ''}\n` +
-        `Ottimo lavoro! 🎉`;
-}
-
-/**
- * Messaggio riepilogo settimanale
- */
-function formatWeeklyOverview(tasksByMember, overdueByMember) {
-    let msg = `📋 *ATTIVITÀ IN SCADENZA QUESTA SETTIMANA*\n`;
-    msg += '━━━━━━━━━━━━━━━━━━━━\n';
-
-    let hasContent = false;
-
-    for (const [member, tasks] of Object.entries(tasksByMember)) {
-        if (tasks.length === 0) continue;
-        hasContent = true;
-        msg += `\n👤 *${member}* - ${tasks.length} task:\n`;
-        tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
-        tasks.forEach(task => {
-            msg += `  ${formatTask(task)}\n`;
-        });
-    }
-
-    for (const [member, tasks] of Object.entries(overdueByMember)) {
-        if (tasks.length === 0) continue;
-        hasContent = true;
-        msg += `\n⚠️ *${member}* - ${tasks.length} task SCADUTI:\n`;
-        tasks.forEach(task => {
-            const days = daysOverdue(task.dueDate);
-            msg += `  🔴 *${task.title}* - scaduto da ${days} giorn${days === 1 ? 'o' : 'i'}\n`;
-        });
-    }
-
-    if (!hasContent) {
-        msg += '\n✅ Nessun task in scadenza questa settimana e nessun arretrato!';
-    } else {
-        msg += '\n━━━━━━━━━━━━━━━━━━━━\nDai che spacchiamo! 💪';
-    }
-
-    return msg;
-}
-
-/**
- * Messaggio riepilogo mensile
- */
-function formatMonthlyOverview(tasksByMember, overdueByMember) {
-    const monthName = new Date().toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-    let msg = `📋 *ATTIVITÀ DEL MESE - ${monthName.toUpperCase()}*\n`;
-    msg += '━━━━━━━━━━━━━━━━━━━━\n';
-
-    let hasContent = false;
-
-    for (const [member, tasks] of Object.entries(tasksByMember)) {
-        if (tasks.length === 0) continue;
-        hasContent = true;
-        msg += `\n👤 *${member}* - ${tasks.length} task:\n`;
-        tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
-        tasks.forEach(task => {
-            msg += `  ${formatTask(task)}\n`;
-        });
-    }
-
-    for (const [member, tasks] of Object.entries(overdueByMember)) {
-        if (tasks.length === 0) continue;
-        hasContent = true;
-        msg += `\n⚠️ *${member}* - ${tasks.length} task SCADUTI:\n`;
-        tasks.forEach(task => {
-            const days = daysOverdue(task.dueDate);
-            msg += `  🔴 *${task.title}* - scaduto da ${days} giorn${days === 1 ? 'o' : 'i'}\n`;
-        });
-    }
-
-    if (!hasContent) {
-        msg += '\n✅ Nessun task in programma questo mese!';
-    } else {
-        msg += '\n━━━━━━━━━━━━━━━━━━━━\nDai che spacchiamo! 💪';
-    }
-
-    return msg;
+    return `✅ *TASK COMPLETATO!*\n*${task.title}*\n${task.owner ? `👑 ${task.owner}` : ''}`;
 }
 
 module.exports = {
     formatDailyReminder,
     formatWeeklyOverview,
     formatMonthlyOverview,
+    formatPersonTasks,
     formatNewTaskAlert,
     formatDeadlineWarning,
     formatStatusChange,
     formatTaskCompleted,
-    formatTask,
+    formatTaskLine,
     formatDate,
+    formatDateShort,
     daysOverdue
 };

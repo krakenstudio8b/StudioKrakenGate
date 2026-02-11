@@ -37,7 +37,7 @@ function initScheduler(sendMessage) {
 }
 
 /**
- * Invia il riepilogo giornaliero al gruppo
+ * !oggi - Invia il riepilogo giornaliero
  */
 async function sendDailyReminder() {
     try {
@@ -61,7 +61,7 @@ async function sendDailyReminder() {
 }
 
 /**
- * Invia alert per task in scadenza domani
+ * Alert scadenze domani
  */
 async function sendDeadlineWarnings() {
     try {
@@ -72,7 +72,6 @@ async function sendDeadlineWarnings() {
         for (const task of tasksDueTomorrow) {
             const message = formatter.formatDeadlineWarning(task);
             await sendMessageFn(message);
-            // Pausa tra messaggi per non fare spam
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
@@ -83,7 +82,7 @@ async function sendDeadlineWarnings() {
 }
 
 /**
- * Invia il riepilogo settimanale al gruppo
+ * !settimana - Invia riepilogo settimanale
  */
 async function sendWeeklyOverview() {
     try {
@@ -92,10 +91,7 @@ async function sendWeeklyOverview() {
             firebaseService.getOverdueTasks()
         ]);
 
-        const tasksByMember = firebaseService.groupTasksByMember(weekTasks);
-        const overdueByMember = firebaseService.groupTasksByMember(overdueTasks);
-
-        const message = formatter.formatWeeklyOverview(tasksByMember, overdueByMember);
+        const message = formatter.formatWeeklyOverview(weekTasks, overdueTasks);
         await sendMessageFn(message);
 
         console.log('[Scheduler] Riepilogo settimanale inviato');
@@ -105,7 +101,7 @@ async function sendWeeklyOverview() {
 }
 
 /**
- * Invia il riepilogo mensile al gruppo
+ * !mese - Invia riepilogo mensile
  */
 async function sendMonthlyOverview() {
     try {
@@ -114,10 +110,7 @@ async function sendMonthlyOverview() {
             firebaseService.getOverdueTasks()
         ]);
 
-        const tasksByMember = firebaseService.groupTasksByMember(monthTasks);
-        const overdueByMember = firebaseService.groupTasksByMember(overdueTasks);
-
-        const message = formatter.formatMonthlyOverview(tasksByMember, overdueByMember);
+        const message = formatter.formatMonthlyOverview(monthTasks, overdueTasks);
         await sendMessageFn(message);
 
         console.log('[Scheduler] Riepilogo mensile inviato');
@@ -126,9 +119,37 @@ async function sendMonthlyOverview() {
     }
 }
 
+/**
+ * !task nome - Invia task di una persona specifica
+ */
+async function sendPersonTasks(name) {
+    try {
+        const tasks = await firebaseService.getTasks();
+        const nameLower = name.toLowerCase();
+
+        const personTasks = tasks.filter(t =>
+            t.status !== 'done' &&
+            ((t.assignedTo || []).some(a => a.toLowerCase() === nameLower) ||
+             (t.owner && t.owner.toLowerCase() === nameLower))
+        );
+
+        const today = new Date().toISOString().split('T')[0];
+        const active = personTasks.filter(t => !t.dueDate || t.dueDate >= today);
+        const overdue = personTasks.filter(t => t.dueDate && t.dueDate < today);
+
+        const message = formatter.formatPersonTasks(name, active, overdue);
+        await sendMessageFn(message);
+
+        console.log(`[Scheduler] Task di ${name} inviati`);
+    } catch (error) {
+        console.error('[Scheduler] Errore invio task persona:', error.message);
+    }
+}
+
 module.exports = {
     initScheduler,
     sendDailyReminder,
     sendWeeklyOverview,
-    sendMonthlyOverview
+    sendMonthlyOverview,
+    sendPersonTasks
 };

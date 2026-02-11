@@ -7,7 +7,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay } 
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const firebaseService = require('./firebase-service');
-const { initScheduler, sendDailyReminder, sendWeeklyOverview, sendMonthlyOverview } = require('./scheduler');
+const { initScheduler, sendDailyReminder, sendWeeklyOverview, sendMonthlyOverview, sendPersonTasks } = require('./scheduler');
 const { initRealtimeListeners } = require('./realtime-listener');
 
 const GROUP_ID = process.env.WHATSAPP_GROUP_ID;
@@ -104,26 +104,38 @@ async function startWhatsApp() {
                 console.log(`[MSG] Gruppo ${from}: ${text.substring(0, 50)}`);
             }
 
-            // Comando !test per verificare che il bot funziona
-            if (isGroup && text.toLowerCase() === '!test') {
+            // Comandi del bot (solo nei gruppi)
+            if (!isGroup) continue;
+            const cmd = text.toLowerCase().trim();
+
+            if (cmd === '!test') {
                 await sock.sendMessage(from, {
-                    text: '✅ Bot attivo e funzionante!\n\nComandi disponibili:\n!test - Verifica stato bot\n!oggi - Riepilogo task di oggi\n!settimana - Riepilogo task della settimana\n!attività - Tutte le task del mese'
+                    text: '✅ Bot attivo!\n\n*Comandi:*\n!oggi - Task di oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!task nome - Task di una persona\n!test - Verifica bot'
                 });
             }
 
-            // Comando !oggi per il riepilogo giornaliero on-demand
-            if (isGroup && text.toLowerCase() === '!oggi') {
+            if (cmd === '!oggi') {
                 await sendDailyReminder();
             }
 
-            // Comando !settimana per il riepilogo settimanale on-demand
-            if (isGroup && text.toLowerCase() === '!settimana') {
+            if (cmd === '!settimana') {
                 await sendWeeklyOverview();
             }
 
-            // Comando !attività per il riepilogo mensile on-demand
-            if (isGroup && (text.toLowerCase() === '!attività' || text.toLowerCase() === '!attivita')) {
+            if (cmd === '!mese') {
                 await sendMonthlyOverview();
+            }
+
+            // !task nome (es. !task simone)
+            if (cmd.startsWith('!task ')) {
+                const name = text.trim().substring(6).trim();
+                if (name) {
+                    await sendPersonTasks(name);
+                } else {
+                    await sock.sendMessage(from, {
+                        text: 'Scrivi il nome dopo !task\nEsempio: *!task simone*'
+                    });
+                }
             }
         }
     });
