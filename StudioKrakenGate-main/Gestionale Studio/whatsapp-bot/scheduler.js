@@ -104,8 +104,31 @@ async function sendWeeklyOverview() {
     }
 }
 
+/**
+ * Invia il riepilogo mensile al gruppo
+ */
+async function sendMonthlyOverview() {
+    try {
+        const [monthTasks, overdueTasks] = await Promise.all([
+            firebaseService.getTasksThisMonth(),
+            firebaseService.getOverdueTasks()
+        ]);
+
+        const tasksByMember = firebaseService.groupTasksByMember(monthTasks);
+        const overdueByMember = firebaseService.groupTasksByMember(overdueTasks);
+
+        const message = formatter.formatMonthlyOverview(tasksByMember, overdueByMember);
+        await sendMessageFn(message);
+
+        console.log('[Scheduler] Riepilogo mensile inviato');
+    } catch (error) {
+        console.error('[Scheduler] Errore invio riepilogo mensile:', error.message);
+    }
+}
+
 module.exports = {
     initScheduler,
     sendDailyReminder,
-    sendWeeklyOverview
+    sendWeeklyOverview,
+    sendMonthlyOverview
 };

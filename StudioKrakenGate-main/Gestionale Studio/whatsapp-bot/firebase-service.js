@@ -153,6 +153,23 @@ async function getTasksDueThisWeek() {
     );
 }
 
+/**
+ * Restituisce i task del mese corrente (non completati)
+ */
+async function getTasksThisMonth() {
+    const tasks = await getTasks();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const monthPrefix = `${year}-${month}`;
+
+    return tasks.filter(t =>
+        t.dueDate &&
+        t.dueDate.startsWith(monthPrefix) &&
+        t.status !== 'done'
+    );
+}
+
 module.exports = {
     initFirebase,
     getDb,
@@ -163,6 +180,7 @@ module.exports = {
     getOverdueTasks,
     getTasksDueTomorrow,
     getTasksDueThisWeek,
+    getTasksThisMonth,
     groupTasksByMember,
     onValueChange
 };
