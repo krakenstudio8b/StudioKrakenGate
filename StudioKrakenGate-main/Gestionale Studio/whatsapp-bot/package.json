@@ -1,0 +1,17 @@
+{
+  "name": "whatsapp-bot-gestionale",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp per reminder attività - Gestionale Studio Kraken Gate",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.16",
+    "firebase-admin": "^13.0.0",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.7",
+    "pino": "^9.6.0"
+  }
+}

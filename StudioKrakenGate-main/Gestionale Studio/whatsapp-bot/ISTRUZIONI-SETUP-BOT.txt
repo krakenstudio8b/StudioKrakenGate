@@ -1,0 +1,222 @@
+=====================================================
+  BOT WHATSAPP - GESTIONALE STUDIO KRAKEN GATE
+  Istruzioni complete per setup e configurazione
+  Creato: 9 febbraio 2026
+=====================================================
+
+
+COSA FA IL BOT
+==============
+
+Il bot si collega al database Firebase del gestionale e invia
+messaggi WhatsApp nel gruppo staff della community.
+
+REMINDER GIORNALIERO (ogni mattina alle 9:00, lun-sab):
+  - Riepilogo task in scadenza oggi per ogni membro
+  - Lista task scaduti/arretrati per ogni membro
+
+ALERT SCADENZE (ogni sera alle 18:00, lun-ven):
+  - Avviso per task che scadono il giorno dopo
+
+NOTIFICHE IN TEMPO REALE:
+  - Nuovo task assegnato a qualcuno -> notifica istantanea
+  - Task completato -> messaggio di congratulazioni
+  - Cambio stato (Da fare -> In corso -> Fatto)
+  - Nuovi membri aggiunti a un task esistente
+
+COMANDI NEL GRUPPO:
+  - !test  -> verifica che il bot funziona
+  - !oggi  -> riepilogo giornaliero on-demand
+
+
+STRUTTURA FILE
+==============
+
+whatsapp-bot/
+  index.js              -> Entry point, connessione WhatsApp con Baileys
+  firebase-service.js   -> Lettura task, membri, scadenze da Firebase
+  scheduler.js          -> Cron jobs (reminder mattutino + alert scadenze)
+  realtime-listener.js  -> Listener Firebase per notifiche istantanee
+  message-formatter.js  -> Formattazione messaggi WhatsApp
+  package.json          -> Dipendenze Node.js
+  .env.example          -> Template configurazione
+  .gitignore            -> File da non committare
+
+
+TECNOLOGIE USATE
+================
+
+- @whiskeysockets/baileys -> libreria WhatsApp (leggera, senza browser)
+  NOTA: e' una libreria NON ufficiale, c'e' un rischio (basso) di ban.
+  Consigliato usare un numero del secondo lavoro, NON il personale.
+
+- firebase-admin -> per leggere il database Firebase del gestionale
+- node-cron -> per i job schedulati (reminder giornaliero)
+- Hostato su Raspberry Pi 3 (basta ~80MB di RAM)
+
+
+=====================================================
+  STEP DI CONFIGURAZIONE
+=====================================================
+
+
+STEP 1 - GENERA SERVICE ACCOUNT KEY DI FIREBASE
+================================================
+
+1. Vai su https://console.firebase.google.com
+2. Seleziona il progetto del gestionale
+3. Clicca sull'ingranaggio -> "Impostazioni progetto"
+4. Tab "Account di servizio"
+5. Clicca "Genera nuova chiave privata"
+6. Scarica il file JSON
+7. Rinominalo "service-account-key.json"
+8. Mettilo nella cartella whatsapp-bot/
+
+IMPORTANTE: NON condividere questo file! Contiene le credenziali
+del database Firebase.
+
+
+STEP 2 - CONFIGURA IL FILE .ENV
+================================
+
+1. Nella cartella whatsapp-bot/, copia .env.example come .env
+2. Modifica .env con questi valori:
+
+   FIREBASE_DATABASE_URL=https://TUO-PROGETTO-default-rtdb.firebaseio.com
+   FIREBASE_SERVICE_ACCOUNT_PATH=./service-account-key.json
+   WHATSAPP_GROUP_ID=
+   DAILY_REMINDER_HOUR=9
+   DAILY_REMINDER_MINUTE=0
+   TZ=Europe/Rome
+
+NOTA: WHATSAPP_GROUP_ID lo trovi dopo il primo avvio (vedi Step 5)
+
+
+STEP 3 - COPIA IL PROGETTO SUL RASPBERRY PI
+============================================
+
+Opzione A - via SCP (da terminale):
+  scp -r whatsapp-bot/ pi@<IP_RASPBERRY>:~/whatsapp-bot/
+
+Opzione B - via chiavetta USB:
+  Copia la cartella whatsapp-bot/ su USB, poi dal Pi copiala in ~/
+
+Opzione C - via Git:
+  Se il gestionale e' su GitHub, fai git pull dal Pi
+
+
+STEP 4 - INSTALLA E AVVIA SUL RASPBERRY PI
+===========================================
+
+Apri il terminale sul Pi e:
+
+  cd ~/whatsapp-bot
+  npm install
+  node index.js
+
+Al primo avvio:
+  - Apparira' un QR CODE nel terminale
+  - Apri WhatsApp sul telefono (quello del 2o lavoro)
+  - Vai in Impostazioni -> Dispositivi collegati -> Collega un dispositivo
+  - Scansiona il QR code dal terminale del Pi
+
+Dopo la scansione il bot si connette e sei operativo!
+La sessione viene salvata nella cartella auth_info/
+(non serve riscansionare ogni volta)
+
+
+STEP 5 - TROVA L'ID DEL GRUPPO STAFF
+=====================================
+
+1. Con il bot avviato, vai nel gruppo staff della community WhatsApp
+2. Manda un messaggio qualsiasi (es. "test")
+3. Nel terminale del Pi vedrai un log tipo:
+   [MSG] Gruppo 120363XXXXXXXXX@g.us: test
+4. Copia quell'ID (es. 120363XXXXXXXXX@g.us)
+5. Mettilo nel file .env:
+   WHATSAPP_GROUP_ID=120363XXXXXXXXX@g.us
+6. Riavvia il bot:
+   Ctrl+C (per fermarlo)
+   node index.js (per riavviarlo)
+
+
+STEP 6 - MANTIENI IL BOT ATTIVO 24/7
+=====================================
+
+Per evitare che il bot si fermi quando chiudi il terminale:
+
+  npm install -g pm2
+  pm2 start index.js --name "whatsapp-bot"
+  pm2 startup
+  pm2 save
+
+Comandi utili pm2:
+  pm2 status           -> vedi se il bot e' attivo
+  pm2 logs             -> vedi i log in tempo reale
+  pm2 restart all      -> riavvia il bot
+  pm2 stop all         -> ferma il bot
+
+
+=====================================================
+  RISOLUZIONE PROBLEMI
+=====================================================
+
+PROBLEMA: "Errore connessione Firebase"
+SOLUZIONE: Verifica che:
+  - service-account-key.json esiste nella cartella
+  - FIREBASE_DATABASE_URL nel .env e' corretto
+  - Il Pi ha connessione internet
+
+PROBLEMA: "QR code non appare"
+SOLUZIONE:
+  - Elimina la cartella auth_info/ e riavvia
+  - Verifica di avere Node.js >= 18
+
+PROBLEMA: "Messaggio non arriva nel gruppo"
+SOLUZIONE:
+  - Verifica WHATSAPP_GROUP_ID nel .env
+  - Controlla i log con: pm2 logs
+  - Prova il comando !test nel gruppo
+
+PROBLEMA: "Bot si disconnette spesso"
+SOLUZIONE:
+  - Il bot si riconnette automaticamente
+  - Se il telefono con WhatsApp e' spento, il bot non funziona
+  - Tieni il telefono acceso e connesso a internet
+
+PROBLEMA: "Numero bannato da WhatsApp"
+SOLUZIONE:
+  - Rischio basso ma possibile con librerie non ufficiali
+  - Per sicurezza, usa un numero dedicato/secondario
+  - Non inviare troppi messaggi in poco tempo (il bot ha gia' una pausa di 2sec tra messaggi)
+
+
+=====================================================
+  INSTALLARE NODE.JS SUL RASPBERRY PI 3
+=====================================================
+
+Se non hai Node.js sul Pi:
+
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  sudo apt-get install -y nodejs
+  node --version    (deve essere >= 18)
+  npm --version
+
+
+=====================================================
+  NOTE AGGIUNTIVE
+=====================================================
+
+- Il bot legge DIRETTAMENTE dal database Firebase del gestionale,
+  quindi qualsiasi modifica fatta sul gestionale web si riflette
+  automaticamente nelle notifiche.
+
+- Se vuoi cambiare l'orario del reminder, modifica nel .env:
+  DAILY_REMINDER_HOUR=9
+  DAILY_REMINDER_MINUTE=0
+  E riavvia il bot.
+
+- Se in futuro vuoi aggiungere funzionalita' (es. notifiche pulizie,
+  notifiche eventi calendario), chiedi a Claude e fatti aiutare!
+
+=====================================================
