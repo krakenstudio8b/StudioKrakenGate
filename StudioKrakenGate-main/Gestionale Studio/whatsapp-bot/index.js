@@ -177,7 +177,7 @@ async function startWhatsApp() {
                     const nameLower = name.toLowerCase();
                     const personTasks = tasks.filter(t =>
                         t.status !== 'done' &&
-                        ((t.assignedTo || []).some(a => a.toLowerCase() === nameLower) ||
+                        ((t.assignedTo || []).some(a => a.toLowerCase() === nameLower || a.toLowerCase() === 'tutti') ||
                          (t.owner && t.owner.toLowerCase() === nameLower))
                     );
                     const today = new Date().toISOString().split('T')[0];

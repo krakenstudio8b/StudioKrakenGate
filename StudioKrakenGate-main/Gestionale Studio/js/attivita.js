@@ -219,6 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="date" class="checklist-duedate text-xs p-1 border rounded bg-white ml-1" value="${item.dueDate || ''}" data-index="${index}" title="Scadenza">
                 <select class="checklist-assignee-select text-xs p-1 border rounded bg-white ml-1" data-index="${index}">
                     <option value="">Nessuno</option>
+                    <option value="tutti" ${item.assignee === 'tutti' ? 'selected' : ''}>👥 Tutti</option>
                     ${assigneeOptions}
                 </select>
                 <button type="button" class="checklist-delete-btn ml-1 text-red-500 hover:text-red-700" data-index="${index}">
@@ -252,6 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <input type="date" class="checklist-duedate text-xs p-1 border rounded bg-white ml-1" value="${dueDate}" data-index="${index}" title="Scadenza">
             <select class="checklist-assignee-select text-xs p-1 border rounded bg-white ml-1" data-index="${index}">
                 <option value="">Nessuno</option>
+                <option value="tutti" ${assignee === 'tutti' ? 'selected' : ''}>👥 Tutti</option>
                 ${assigneeOptions}
             </select>
             <button type="button" class="checklist-delete-btn ml-1 text-red-500 hover:text-red-700" data-index="${index}">
@@ -422,7 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Popola select assegnatario checklist
         if (newChecklistAssignee) {
-            newChecklistAssignee.innerHTML = '<option value="">Nessuno</option>';
+            newChecklistAssignee.innerHTML = '<option value="">Nessuno</option><option value="tutti">👥 Tutti</option>';
             allMembers.forEach(member => {
                 const option = document.createElement('option');
                 option.value = member.name;
