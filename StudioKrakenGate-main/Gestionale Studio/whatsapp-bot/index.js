@@ -3,7 +3,7 @@
 
 require('dotenv').config();
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay } = require('baileys');
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const firebaseService = require('./firebase-service');
