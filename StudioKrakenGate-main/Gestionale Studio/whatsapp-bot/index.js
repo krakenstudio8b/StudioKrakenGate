@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+const qrcode = require('qrcode-terminal');
 const firebaseService = require('./firebase-service');
 const { initScheduler, sendDailyReminder } = require('./scheduler');
 const { initRealtimeListeners } = require('./realtime-listener');
@@ -45,7 +46,6 @@ async function startWhatsApp() {
     sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: true, // Mostra QR nel terminale per il login
         browser: ['Gestionale Bot', 'Chrome', '1.0.0']
     });
 
@@ -58,6 +58,7 @@ async function startWhatsApp() {
 
         if (qr) {
             console.log('\n📱 Scansiona il QR code con WhatsApp per collegare il bot!\n');
+            qrcode.generate(qr, { small: true });
         }
 
         if (connection === 'close') {
