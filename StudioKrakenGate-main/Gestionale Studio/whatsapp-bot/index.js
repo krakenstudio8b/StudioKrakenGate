@@ -126,14 +126,16 @@ async function startWhatsApp() {
                 const firebaseService = require('./firebase-service');
                 const formatter = require('./message-formatter');
                 const today = new Date().toISOString().split('T')[0];
-                const [todayTasks, overdue] = await Promise.all([
+                const [todayTasks, overdue, checklistToday] = await Promise.all([
                     firebaseService.getTasksDueToday(),
-                    firebaseService.getOverdueTasks()
+                    firebaseService.getOverdueTasks(),
+                    firebaseService.getChecklistItemsDueToday()
                 ]);
                 const msg = formatter.formatDailyReminder(
                     firebaseService.groupTasksByMember(todayTasks),
                     firebaseService.groupTasksByMember(overdue),
-                    today
+                    today,
+                    checklistToday
                 );
                 await reply(msg);
             }
@@ -141,11 +143,12 @@ async function startWhatsApp() {
             if (cmd === '!settimana') {
                 const firebaseService = require('./firebase-service');
                 const formatter = require('./message-formatter');
-                const [weekTasks, overdue] = await Promise.all([
+                const [weekTasks, overdue, checklistWeek] = await Promise.all([
                     firebaseService.getTasksDueThisWeek(),
-                    firebaseService.getOverdueTasks()
+                    firebaseService.getOverdueTasks(),
+                    firebaseService.getChecklistItemsDueThisWeek()
                 ]);
-                await reply(formatter.formatWeeklyOverview(weekTasks, overdue));
+                await reply(formatter.formatWeeklyOverview(weekTasks, overdue, checklistWeek));
             }
 
             if (cmd === '!mese') {
