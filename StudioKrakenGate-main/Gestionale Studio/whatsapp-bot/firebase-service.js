@@ -170,6 +170,64 @@ async function getTasksThisMonth() {
     );
 }
 
+/**
+ * Restituisce gli item checklist con scadenza oggi (non completati)
+ */
+async function getChecklistItemsDueToday() {
+    const tasks = await getTasks();
+    const today = new Date().toISOString().split('T')[0];
+    const items = [];
+
+    tasks.forEach(task => {
+        if (task.status === 'done' || !task.checklist) return;
+        task.checklist.forEach(item => {
+            if (item.dueDate === today && !item.done) {
+                items.push({
+                    taskTitle: task.title,
+                    text: item.text,
+                    assignee: item.assignee || '',
+                    dueDate: item.dueDate
+                });
+            }
+        });
+    });
+
+    return items;
+}
+
+/**
+ * Restituisce gli item checklist con scadenza questa settimana (non completati)
+ */
+async function getChecklistItemsDueThisWeek() {
+    const tasks = await getTasks();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(today);
+    endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+    endOfWeek.setHours(23, 59, 59, 999);
+    const todayStr = today.toISOString().split('T')[0];
+    const items = [];
+
+    tasks.forEach(task => {
+        if (task.status === 'done' || !task.checklist) return;
+        task.checklist.forEach(item => {
+            if (!item.dueDate || item.done) return;
+            const due = new Date(item.dueDate + 'T00:00:00');
+            if (item.dueDate >= todayStr && due <= endOfWeek) {
+                items.push({
+                    taskTitle: task.title,
+                    text: item.text,
+                    assignee: item.assignee || '',
+                    dueDate: item.dueDate
+                });
+            }
+        });
+    });
+
+    items.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    return items;
+}
+
 module.exports = {
     initFirebase,
     getDb,
@@ -181,6 +239,8 @@ module.exports = {
     getTasksDueTomorrow,
     getTasksDueThisWeek,
     getTasksThisMonth,
+    getChecklistItemsDueToday,
+    getChecklistItemsDueThisWeek,
     groupTasksByMember,
     onValueChange
 };

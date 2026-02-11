@@ -45,115 +45,118 @@ function daysOverdue(dueDate) {
 function formatTaskLine(task) {
     const emoji = PRIORITY_EMOJI[task.priority] || '⚪';
     const date = formatDateShort(task.dueDate);
-    return `${emoji} *${task.title}* - ${date}`;
+    return `${emoji} *${task.title}*\n    Scadenza: ${date}`;
 }
+
+// ---------------------------------------------------
+// COMANDI
+// ---------------------------------------------------
 
 /**
  * !oggi - Task in scadenza oggi
  */
 function formatDailyReminder(tasksByMember, overdueByMember, todayDate) {
-    let msg = `📋 *TASK DI OGGI* - ${formatDate(todayDate)}\n`;
-    msg += '--------------------\n';
+    let msg = `📋 *TASK DI OGGI*\n${formatDate(todayDate)}\n\n`;
 
     let hasContent = false;
 
     for (const [member, tasks] of Object.entries(tasksByMember)) {
         if (tasks.length === 0) continue;
         hasContent = true;
-        msg += `\n👤 *${member}*:\n`;
-        tasks.forEach(t => { msg += `  ${formatTaskLine(t)}\n`; });
+        msg += `👤 *${member}* (${tasks.length} task):\n\n`;
+        tasks.forEach(t => {
+            msg += `${formatTaskLine(t)}\n\n`;
+        });
     }
 
     const overdueList = Object.entries(overdueByMember).filter(([, t]) => t.length > 0);
     if (overdueList.length > 0) {
         hasContent = true;
-        msg += `\n⚠️ *SCADUTI:*\n`;
+        msg += `\n⚠️ *ARRETRATI*\n\n`;
         for (const [member, tasks] of overdueList) {
             tasks.forEach(t => {
                 const days = daysOverdue(t.dueDate);
-                msg += `  🔴 *${t.title}* (${member}) - ${days}g di ritardo\n`;
+                msg += `🔴 *${t.title}*\n    ${member} - ${days} giorni di ritardo\n\n`;
             });
         }
     }
 
     if (!hasContent) {
-        msg += '\n✅ Nessun task oggi e nessun arretrato!\nBuona giornata! 💪';
+        msg += '✅ Nessun task oggi e nessun arretrato!\n\nBuona giornata! 💪';
     }
 
-    return msg;
+    return msg.trim();
 }
 
 /**
- * !settimana - Task in scadenza questa settimana (lista compatta)
+ * !settimana - Task in scadenza questa settimana
  */
 function formatWeeklyOverview(tasks, overdueTasks) {
-    let msg = `📋 *SCADENZE SETTIMANA*\n`;
-    msg += '--------------------\n';
+    let msg = `📋 *SCADENZE SETTIMANA*\n\n`;
 
     if (tasks.length === 0 && overdueTasks.length === 0) {
-        msg += '\n✅ Nessun task in scadenza questa settimana!';
+        msg += '✅ Nessun task in scadenza questa settimana!';
         return msg;
     }
 
-    // Ordina per data
     tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
     tasks.forEach(t => {
         const assignees = (t.assignedTo || []).join(', ');
-        msg += `\n${formatTaskLine(t)}`;
-        if (assignees) msg += `\n   👥 ${assignees}`;
+        msg += `${formatTaskLine(t)}`;
+        if (assignees) msg += `\n    Assegnato a: ${assignees}`;
+        msg += '\n\n';
     });
 
     if (overdueTasks.length > 0) {
-        msg += `\n\n⚠️ *SCADUTI:*`;
+        msg += `⚠️ *ARRETRATI*\n\n`;
         overdueTasks.forEach(t => {
             const days = daysOverdue(t.dueDate);
-            msg += `\n  🔴 *${t.title}* - ${days}g di ritardo`;
+            msg += `🔴 *${t.title}* - ${days} giorni di ritardo\n\n`;
         });
     }
 
-    return msg;
+    return msg.trim();
 }
 
 /**
- * !mese - Task del mese (lista compatta)
+ * !mese - Task del mese
  */
 function formatMonthlyOverview(tasks, overdueTasks) {
     const monthName = new Date().toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-    let msg = `📋 *TASK DI ${monthName.toUpperCase()}*\n`;
-    msg += '--------------------\n';
+    let msg = `📋 *TASK DI ${monthName.toUpperCase()}*\n\n`;
 
     if (tasks.length === 0 && overdueTasks.length === 0) {
-        msg += '\n✅ Nessun task questo mese!';
+        msg += '✅ Nessun task questo mese!';
         return msg;
     }
 
     tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
     tasks.forEach(t => {
         const assignees = (t.assignedTo || []).join(', ');
-        msg += `\n${formatTaskLine(t)}`;
-        if (assignees) msg += `\n   👥 ${assignees}`;
+        msg += `${formatTaskLine(t)}`;
+        if (assignees) msg += `\n    Assegnato a: ${assignees}`;
+        msg += '\n\n';
     });
 
     if (overdueTasks.length > 0) {
-        msg += `\n\n⚠️ *SCADUTI:*`;
+        msg += `⚠️ *ARRETRATI*\n\n`;
         overdueTasks.forEach(t => {
             const days = daysOverdue(t.dueDate);
-            msg += `\n  🔴 *${t.title}* - ${days}g di ritardo`;
+            msg += `🔴 *${t.title}* - ${days} giorni di ritardo\n\n`;
         });
     }
 
-    return msg;
+    return msg.trim();
 }
 
 /**
  * !task nome - Task di una persona specifica
  */
 function formatPersonTasks(name, tasks, overdueTasks) {
-    let msg = `👤 *TASK DI ${name.toUpperCase()}*\n`;
-    msg += '--------------------\n';
+    let msg = `👤 *TASK DI ${name.toUpperCase()}*\n\n`;
 
     if (tasks.length === 0 && overdueTasks.length === 0) {
-        msg += `\n✅ ${name} non ha task attivi!`;
+        msg += `✅ ${name} non ha task attivi!`;
         return msg;
     }
 
@@ -161,19 +164,59 @@ function formatPersonTasks(name, tasks, overdueTasks) {
         tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
         tasks.forEach(t => {
             const status = t.status === 'inprogress' ? '🔄' : '⬜';
-            msg += `\n${status} ${formatTaskLine(t)}`;
+            const emoji = PRIORITY_EMOJI[t.priority] || '⚪';
+            const date = formatDateShort(t.dueDate);
+            msg += `${status} ${emoji} *${t.title}*\n    Scadenza: ${date}\n\n`;
         });
     }
 
     if (overdueTasks.length > 0) {
-        msg += `\n\n⚠️ *SCADUTI:*`;
+        msg += `⚠️ *ARRETRATI*\n\n`;
         overdueTasks.forEach(t => {
             const days = daysOverdue(t.dueDate);
-            msg += `\n  🔴 *${t.title}* - ${days}g di ritardo`;
+            msg += `🔴 *${t.title}* - ${days} giorni di ritardo\n\n`;
         });
     }
 
-    return msg;
+    return msg.trim();
+}
+
+/**
+ * !scadenze - Attivita checklist in scadenza oggi/settimana
+ */
+function formatChecklistDeadlines(todayItems, weekItems) {
+    let msg = `📌 *SCADENZE ATTIVITA*\n\n`;
+
+    if (todayItems.length === 0 && weekItems.length === 0) {
+        msg += '✅ Nessuna attivita con scadenza questa settimana!';
+        return msg;
+    }
+
+    if (todayItems.length > 0) {
+        msg += `🔥 *OGGI:*\n\n`;
+        todayItems.forEach(item => {
+            msg += `- *${item.text}*\n`;
+            msg += `    Task: ${item.taskTitle}`;
+            if (item.assignee) msg += `\n    Chi: ${item.assignee}`;
+            msg += '\n\n';
+        });
+    }
+
+    const futureItems = weekItems.filter(w =>
+        !todayItems.some(t => t.text === w.text && t.taskTitle === w.taskTitle)
+    );
+
+    if (futureItems.length > 0) {
+        msg += `📅 *PROSSIMI GIORNI:*\n\n`;
+        futureItems.forEach(item => {
+            msg += `- *${item.text}* (${formatDateShort(item.dueDate)})\n`;
+            msg += `    Task: ${item.taskTitle}`;
+            if (item.assignee) msg += `\n    Chi: ${item.assignee}`;
+            msg += '\n\n';
+        });
+    }
+
+    return msg.trim();
 }
 
 /**
@@ -207,7 +250,7 @@ function formatDeadlineWarning(task) {
  */
 function formatStatusChange(task, oldStatus, newStatus) {
     const statusLabels = {
-        todo: 'Da Fare ⬜',
+        todo: 'Da Fare',
         inprogress: 'In Corso 🔄',
         done: 'Completato ✅'
     };
@@ -218,7 +261,7 @@ function formatStatusChange(task, oldStatus, newStatus) {
  * Messaggio per task completato
  */
 function formatTaskCompleted(task) {
-    return `✅ *TASK COMPLETATO!*\n*${task.title}*\n${task.owner ? `👑 ${task.owner}` : ''}`;
+    return `✅ *TASK COMPLETATO!*\n\n*${task.title}*\n${task.owner ? `👑 ${task.owner}` : ''}\n\nOttimo lavoro! 🎉`;
 }
 
 module.exports = {
@@ -226,6 +269,7 @@ module.exports = {
     formatWeeklyOverview,
     formatMonthlyOverview,
     formatPersonTasks,
+    formatChecklistDeadlines,
     formatNewTaskAlert,
     formatDeadlineWarning,
     formatStatusChange,

@@ -208,11 +208,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const itemEl = document.createElement('div');
             itemEl.className = 'checklist-item';
 
-            // Badge assegnatario
-            const assigneeBadge = item.assignee
-                ? `<span class="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">${item.assignee}</span>`
-                : '';
-
             // Select per cambiare assegnatario
             const assigneeOptions = allMembers.map(m =>
                 `<option value="${m.name}" ${item.assignee === m.name ? 'selected' : ''}>${m.name}</option>`
@@ -221,11 +216,12 @@ document.addEventListener('DOMContentLoaded', () => {
             itemEl.innerHTML = `
                 <input type="checkbox" id="check-${index}" ${item.done ? 'checked' : ''}>
                 <label for="check-${index}" class="text-sm flex-1">${item.text}</label>
-                <select class="checklist-assignee-select text-xs p-1 border rounded bg-white ml-2" data-index="${index}">
+                <input type="date" class="checklist-duedate text-xs p-1 border rounded bg-white ml-1" value="${item.dueDate || ''}" data-index="${index}" title="Scadenza">
+                <select class="checklist-assignee-select text-xs p-1 border rounded bg-white ml-1" data-index="${index}">
                     <option value="">Nessuno</option>
                     ${assigneeOptions}
                 </select>
-                <button type="button" class="checklist-delete-btn ml-2 text-red-500 hover:text-red-700" data-index="${index}">
+                <button type="button" class="checklist-delete-btn ml-1 text-red-500 hover:text-red-700" data-index="${index}">
                     <i class="fa-solid fa-trash-can text-xs"></i>
                 </button>
             `;
@@ -233,11 +229,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
+    const newChecklistDueDate = document.getElementById('new-checklist-duedate');
+
     if (addChecklistItemBtn) addChecklistItemBtn.addEventListener('click', () => {
         const text = newChecklistItemInput.value.trim();
         if (!text) return;
 
         const assignee = newChecklistAssignee ? newChecklistAssignee.value : '';
+        const dueDate = newChecklistDueDate ? newChecklistDueDate.value : '';
         const index = checklistContainer.querySelectorAll('.checklist-item').length;
         const id = `check-new-${Date.now()}`;
 
@@ -250,17 +249,19 @@ document.addEventListener('DOMContentLoaded', () => {
         itemEl.innerHTML = `
             <input type="checkbox" id="${id}">
             <label for="${id}" class="text-sm flex-1">${text}</label>
-            <select class="checklist-assignee-select text-xs p-1 border rounded bg-white ml-2" data-index="${index}">
+            <input type="date" class="checklist-duedate text-xs p-1 border rounded bg-white ml-1" value="${dueDate}" data-index="${index}" title="Scadenza">
+            <select class="checklist-assignee-select text-xs p-1 border rounded bg-white ml-1" data-index="${index}">
                 <option value="">Nessuno</option>
                 ${assigneeOptions}
             </select>
-            <button type="button" class="checklist-delete-btn ml-2 text-red-500 hover:text-red-700" data-index="${index}">
+            <button type="button" class="checklist-delete-btn ml-1 text-red-500 hover:text-red-700" data-index="${index}">
                 <i class="fa-solid fa-trash-can text-xs"></i>
             </button>
         `;
         checklistContainer.appendChild(itemEl);
         newChecklistItemInput.value = '';
         if (newChecklistAssignee) newChecklistAssignee.value = '';
+        if (newChecklistDueDate) newChecklistDueDate.value = '';
     });
 
     const openModalForNew = () => {
@@ -310,11 +311,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const checkbox = itemEl.querySelector('input[type="checkbox"]');
             const label = itemEl.querySelector('label');
             const assigneeSelect = itemEl.querySelector('.checklist-assignee-select');
+            const dueDateEl = itemEl.querySelector('.checklist-duedate');
             if (label && label.textContent) {
                 checklistItems.push({
                     text: label.textContent,
                     done: checkbox.checked,
-                    assignee: assigneeSelect ? assigneeSelect.value : ''
+                    assignee: assigneeSelect ? assigneeSelect.value : '',
+                    dueDate: dueDateEl ? dueDateEl.value : ''
                 });
             }
         });

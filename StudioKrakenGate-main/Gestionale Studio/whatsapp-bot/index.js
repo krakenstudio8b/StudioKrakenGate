@@ -118,8 +118,8 @@ async function startWhatsApp() {
                 }
             };
 
-            if (cmd === '!test') {
-                await reply('Bot attivo!\n\nComandi:\n!oggi - Task di oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!task nome - Task di una persona\n!test - Verifica bot');
+            if (cmd === '!test' || cmd === '!help') {
+                await reply('Bot attivo!\n\nComandi:\n\n!oggi - Task in scadenza oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!scadenze - Attivita da fare questa settimana\n!task nome - Task di una persona\n!test - Verifica bot');
             }
 
             if (cmd === '!oggi') {
@@ -156,6 +156,16 @@ async function startWhatsApp() {
                     firebaseService.getOverdueTasks()
                 ]);
                 await reply(formatter.formatMonthlyOverview(monthTasks, overdue));
+            }
+
+            if (cmd === '!scadenze') {
+                const firebaseService = require('./firebase-service');
+                const formatter = require('./message-formatter');
+                const [todayItems, weekItems] = await Promise.all([
+                    firebaseService.getChecklistItemsDueToday(),
+                    firebaseService.getChecklistItemsDueThisWeek()
+                ]);
+                await reply(formatter.formatChecklistDeadlines(todayItems, weekItems));
             }
 
             if (cmd.startsWith('!task ')) {
