@@ -289,6 +289,58 @@ function formatTaskCompleted(task) {
     return `✅ *TASK COMPLETATO!*\n\n*${task.title}*\n${task.owner ? `👑 ${task.owner}` : ''}\n\nOttimo lavoro! 🎉`;
 }
 
+/**
+ * Report settimanale automatico (lunedi mattina)
+ */
+function formatWeeklyReport(completedTasks, overdueTasks, weekAheadTasks) {
+    let msg = `📊 *REPORT SETTIMANALE*\n${formatDate(new Date().toISOString().split('T')[0])}\n\n`;
+
+    // Task completati
+    if (completedTasks.length > 0) {
+        msg += `✅ *COMPLETATI* (${completedTasks.length}):\n\n`;
+        completedTasks.forEach(t => {
+            const assignees = (t.assignedTo || []).join(', ');
+            msg += `- *${t.title}*`;
+            if (assignees) msg += ` (${assignees})`;
+            msg += '\n';
+        });
+        msg += '\n';
+    } else {
+        msg += '⚠️ Nessun task completato la settimana scorsa\n\n';
+    }
+
+    // Arretrati
+    if (overdueTasks.length > 0) {
+        msg += `🔴 *ARRETRATI* (${overdueTasks.length}):\n\n`;
+        overdueTasks.forEach(t => {
+            const days = daysOverdue(t.dueDate);
+            const assignees = (t.assignedTo || []).join(', ');
+            msg += `- *${t.title}* - ${days}g di ritardo`;
+            if (assignees) msg += ` (${assignees})`;
+            msg += '\n';
+        });
+        msg += '\n';
+    }
+
+    // Settimana in arrivo
+    if (weekAheadTasks.length > 0) {
+        msg += `📅 *QUESTA SETTIMANA* (${weekAheadTasks.length}):\n\n`;
+        weekAheadTasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+        weekAheadTasks.forEach(t => {
+            const emoji = PRIORITY_EMOJI[t.priority] || '⚪';
+            const date = formatDateShort(t.dueDate);
+            const assignees = (t.assignedTo || []).join(', ');
+            msg += `${emoji} *${t.title}* - ${date}`;
+            if (assignees) msg += `\n    (${assignees})`;
+            msg += '\n';
+        });
+    } else {
+        msg += '📅 Nessun task in programma questa settimana';
+    }
+
+    return msg.trim();
+}
+
 module.exports = {
     formatDailyReminder,
     formatWeeklyOverview,
@@ -299,6 +351,7 @@ module.exports = {
     formatDeadlineWarning,
     formatStatusChange,
     formatTaskCompleted,
+    formatWeeklyReport,
     formatTaskLine,
     formatDate,
     formatDateShort,

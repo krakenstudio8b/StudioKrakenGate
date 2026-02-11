@@ -32,8 +32,17 @@ function initScheduler(sendMessage) {
         timezone: process.env.TZ || 'Europe/Rome'
     });
 
+    // Report settimanale - ogni lunedi alle 9:00
+    cron.schedule('0 9 * * 1', async () => {
+        console.log('[Scheduler] Invio report settimanale...');
+        await sendWeeklyReport();
+    }, {
+        timezone: process.env.TZ || 'Europe/Rome'
+    });
+
     console.log(`[Scheduler] Reminder giornaliero programmato alle ${hour}:${minute.padStart(2, '0')} (lun-sab)`);
     console.log('[Scheduler] Check scadenze programmato alle 18:00 (lun-ven)');
+    console.log('[Scheduler] Report settimanale programmato ogni lunedi alle 9:00');
 }
 
 /**
@@ -146,10 +155,31 @@ async function sendPersonTasks(name) {
     }
 }
 
+/**
+ * Report settimanale (lunedi mattina)
+ */
+async function sendWeeklyReport() {
+    try {
+        const [completedTasks, overdueTasks, weekTasks] = await Promise.all([
+            firebaseService.getTasksCompletedLastWeek(),
+            firebaseService.getOverdueTasks(),
+            firebaseService.getTasksDueThisWeek()
+        ]);
+
+        const message = formatter.formatWeeklyReport(completedTasks, overdueTasks, weekTasks);
+        await sendMessageFn(message);
+
+        console.log('[Scheduler] Report settimanale inviato');
+    } catch (error) {
+        console.error('[Scheduler] Errore invio report settimanale:', error.message);
+    }
+}
+
 module.exports = {
     initScheduler,
     sendDailyReminder,
     sendWeeklyOverview,
     sendMonthlyOverview,
-    sendPersonTasks
+    sendPersonTasks,
+    sendWeeklyReport
 };

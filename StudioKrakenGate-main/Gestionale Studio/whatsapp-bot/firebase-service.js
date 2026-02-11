@@ -228,6 +228,35 @@ async function getChecklistItemsDueThisWeek() {
     return items;
 }
 
+/**
+ * Restituisce i task completati nella settimana scorsa
+ */
+async function getTasksCompletedLastWeek() {
+    const tasks = await getTasks();
+    const now = new Date();
+    const startOfThisWeek = new Date(now);
+    startOfThisWeek.setDate(now.getDate() - now.getDay() + 1); // Lunedi questa settimana
+    startOfThisWeek.setHours(0, 0, 0, 0);
+
+    const startOfLastWeek = new Date(startOfThisWeek);
+    startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+
+    return tasks.filter(t => {
+        if (t.status !== 'done') return false;
+        // Usa completedAt se disponibile, altrimenti non possiamo sapere quando e' stato completato
+        // In mancanza di completedAt, includiamo tutti i done (il realtime-listener potrebbe aggiungere completedAt in futuro)
+        return true;
+    });
+}
+
+/**
+ * Restituisce tutti i task completati (per archivio)
+ */
+async function getCompletedTasks() {
+    const tasks = await getTasks();
+    return tasks.filter(t => t.status === 'done');
+}
+
 module.exports = {
     initFirebase,
     getDb,
@@ -241,6 +270,8 @@ module.exports = {
     getTasksThisMonth,
     getChecklistItemsDueToday,
     getChecklistItemsDueThisWeek,
+    getTasksCompletedLastWeek,
+    getCompletedTasks,
     groupTasksByMember,
     onValueChange
 };

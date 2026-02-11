@@ -28,6 +28,7 @@
                     <a id="finanze-link" href="finanze.html" class="text-gray-500 hover:text-indigo-600">Dashboard Finanze</a>
                     <a href="pulizie.html" class="text-gray-500 hover:text-indigo-600">Turni Pulizie</a>
                     <a href="documenti.html" class="text-gray-500 hover:text-indigo-600">Documenti</a>
+                    <a href="archivio.html" class="text-gray-500 hover:text-indigo-600">Archivio</a>
                     <a id="admin-panel-link" href="admin.html" class="text-gray-500 hover:text-indigo-600 hidden">Pannello Admin</a>
                     <button id="logout-btn" class="bg-red-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-red-600 transition-colors mt-2 md:mt-0">Logout</button>
                 </div>
@@ -116,6 +117,28 @@
                     </div>
                 </div>
             </div>
+            <!-- Sezione Commenti -->
+            <div id="comments-section" class="hidden">
+                <label class="block text-sm font-medium">Commenti</label>
+                <div id="comments-container" class="mt-1 border rounded-lg p-3 space-y-3 max-h-48 overflow-y-auto">
+                </div>
+                <div class="flex gap-2 mt-2">
+                    <input type="text" id="new-comment-input" placeholder="Scrivi un commento..." class="flex-grow p-2 border rounded-lg">
+                    <button id="add-comment-btn" class="bg-indigo-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-indigo-600">Invia</button>
+                </div>
+            </div>
+
+            <!-- Template di task -->
+            <div id="template-section" class="hidden">
+                <label class="block text-sm font-medium mb-1">Crea da Template</label>
+                <div class="flex gap-2">
+                    <select id="template-select" class="flex-grow p-2 border rounded-lg bg-white">
+                        <option value="">-- Scegli un template --</option>
+                    </select>
+                    <button id="apply-template-btn" class="bg-green-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-green-600">Applica</button>
+                </div>
+            </div>
+
             <div class="mt-6 flex justify-between items-center">
                 <button id="delete-task-btn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 hidden">Elimina Task</button>
                 <div class="flex gap-3">

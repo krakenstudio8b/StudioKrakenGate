@@ -119,7 +119,7 @@ async function startWhatsApp() {
             };
 
             if (cmd === '!test' || cmd === '!help') {
-                await reply('Bot attivo!\n\nComandi:\n\n!oggi - Task in scadenza oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!scadenze - Attivita da fare questa settimana\n!task nome - Task di una persona\n!test - Verifica bot');
+                await reply('Bot attivo!\n\nComandi:\n\n!oggi - Task in scadenza oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!scadenze - Attivita da fare questa settimana\n!task nome - Task di una persona\n!report - Report settimanale\n!test - Verifica bot');
             }
 
             if (cmd === '!oggi') {
@@ -169,6 +169,17 @@ async function startWhatsApp() {
                     firebaseService.getChecklistItemsDueThisWeek()
                 ]);
                 await reply(formatter.formatChecklistDeadlines(todayItems, weekItems));
+            }
+
+            if (cmd === '!report') {
+                const firebaseService = require('./firebase-service');
+                const formatter = require('./message-formatter');
+                const [completedTasks, overdue, weekTasks] = await Promise.all([
+                    firebaseService.getTasksCompletedLastWeek(),
+                    firebaseService.getOverdueTasks(),
+                    firebaseService.getTasksDueThisWeek()
+                ]);
+                await reply(formatter.formatWeeklyReport(completedTasks, overdue, weekTasks));
             }
 
             if (cmd.startsWith('!task ')) {

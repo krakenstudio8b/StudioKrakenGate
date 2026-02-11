@@ -3,15 +3,18 @@
 
 import { database } from './firebase-config.js';
 import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { currentUser } from './auth-guard.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Riferimenti Firebase
     const tasksRef = ref(database, 'tasks');
     const membersRef = ref(database, 'members');
+    const templatesRef = ref(database, 'taskTemplates');
 
     // Stato locale
     let allTasks = [];
     let allMembers = [];
+    let allTemplates = [];
     let currentTaskId = null;
 
     // Riferimenti DOM
@@ -36,6 +39,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const newChecklistItemInput = document.getElementById('new-checklist-item-input');
     const newChecklistAssignee = document.getElementById('new-checklist-assignee');
     const addChecklistItemBtn = document.getElementById('add-checklist-item-btn');
+    const commentsSection = document.getElementById('comments-section');
+    const commentsContainer = document.getElementById('comments-container');
+    const newCommentInput = document.getElementById('new-comment-input');
+    const addCommentBtn = document.getElementById('add-comment-btn');
+    const templateSection = document.getElementById('template-section');
+    const templateSelect = document.getElementById('template-select');
+    const applyTemplateBtn = document.getElementById('apply-template-btn');
 
     const priorityMap = {
         low: { label: 'Bassa', color: 'bg-blue-500' },
@@ -266,6 +276,74 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newChecklistDueDate) newChecklistDueDate.value = '';
     });
 
+    // COMMENTI
+    const renderComments = (comments = []) => {
+        if (!commentsContainer) return;
+        commentsContainer.innerHTML = '';
+        if (comments.length === 0) {
+            commentsContainer.innerHTML = '<p class="text-gray-400 text-sm">Nessun commento</p>';
+            return;
+        }
+        comments.forEach(c => {
+            const date = new Date(c.timestamp);
+            const dateStr = date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            const div = document.createElement('div');
+            div.className = 'comment-item';
+            div.innerHTML = `
+                <div class="comment-header">
+                    <span class="comment-author">${c.author}</span>
+                    <span class="comment-date">${dateStr}</span>
+                </div>
+                <p class="comment-text">${c.text}</p>
+            `;
+            commentsContainer.appendChild(div);
+        });
+        commentsContainer.scrollTop = commentsContainer.scrollHeight;
+    };
+
+    if (addCommentBtn) addCommentBtn.addEventListener('click', () => {
+        const text = newCommentInput.value.trim();
+        if (!text || !currentTaskId) return;
+        const task = allTasks.find(t => t.id === currentTaskId);
+        if (!task) return;
+        if (!task.comments) task.comments = [];
+        task.comments.push({
+            text,
+            author: currentUser.name || 'Anonimo',
+            timestamp: new Date().toISOString()
+        });
+        saveData();
+        renderComments(task.comments);
+        newCommentInput.value = '';
+    });
+
+    if (newCommentInput) newCommentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') addCommentBtn.click();
+    });
+
+    // TEMPLATE
+    const populateTemplateSelect = () => {
+        if (!templateSelect) return;
+        templateSelect.innerHTML = '<option value="">-- Scegli un template --</option>';
+        allTemplates.forEach(tpl => {
+            const option = document.createElement('option');
+            option.value = tpl.id;
+            option.textContent = tpl.name;
+            templateSelect.appendChild(option);
+        });
+    };
+
+    if (applyTemplateBtn) applyTemplateBtn.addEventListener('click', () => {
+        const tplId = templateSelect.value;
+        if (!tplId) return;
+        const template = allTemplates.find(t => t.id === tplId);
+        if (!template) return;
+        titleInput.value = template.title || '';
+        descriptionInput.value = template.description || '';
+        prioritySelect.value = template.priority || 'medium';
+        renderChecklist((template.checklist || []).map(item => ({ ...item, done: false })));
+    });
+
     const openModalForNew = () => {
         currentTaskId = null;
         modalTitle.textContent = 'Nuovo Task';
@@ -277,6 +355,8 @@ document.addEventListener('DOMContentLoaded', () => {
         membersCheckboxesContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
         renderChecklist([]);
         deleteTaskBtn.classList.add('hidden');
+        if (commentsSection) commentsSection.classList.add('hidden');
+        if (templateSection) templateSection.classList.remove('hidden');
         modal.classList.remove('hidden');
     };
 
@@ -295,7 +375,10 @@ document.addEventListener('DOMContentLoaded', () => {
             cb.checked = (task.assignedTo || []).includes(cb.value);
         });
         renderChecklist(task.checklist);
+        renderComments(task.comments || []);
         deleteTaskBtn.classList.remove('hidden');
+        if (commentsSection) commentsSection.classList.remove('hidden');
+        if (templateSection) templateSection.classList.add('hidden');
         modal.classList.remove('hidden');
     };
 
@@ -335,9 +418,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         if (currentTaskId) {
-            // Modifica task esistente
+            // Modifica task esistente - mantieni i commenti
             const taskIndex = allTasks.findIndex(t => t.id === currentTaskId);
             if (taskIndex !== -1) {
+                taskData.comments = allTasks[taskIndex].comments || [];
                 allTasks[taskIndex] = { ...allTasks[taskIndex], ...taskData };
             }
         } else {
@@ -446,6 +530,78 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Inizializza template predefiniti se non esistono
+    const defaultTemplates = {
+        evento_live: {
+            name: 'Evento Live',
+            title: 'Evento Live - ',
+            description: 'Organizzazione evento live',
+            priority: 'high',
+            checklist: [
+                { text: 'Confermare artista/ospite', assignee: '', dueDate: '' },
+                { text: 'Preparare locandina/grafica', assignee: '', dueDate: '' },
+                { text: 'Pubblicare evento sui social', assignee: '', dueDate: '' },
+                { text: 'Controllare impianto audio', assignee: '', dueDate: '' },
+                { text: 'Preparare scaletta', assignee: '', dueDate: '' },
+                { text: 'Verificare scorte bar', assignee: '', dueDate: '' },
+                { text: 'Organizzare staff serata', assignee: '', dueDate: '' }
+            ]
+        },
+        serata: {
+            name: 'Serata Standard',
+            title: 'Serata - ',
+            description: 'Preparazione serata standard',
+            priority: 'medium',
+            checklist: [
+                { text: 'Verificare prenotazioni', assignee: '', dueDate: '' },
+                { text: 'Controllare scorte bar', assignee: '', dueDate: '' },
+                { text: 'Preparare playlist/musica', assignee: '', dueDate: '' },
+                { text: 'Organizzare staff', assignee: '', dueDate: '' },
+                { text: 'Pulizia locale', assignee: '', dueDate: '' }
+            ]
+        },
+        manutenzione: {
+            name: 'Manutenzione',
+            title: 'Manutenzione - ',
+            description: 'Attivita di manutenzione',
+            priority: 'medium',
+            checklist: [
+                { text: 'Identificare problema', assignee: '', dueDate: '' },
+                { text: 'Acquistare materiale necessario', assignee: '', dueDate: '' },
+                { text: 'Eseguire intervento', assignee: '', dueDate: '' },
+                { text: 'Verificare funzionamento', assignee: '', dueDate: '' }
+            ]
+        },
+        riunione: {
+            name: 'Riunione Staff',
+            title: 'Riunione Staff - ',
+            description: 'Riunione del team',
+            priority: 'low',
+            checklist: [
+                { text: 'Definire ordine del giorno', assignee: '', dueDate: '' },
+                { text: 'Convocare partecipanti', assignee: '', dueDate: '' },
+                { text: 'Preparare documenti', assignee: '', dueDate: '' },
+                { text: 'Scrivere verbale/note', assignee: '', dueDate: '' }
+            ]
+        }
+    };
+
+    // Caricamento template
+    onValue(templatesRef, (snapshot) => {
+        const data = snapshot.val();
+        if (!data) {
+            // Prima volta: salva template predefiniti
+            set(templatesRef, defaultTemplates);
+            return;
+        }
+        if (typeof data === 'object') {
+            allTemplates = Object.entries(data).map(([id, tpl]) => ({ id, ...tpl }));
+        } else {
+            allTemplates = [];
+        }
+        populateTemplateSelect();
+    });
 
     // Caricamento task
     onValue(tasksRef, (snapshot) => {
