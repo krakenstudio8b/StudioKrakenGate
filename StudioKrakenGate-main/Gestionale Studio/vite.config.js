@@ -14,7 +14,8 @@ export default defineConfig({
         pulizie: './pulizie.html',
         'attivita-personale': './attivita-personale.html',
         obiettivi: './obiettivi.html',
-        'load-tasks': './load-tasks.html'
+        'load-tasks': './load-tasks.html',
+        archivio: './archivio.html'
       }
     },
     outDir: 'dist',
