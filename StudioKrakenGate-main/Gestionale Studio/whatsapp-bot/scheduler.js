@@ -82,7 +82,30 @@ async function sendDeadlineWarnings() {
     }
 }
 
+/**
+ * Invia il riepilogo settimanale al gruppo
+ */
+async function sendWeeklyOverview() {
+    try {
+        const [weekTasks, overdueTasks] = await Promise.all([
+            firebaseService.getTasksDueThisWeek(),
+            firebaseService.getOverdueTasks()
+        ]);
+
+        const tasksByMember = firebaseService.groupTasksByMember(weekTasks);
+        const overdueByMember = firebaseService.groupTasksByMember(overdueTasks);
+
+        const message = formatter.formatWeeklyOverview(tasksByMember, overdueByMember);
+        await sendMessageFn(message);
+
+        console.log('[Scheduler] Riepilogo settimanale inviato');
+    } catch (error) {
+        console.error('[Scheduler] Errore invio riepilogo settimanale:', error.message);
+    }
+}
+
 module.exports = {
     initScheduler,
-    sendDailyReminder
+    sendDailyReminder,
+    sendWeeklyOverview
 };

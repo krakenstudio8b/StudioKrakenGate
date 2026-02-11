@@ -152,8 +152,47 @@ function formatTaskCompleted(task) {
         `Ottimo lavoro! 🎉`;
 }
 
+/**
+ * Messaggio riepilogo settimanale
+ */
+function formatWeeklyOverview(tasksByMember, overdueByMember) {
+    let msg = `📋 *ATTIVITÀ IN SCADENZA QUESTA SETTIMANA*\n`;
+    msg += '━━━━━━━━━━━━━━━━━━━━\n';
+
+    let hasContent = false;
+
+    for (const [member, tasks] of Object.entries(tasksByMember)) {
+        if (tasks.length === 0) continue;
+        hasContent = true;
+        msg += `\n👤 *${member}* - ${tasks.length} task:\n`;
+        tasks.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+        tasks.forEach(task => {
+            msg += `  ${formatTask(task)}\n`;
+        });
+    }
+
+    for (const [member, tasks] of Object.entries(overdueByMember)) {
+        if (tasks.length === 0) continue;
+        hasContent = true;
+        msg += `\n⚠️ *${member}* - ${tasks.length} task SCADUTI:\n`;
+        tasks.forEach(task => {
+            const days = daysOverdue(task.dueDate);
+            msg += `  🔴 *${task.title}* - scaduto da ${days} giorn${days === 1 ? 'o' : 'i'}\n`;
+        });
+    }
+
+    if (!hasContent) {
+        msg += '\n✅ Nessun task in scadenza questa settimana e nessun arretrato!';
+    } else {
+        msg += '\n━━━━━━━━━━━━━━━━━━━━\nDai che spacchiamo! 💪';
+    }
+
+    return msg;
+}
+
 module.exports = {
     formatDailyReminder,
+    formatWeeklyOverview,
     formatNewTaskAlert,
     formatDeadlineWarning,
     formatStatusChange,

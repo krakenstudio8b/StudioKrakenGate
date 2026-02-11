@@ -132,6 +132,27 @@ function onValueChange(path, callback) {
     });
 }
 
+/**
+ * Restituisce i task in scadenza questa settimana (non completati)
+ */
+async function getTasksDueThisWeek() {
+    const tasks = await getTasks();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(today);
+    endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const todayStr = today.toISOString().split('T')[0];
+
+    return tasks.filter(t =>
+        t.dueDate &&
+        t.dueDate >= todayStr &&
+        new Date(t.dueDate + 'T00:00:00') <= endOfWeek &&
+        t.status !== 'done'
+    );
+}
+
 module.exports = {
     initFirebase,
     getDb,
@@ -141,6 +162,7 @@ module.exports = {
     getTasksDueToday,
     getOverdueTasks,
     getTasksDueTomorrow,
+    getTasksDueThisWeek,
     groupTasksByMember,
     onValueChange
 };

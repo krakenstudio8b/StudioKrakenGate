@@ -7,7 +7,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay } 
 const pino = require('pino');
 const qrcode = require('qrcode-terminal');
 const firebaseService = require('./firebase-service');
-const { initScheduler, sendDailyReminder } = require('./scheduler');
+const { initScheduler, sendDailyReminder, sendWeeklyOverview } = require('./scheduler');
 const { initRealtimeListeners } = require('./realtime-listener');
 
 const GROUP_ID = process.env.WHATSAPP_GROUP_ID;
@@ -107,13 +107,18 @@ async function startWhatsApp() {
             // Comando !test per verificare che il bot funziona
             if (isGroup && text.toLowerCase() === '!test') {
                 await sock.sendMessage(from, {
-                    text: '✅ Bot attivo e funzionante!\n\nComandi disponibili:\n!test - Verifica stato bot\n!oggi - Riepilogo task di oggi'
+                    text: '✅ Bot attivo e funzionante!\n\nComandi disponibili:\n!test - Verifica stato bot\n!oggi - Riepilogo task di oggi\n!settimana - Riepilogo task della settimana'
                 });
             }
 
             // Comando !oggi per il riepilogo giornaliero on-demand
             if (isGroup && text.toLowerCase() === '!oggi') {
                 await sendDailyReminder();
+            }
+
+            // Comando !settimana per il riepilogo settimanale on-demand
+            if (isGroup && text.toLowerCase() === '!settimana') {
+                await sendWeeklyOverview();
             }
         }
     });
