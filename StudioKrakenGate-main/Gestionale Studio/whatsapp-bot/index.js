@@ -108,33 +108,74 @@ async function startWhatsApp() {
             if (!isGroup) continue;
             const cmd = text.toLowerCase().trim();
 
+            // Funzione helper per rispondere nello stesso gruppo
+            const reply = async (message) => {
+                try {
+                    await sock.sendMessage(from, { text: message });
+                    console.log('[Bot] Risposta inviata');
+                } catch (err) {
+                    console.error('[Bot] Errore invio:', err.message);
+                }
+            };
+
             if (cmd === '!test') {
-                await sock.sendMessage(from, {
-                    text: '✅ Bot attivo!\n\n*Comandi:*\n!oggi - Task di oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!task nome - Task di una persona\n!test - Verifica bot'
-                });
+                await reply('Bot attivo!\n\nComandi:\n!oggi - Task di oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!task nome - Task di una persona\n!test - Verifica bot');
             }
 
             if (cmd === '!oggi') {
-                await sendDailyReminder();
+                const firebaseService = require('./firebase-service');
+                const formatter = require('./message-formatter');
+                const today = new Date().toISOString().split('T')[0];
+                const [todayTasks, overdue] = await Promise.all([
+                    firebaseService.getTasksDueToday(),
+                    firebaseService.getOverdueTasks()
+                ]);
+                const msg = formatter.formatDailyReminder(
+                    firebaseService.groupTasksByMember(todayTasks),
+                    firebaseService.groupTasksByMember(overdue),
+                    today
+                );
+                await reply(msg);
             }
 
             if (cmd === '!settimana') {
-                await sendWeeklyOverview();
+                const firebaseService = require('./firebase-service');
+                const formatter = require('./message-formatter');
+                const [weekTasks, overdue] = await Promise.all([
+                    firebaseService.getTasksDueThisWeek(),
+                    firebaseService.getOverdueTasks()
+                ]);
+                await reply(formatter.formatWeeklyOverview(weekTasks, overdue));
             }
 
             if (cmd === '!mese') {
-                await sendMonthlyOverview();
+                const firebaseService = require('./firebase-service');
+                const formatter = require('./message-formatter');
+                const [monthTasks, overdue] = await Promise.all([
+                    firebaseService.getTasksThisMonth(),
+                    firebaseService.getOverdueTasks()
+                ]);
+                await reply(formatter.formatMonthlyOverview(monthTasks, overdue));
             }
 
-            // !task nome (es. !task simone)
             if (cmd.startsWith('!task ')) {
+                const firebaseService = require('./firebase-service');
+                const formatter = require('./message-formatter');
                 const name = text.trim().substring(6).trim();
                 if (name) {
-                    await sendPersonTasks(name);
+                    const tasks = await firebaseService.getTasks();
+                    const nameLower = name.toLowerCase();
+                    const personTasks = tasks.filter(t =>
+                        t.status !== 'done' &&
+                        ((t.assignedTo || []).some(a => a.toLowerCase() === nameLower) ||
+                         (t.owner && t.owner.toLowerCase() === nameLower))
+                    );
+                    const today = new Date().toISOString().split('T')[0];
+                    const active = personTasks.filter(t => !t.dueDate || t.dueDate >= today);
+                    const overdue = personTasks.filter(t => t.dueDate && t.dueDate < today);
+                    await reply(formatter.formatPersonTasks(name, active, overdue));
                 } else {
-                    await sock.sendMessage(from, {
-                        text: 'Scrivi il nome dopo !task\nEsempio: *!task simone*'
-                    });
+                    await reply('Scrivi il nome dopo !task\nEsempio: !task simone');
                 }
             }
         }
