@@ -95,10 +95,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const checklist = task.checklist || [];
         const completedItems = checklist.filter(item => item.done).length;
-        // Verifica se ci sono attività bloccate (la prossima non completata ha un predecessore non completato)
-        const hasBlockedItems = checklist.length > 1 && completedItems < checklist.length && completedItems < checklist.length - 1;
-        const lockHtml = hasBlockedItems && task.status !== 'done'
-            ? `<div class="blocked-badge" title="${checklist.length - completedItems - 1} attività bloccate"><i class="fa-solid fa-lock"></i></div>`
+        // Verifica se ci sono attività effettivamente bloccate (locked + predecessore non completato)
+        const blockedCount = checklist.filter((item, i) =>
+            item.locked && i > 0 && !checklist[i - 1].done && !item.done
+        ).length;
+        const lockHtml = blockedCount > 0 && task.status !== 'done'
+            ? `<div class="blocked-badge" title="${blockedCount} attività bloccate"><i class="fa-solid fa-lock"></i></div>`
             : '';
         const checklistProgressHtml = checklist.length > 0
             ? `<div class="checklist-progress">
@@ -224,21 +226,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const itemEl = document.createElement('div');
             itemEl.className = 'checklist-item';
 
-            // Blocco sequenziale: l'item è bloccato se il precedente non è completato
-            const isBlocked = index > 0 && !checklist[index - 1].done;
+            // Blocco: l'item è bloccato solo se ha il lucchetto attivo E il precedente non è completato
+            const hasLock = item.locked === true;
+            const isBlocked = hasLock && index > 0 && !checklist[index - 1].done;
 
             // Select per cambiare assegnatario
             const assigneeOptions = allMembers.map(m =>
                 `<option value="${m.name}" ${item.assignee === m.name ? 'selected' : ''}>${m.name}</option>`
             ).join('');
 
-            const lockIcon = isBlocked ? '<i class="fa-solid fa-lock text-red-400 text-xs mr-1" title="Completa prima l\'attività precedente"></i>' : '';
-            const blockedClass = isBlocked ? 'checklist-blocked' : '';
+            if (isBlocked) itemEl.classList.add('checklist-blocked');
 
-            itemEl.classList.add(blockedClass || 'checklist-unlocked');
+            const lockBtnClass = hasLock ? 'text-red-500' : 'text-gray-300 hover:text-red-400';
+            const lockIcon = hasLock ? 'fa-lock' : 'fa-lock-open';
+            const lockTitle = hasLock ? 'Lucchetto attivo: richiede completamento attività precedente' : 'Lucchetto disattivo: clicca per attivare';
 
             itemEl.innerHTML = `
-                ${lockIcon}
+                <button type="button" class="checklist-lock-btn mr-1 ${lockBtnClass}" data-index="${index}" title="${lockTitle}">
+                    <i class="fa-solid ${lockIcon} text-xs"></i>
+                </button>
                 <input type="checkbox" id="check-${index}" ${item.done ? 'checked' : ''} ${isBlocked ? 'disabled' : ''}>
                 <label for="check-${index}" class="text-sm flex-1">${item.text}</label>
                 <input type="date" class="checklist-duedate text-xs p-1 border rounded bg-white ml-1" value="${item.dueDate || ''}" data-index="${index}" title="Scadenza">
@@ -273,6 +279,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const itemEl = document.createElement('div');
         itemEl.className = 'checklist-item';
         itemEl.innerHTML = `
+            <button type="button" class="checklist-lock-btn mr-1 text-gray-300 hover:text-red-400" data-index="${index}" title="Lucchetto disattivo: clicca per attivare">
+                <i class="fa-solid fa-lock-open text-xs"></i>
+            </button>
             <input type="checkbox" id="${id}">
             <label for="${id}" class="text-sm flex-1">${text}</label>
             <input type="date" class="checklist-duedate text-xs p-1 border rounded bg-white ml-1" value="${dueDate}" data-index="${index}" title="Scadenza">
@@ -412,12 +421,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = itemEl.querySelector('label');
             const assigneeSelect = itemEl.querySelector('.checklist-assignee-select');
             const dueDateEl = itemEl.querySelector('.checklist-duedate');
+            const lockBtn = itemEl.querySelector('.checklist-lock-btn');
             if (label && label.textContent) {
                 checklistItems.push({
                     text: label.textContent,
                     done: checkbox.checked,
                     assignee: assigneeSelect ? assigneeSelect.value : '',
-                    dueDate: dueDateEl ? dueDateEl.value : ''
+                    dueDate: dueDateEl ? dueDateEl.value : '',
+                    locked: lockBtn ? lockBtn.querySelector('.fa-lock:not(.fa-lock-open)') !== null : false
                 });
             }
         });
@@ -533,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Event delegation per eliminare item checklist e gestire blocco sequenziale
+    // Event delegation per eliminare item checklist, toggle lucchetto e gestire blocco
     if (checklistContainer) {
         checklistContainer.addEventListener('click', (e) => {
             if (e.target.closest('.checklist-delete-btn')) {
@@ -541,6 +552,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const itemEl = btn.closest('.checklist-item');
                 if (itemEl) {
                     itemEl.remove();
+                }
+            }
+            // Toggle lucchetto
+            if (e.target.closest('.checklist-lock-btn')) {
+                const currentChecklist = getCurrentChecklistState();
+                const btn = e.target.closest('.checklist-lock-btn');
+                const idx = parseInt(btn.dataset.index);
+                if (currentChecklist[idx]) {
+                    currentChecklist[idx].locked = !currentChecklist[idx].locked;
+                    renderChecklist(currentChecklist);
                 }
             }
         });
@@ -562,12 +583,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = itemEl.querySelector('label');
             const assigneeSelect = itemEl.querySelector('.checklist-assignee-select');
             const dueDateEl = itemEl.querySelector('.checklist-duedate');
+            const lockBtn = itemEl.querySelector('.checklist-lock-btn');
             if (label && label.textContent) {
                 items.push({
                     text: label.textContent,
                     done: checkbox.checked,
                     assignee: assigneeSelect ? assigneeSelect.value : '',
-                    dueDate: dueDateEl ? dueDateEl.value : ''
+                    dueDate: dueDateEl ? dueDateEl.value : '',
+                    locked: lockBtn ? lockBtn.querySelector('.fa-lock:not(.fa-lock-open)') !== null : false
                 });
             }
         });
