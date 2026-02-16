@@ -2,7 +2,18 @@
   BOT WHATSAPP - GESTIONALE STUDIO KRAKEN GATE
   Istruzioni complete per setup e configurazione
   Creato: 9 febbraio 2026
+  Ultimo aggiornamento: 16 febbraio 2026
 =====================================================
+
+REPOSITORY GITHUB
+=================
+
+https://github.com/krakenstudio8b/StudioKrakenGate.git
+
+Per aggiornare il Raspberry dopo un push:
+  cd /home/pi/studiokrakengate
+  git pull origin main
+  pm2 restart whatsapp-bot
 
 
 COSA FA IL BOT
@@ -13,10 +24,16 @@ messaggi WhatsApp nel gruppo staff della community.
 
 REMINDER GIORNALIERO (ogni mattina alle 9:00, lun-sab):
   - Riepilogo task in scadenza oggi per ogni membro
+  - Attivita checklist in scadenza oggi
   - Lista task scaduti/arretrati per ogni membro
 
 ALERT SCADENZE (ogni sera alle 18:00, lun-ven):
   - Avviso per task che scadono il giorno dopo
+
+REPORT SETTIMANALE (ogni lunedi alle 9:00):
+  - Task completati la settimana scorsa
+  - Task arretrati
+  - Task in programma questa settimana
 
 NOTIFICHE IN TEMPO REALE:
   - Nuovo task assegnato a qualcuno -> notifica istantanea
@@ -24,20 +41,39 @@ NOTIFICHE IN TEMPO REALE:
   - Cambio stato (Da fare -> In corso -> Fatto)
   - Nuovi membri aggiunti a un task esistente
 
-COMANDI NEL GRUPPO:
-  - !test  -> verifica che il bot funziona
-  - !oggi  -> riepilogo giornaliero on-demand
+COMANDI NEL GRUPPO - CONSULTAZIONE:
+  - !test / !help    -> verifica bot + lista comandi
+  - !oggi            -> task e attivita in scadenza oggi
+  - !settimana       -> scadenze della settimana
+  - !mese            -> task del mese
+  - !attivita        -> attivita checklist da fare questa settimana
+  - !task nome       -> task assegnati a una persona
+  - !lista           -> tutti i task attivi con stato
+  - !report          -> report settimanale
+
+COMANDI NEL GRUPPO - GESTIONE RAPIDA:
+  - !fatto nome      -> completa un task cercando per nome
+  - !inizia nome     -> segna un task come in corso
+  - !fatto-a nome    -> completa un'attivita checklist
+
+  La ricerca e' parziale e case-insensitive:
+    !fatto logo      -> trova "Design logo per evento"
+    !fatto-a cavi    -> trova "Comprare cavi audio"
+  Se trova piu risultati chiede di essere piu precisi.
+  Se l'attivita ha il lucchetto attivo e la precedente non e'
+  completata, il bot rifiuta con messaggio "Attivita bloccata!".
 
 
 STRUTTURA FILE
 ==============
 
 whatsapp-bot/
-  index.js              -> Entry point, connessione WhatsApp con Baileys
-  firebase-service.js   -> Lettura task, membri, scadenze da Firebase
-  scheduler.js          -> Cron jobs (reminder mattutino + alert scadenze)
+  index.js              -> Entry point, connessione WhatsApp, comandi
+  firebase-service.js   -> Lettura/scrittura task, membri, scadenze
+  scheduler.js          -> Cron jobs (reminder + alert + report)
   realtime-listener.js  -> Listener Firebase per notifiche istantanee
   message-formatter.js  -> Formattazione messaggi WhatsApp
+  ecosystem.config.js   -> Configurazione PM2 per auto-start al boot
   package.json          -> Dipendenze Node.js
   .env.example          -> Template configurazione
   .gitignore            -> File da non committare
@@ -50,8 +86,9 @@ TECNOLOGIE USATE
   NOTA: e' una libreria NON ufficiale, c'e' un rischio (basso) di ban.
   Consigliato usare un numero del secondo lavoro, NON il personale.
 
-- firebase-admin -> per leggere il database Firebase del gestionale
-- node-cron -> per i job schedulati (reminder giornaliero)
+- firebase-admin -> per leggere/scrivere il database Firebase
+- node-cron -> per i job schedulati
+- pm2 -> per mantenere il bot attivo 24/7 e auto-start al boot
 - Hostato su Raspberry Pi 3 (basta ~80MB di RAM)
 
 
@@ -95,14 +132,17 @@ NOTA: WHATSAPP_GROUP_ID lo trovi dopo il primo avvio (vedi Step 5)
 STEP 3 - COPIA IL PROGETTO SUL RASPBERRY PI
 ============================================
 
-Opzione A - via SCP (da terminale):
+Opzione A - via Git (consigliata):
+  cd /home/pi
+  git clone https://github.com/krakenstudio8b/StudioKrakenGate.git studiokrakengate
+  cd "studiokrakengate/studiokrakengate-main/Gestionale Studio/whatsapp-bot"
+  npm install
+
+Opzione B - via SCP (da terminale):
   scp -r whatsapp-bot/ pi@<IP_RASPBERRY>:~/whatsapp-bot/
 
-Opzione B - via chiavetta USB:
+Opzione C - via chiavetta USB:
   Copia la cartella whatsapp-bot/ su USB, poi dal Pi copiala in ~/
-
-Opzione C - via Git:
-  Se il gestionale e' su GitHub, fai git pull dal Pi
 
 
 STEP 4 - INSTALLA E AVVIA SUL RASPBERRY PI
@@ -110,7 +150,7 @@ STEP 4 - INSTALLA E AVVIA SUL RASPBERRY PI
 
 Apri il terminale sul Pi e:
 
-  cd ~/whatsapp-bot
+  cd "/home/pi/studiokrakengate/studiokrakengate-main/Gestionale Studio/whatsapp-bot"
   npm install
   node index.js
 
@@ -140,14 +180,13 @@ STEP 5 - TROVA L'ID DEL GRUPPO STAFF
    node index.js (per riavviarlo)
 
 
-STEP 6 - MANTIENI IL BOT ATTIVO 24/7
-=====================================
+STEP 6 - MANTIENI IL BOT ATTIVO 24/7 + AUTO-START AL BOOT
+==========================================================
 
-Per evitare che il bot si fermi quando chiudi il terminale:
-
-  npm install -g pm2
-  pm2 start index.js --name "whatsapp-bot"
+  sudo npm install -g pm2
+  pm2 start ecosystem.config.js
   pm2 startup
+  (copia e incolla il comando sudo che ti stampa)
   pm2 save
 
 Comandi utili pm2:
@@ -155,6 +194,8 @@ Comandi utili pm2:
   pm2 logs             -> vedi i log in tempo reale
   pm2 restart all      -> riavvia il bot
   pm2 stop all         -> ferma il bot
+
+Il bot si avvia automaticamente quando il Raspberry si accende.
 
 
 =====================================================
@@ -207,16 +248,39 @@ Se non hai Node.js sul Pi:
   NOTE AGGIUNTIVE
 =====================================================
 
-- Il bot legge DIRETTAMENTE dal database Firebase del gestionale,
-  quindi qualsiasi modifica fatta sul gestionale web si riflette
-  automaticamente nelle notifiche.
+- Il bot legge e scrive DIRETTAMENTE sul database Firebase,
+  quindi qualsiasi modifica fatta dal bot o dal gestionale web
+  si riflette automaticamente ovunque in tempo reale.
 
 - Se vuoi cambiare l'orario del reminder, modifica nel .env:
   DAILY_REMINDER_HOUR=9
   DAILY_REMINDER_MINUTE=0
   E riavvia il bot.
 
-- Se in futuro vuoi aggiungere funzionalita' (es. notifiche pulizie,
-  notifiche eventi calendario), chiedi a Claude e fatti aiutare!
+- Per aggiornare il bot dopo modifiche al codice:
+  cd /home/pi/studiokrakengate
+  git pull origin main
+  pm2 restart whatsapp-bot
+
+
+=====================================================
+  CHANGELOG
+=====================================================
+
+16 febbraio 2026:
+  - Fix: reminder giornaliero ora include attivita checklist
+  - Aggiunto ecosystem.config.js per auto-start PM2 al boot
+  - Aggiunto lucchetto manuale sulle attivita checklist (frontend)
+  - Aggiunto comando !lista (tutti i task attivi)
+  - Aggiunto comando !fatto (completa task da WhatsApp)
+  - Aggiunto comando !inizia (segna task come in corso)
+  - Aggiunto comando !fatto-a (completa attivita checklist)
+  - Rinominato !scadenze in !attivita
+
+9 febbraio 2026:
+  - Creazione bot WhatsApp con Baileys
+  - Comandi: !test, !oggi, !settimana, !mese, !scadenze, !task, !report
+  - Reminder giornaliero, alert scadenze, report settimanale
+  - Notifiche real-time per nuovi task e cambi stato
 
 =====================================================
