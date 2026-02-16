@@ -248,6 +248,28 @@ body {
     opacity: 1;
 }
 
+/* Checklist - Blocco sequenziale */
+.checklist-blocked {
+    opacity: 0.5;
+    background: #f3f4f6;
+    border: 1px dashed #d1d5db;
+}
+
+.checklist-blocked input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
+.checklist-blocked label {
+    color: #9ca3af;
+}
+
+/* Badge lucchetto sulla card */
+.blocked-badge {
+    color: #ef4444;
+    font-size: 0.6rem;
+    margin-left: 0.25rem;
+}
+
 /* ============================================
    RESPONSIVE IMPROVEMENTS
    ============================================ */
