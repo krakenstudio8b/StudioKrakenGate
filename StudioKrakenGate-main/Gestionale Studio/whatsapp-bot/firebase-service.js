@@ -257,6 +257,84 @@ async function getCompletedTasks() {
     return tasks.filter(t => t.status === 'done');
 }
 
+/**
+ * Aggiorna lo status di un task per ID
+ */
+async function updateTaskStatus(taskId, newStatus) {
+    const tasks = await getTasks();
+    const taskIndex = tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) return null;
+
+    tasks[taskIndex].status = newStatus;
+    await getDb().ref('tasks').set(tasks);
+    return tasks[taskIndex];
+}
+
+/**
+ * Cerca un task per nome (ricerca parziale, case-insensitive)
+ * Restituisce i task che contengono il testo cercato nel titolo
+ */
+async function findTasksByName(searchText) {
+    const tasks = await getTasks();
+    const search = searchText.toLowerCase();
+    return tasks.filter(t =>
+        t.status !== 'done' &&
+        t.title.toLowerCase().includes(search)
+    );
+}
+
+/**
+ * Cerca attività checklist per nome (ricerca parziale, case-insensitive)
+ * Restituisce array di { taskId, taskTitle, itemIndex, item }
+ */
+async function findChecklistItemsByName(searchText) {
+    const tasks = await getTasks();
+    const search = searchText.toLowerCase();
+    const results = [];
+
+    tasks.forEach(task => {
+        if (task.status === 'done' || !task.checklist) return;
+        task.checklist.forEach((item, index) => {
+            if (!item.done && item.text.toLowerCase().includes(search)) {
+                results.push({
+                    taskId: task.id,
+                    taskTitle: task.title,
+                    itemIndex: index,
+                    item: item,
+                    checklist: task.checklist
+                });
+            }
+        });
+    });
+
+    return results;
+}
+
+/**
+ * Segna un'attività checklist come completata
+ * Controlla il blocco sequenziale (locked) prima di completare
+ */
+async function completeChecklistItem(taskId, itemIndex) {
+    const tasks = await getTasks();
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || !task.checklist || !task.checklist[itemIndex]) return { success: false, error: 'Attivita non trovata' };
+
+    const item = task.checklist[itemIndex];
+
+    // Controlla blocco sequenziale
+    if (item.locked && itemIndex > 0 && !task.checklist[itemIndex - 1].done) {
+        const prevItem = task.checklist[itemIndex - 1];
+        return {
+            success: false,
+            error: `Attivita bloccata! Devi prima completare: "${prevItem.text}"`
+        };
+    }
+
+    task.checklist[itemIndex].done = true;
+    await getDb().ref('tasks').set(tasks);
+    return { success: true, task: task, item: item };
+}
+
 module.exports = {
     initFirebase,
     getDb,
@@ -273,5 +351,9 @@ module.exports = {
     getTasksCompletedLastWeek,
     getCompletedTasks,
     groupTasksByMember,
-    onValueChange
+    onValueChange,
+    updateTaskStatus,
+    findTasksByName,
+    findChecklistItemsByName,
+    completeChecklistItem
 };

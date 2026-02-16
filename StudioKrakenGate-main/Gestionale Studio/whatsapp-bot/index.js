@@ -119,7 +119,7 @@ async function startWhatsApp() {
             };
 
             if (cmd === '!test' || cmd === '!help') {
-                await reply('Bot attivo!\n\nComandi:\n\n!oggi - Task in scadenza oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!scadenze - Attivita da fare questa settimana\n!task nome - Task di una persona\n!report - Report settimanale\n!test - Verifica bot');
+                await reply('Bot attivo!\n\nComandi:\n\n*CONSULTAZIONE:*\n!oggi - Task in scadenza oggi\n!settimana - Scadenze settimana\n!mese - Task del mese\n!attivita - Attivita da fare questa settimana\n!task nome - Task di una persona\n!lista - Tutti i task attivi\n!report - Report settimanale\n\n*GESTIONE RAPIDA:*\n!fatto nome - Completa un task\n!inizia nome - Segna task come in corso\n!fatto-a nome - Completa un\'attivita checklist\n\n!test - Verifica bot');
             }
 
             if (cmd === '!oggi') {
@@ -161,7 +161,7 @@ async function startWhatsApp() {
                 await reply(formatter.formatMonthlyOverview(monthTasks, overdue));
             }
 
-            if (cmd === '!scadenze') {
+            if (cmd === '!attivita') {
                 const firebaseService = require('./firebase-service');
                 const formatter = require('./message-formatter');
                 const [todayItems, weekItems] = await Promise.all([
@@ -200,6 +200,108 @@ async function startWhatsApp() {
                     await reply(formatter.formatPersonTasks(name, active, overdue));
                 } else {
                     await reply('Scrivi il nome dopo !task\nEsempio: !task simone');
+                }
+            }
+
+            // !lista - Mostra tutti i task attivi con numeri per riferimento
+            if (cmd === '!lista') {
+                const firebaseService = require('./firebase-service');
+                const tasks = await firebaseService.getTasks();
+                const activeTasks = tasks.filter(t => t.status !== 'done');
+                if (activeTasks.length === 0) {
+                    await reply('Nessun task attivo!');
+                } else {
+                    let msg = '*TASK ATTIVI:*\n\n';
+                    activeTasks.forEach((t, i) => {
+                        const status = t.status === 'inprogress' ? '🔄' : '⬜';
+                        const assignees = (t.assignedTo || []).join(', ');
+                        msg += `${status} *${i + 1}.* ${t.title}`;
+                        if (assignees) msg += ` (${assignees})`;
+                        msg += '\n';
+                    });
+                    msg += '\nUsa *!fatto nome* o *!inizia nome* per aggiornare';
+                    await reply(msg);
+                }
+            }
+
+            // !fatto nome-task - Segna un task come completato
+            if (cmd.startsWith('!fatto ')) {
+                const firebaseService = require('./firebase-service');
+                const searchText = text.trim().substring(7).trim();
+                if (!searchText) {
+                    await reply('Scrivi il nome del task dopo !fatto\nEsempio: !fatto logo');
+                } else {
+                    const matches = await firebaseService.findTasksByName(searchText);
+                    if (matches.length === 0) {
+                        await reply(`Nessun task trovato con "${searchText}"\n\nUsa !lista per vedere tutti i task attivi`);
+                    } else if (matches.length === 1) {
+                        const task = matches[0];
+                        await firebaseService.updateTaskStatus(task.id, 'done');
+                        await reply(`✅ *TASK COMPLETATO!*\n\n*${task.title}*\n\nOttimo lavoro! 🎉`);
+                    } else {
+                        let msg = `Ho trovato ${matches.length} task con "${searchText}":\n\n`;
+                        matches.forEach((t, i) => {
+                            msg += `${i + 1}. *${t.title}*\n`;
+                        });
+                        msg += '\nScrivi il nome piu preciso per selezionare quello giusto';
+                        await reply(msg);
+                    }
+                }
+            }
+
+            // !inizia nome-task - Segna un task come in corso
+            if (cmd.startsWith('!inizia ')) {
+                const firebaseService = require('./firebase-service');
+                const searchText = text.trim().substring(8).trim();
+                if (!searchText) {
+                    await reply('Scrivi il nome del task dopo !inizia\nEsempio: !inizia logo');
+                } else {
+                    const matches = await firebaseService.findTasksByName(searchText);
+                    if (matches.length === 0) {
+                        await reply(`Nessun task trovato con "${searchText}"\n\nUsa !lista per vedere tutti i task attivi`);
+                    } else if (matches.length === 1) {
+                        const task = matches[0];
+                        await firebaseService.updateTaskStatus(task.id, 'inprogress');
+                        await reply(`🔄 *TASK IN CORSO*\n\n*${task.title}*\n\nForza! 💪`);
+                    } else {
+                        let msg = `Ho trovato ${matches.length} task con "${searchText}":\n\n`;
+                        matches.forEach((t, i) => {
+                            msg += `${i + 1}. *${t.title}*\n`;
+                        });
+                        msg += '\nScrivi il nome piu preciso per selezionare quello giusto';
+                        await reply(msg);
+                    }
+                }
+            }
+
+            // !fatto-a nome-attivita - Completa un'attività checklist
+            if (cmd.startsWith('!fatto-a ')) {
+                const firebaseService = require('./firebase-service');
+                const searchText = text.trim().substring(9).trim();
+                if (!searchText) {
+                    await reply('Scrivi il nome dell\'attivita dopo !fatto-a\nEsempio: !fatto-a comprare cavi');
+                } else {
+                    const matches = await firebaseService.findChecklistItemsByName(searchText);
+                    if (matches.length === 0) {
+                        await reply(`Nessuna attivita trovata con "${searchText}"\n\nUsa !scadenze per vedere le attivita da fare`);
+                    } else if (matches.length === 1) {
+                        const match = matches[0];
+                        const result = await firebaseService.completeChecklistItem(match.taskId, match.itemIndex);
+                        if (result.success) {
+                            const done = match.checklist.filter(i => i.done).length + 1;
+                            const total = match.checklist.length;
+                            await reply(`✅ *ATTIVITA COMPLETATA!*\n\n*${match.item.text}*\nTask: ${match.taskTitle}\nProgresso: ${done}/${total}\n\nBravo! 🎉`);
+                        } else {
+                            await reply(`🔒 ${result.error}`);
+                        }
+                    } else {
+                        let msg = `Ho trovato ${matches.length} attivita con "${searchText}":\n\n`;
+                        matches.forEach((m, i) => {
+                            msg += `${i + 1}. *${m.item.text}*\n    Task: ${m.taskTitle}\n`;
+                        });
+                        msg += '\nScrivi il nome piu preciso per selezionare quella giusta';
+                        await reply(msg);
+                    }
                 }
             }
         }
