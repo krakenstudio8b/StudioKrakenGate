@@ -52,15 +52,16 @@ async function sendDailyReminder() {
     try {
         const today = new Date().toISOString().split('T')[0];
 
-        const [tasksDueToday, overdueTasks] = await Promise.all([
+        const [tasksDueToday, overdueTasks, checklistToday] = await Promise.all([
             firebaseService.getTasksDueToday(),
-            firebaseService.getOverdueTasks()
+            firebaseService.getOverdueTasks(),
+            firebaseService.getChecklistItemsDueToday()
         ]);
 
         const tasksByMember = firebaseService.groupTasksByMember(tasksDueToday);
         const overdueByMember = firebaseService.groupTasksByMember(overdueTasks);
 
-        const message = formatter.formatDailyReminder(tasksByMember, overdueByMember, today);
+        const message = formatter.formatDailyReminder(tasksByMember, overdueByMember, today, checklistToday);
         await sendMessageFn(message);
 
         console.log('[Scheduler] Reminder giornaliero inviato');
