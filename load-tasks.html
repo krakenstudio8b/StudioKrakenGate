@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carica Task Febbraio 2026</title>
+    <link rel="icon" type="image/png" href="logogate.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white rounded-xl shadow-lg p-8 max-w-2xl w-full">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">Carica Task Macro - Febbraio 2026</h1>
+        <p class="text-gray-500 mb-6">Questo script caricherà i 7 eventi pianificati per Febbraio 2026 nel database Firebase.</p>
+
+        <div class="bg-gray-50 rounded-lg p-4 mb-6">
+            <h3 class="font-semibold text-gray-700 mb-2">Eventi da caricare:</h3>
+            <ul class="space-y-1 text-sm text-gray-600">
+                <li>7 Feb - Showcase Asse</li>
+                <li>8 Feb - Riprese Scomodo</li>
+                <li>13 Feb - Live DEDO</li>
+                <li>20 Feb - Live Ladymaru & 5QM</li>
+                <li>21 Feb - Live GIANNA</li>
+                <li>27 Feb - Serata Gateradio (Serena De Marchi + BLEACH)</li>
+                <li>28 Feb - Showcase Resistance</li>
+            </ul>
+        </div>
+
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                        <strong>Attenzione:</strong> Esegui questo script UNA SOLA VOLTA. I task duplicati verranno ignorati automaticamente.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div id="status" class="hidden mb-6 p-4 rounded-lg"></div>
+
+        <div id="log" class="hidden bg-gray-900 text-green-400 rounded-lg p-4 mb-6 font-mono text-sm max-h-64 overflow-y-auto"></div>
+
+        <div class="flex gap-4">
+            <button id="load-btn" class="flex-1 bg-indigo-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors">
+                Carica Task
+            </button>
+            <a href="index.html" class="flex-1 bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-lg hover:bg-gray-300 transition-colors text-center">
+                Torna al Gestionale
+            </a>
+        </div>
+    </div>
+
+    <script type="module">
+        import { loadFebruaryTasks } from './js/load-february-tasks.js';
+
+        const loadBtn = document.getElementById('load-btn');
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+
+        // Intercetta console.log
+        const originalLog = console.log;
+        const logs = [];
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            logs.push(args.join(' '));
+            logDiv.innerHTML = logs.map(l => `<div>${l}</div>`).join('');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        };
+
+        loadBtn.addEventListener('click', async () => {
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Caricamento in corso...';
+            loadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            statusDiv.classList.remove('hidden', 'bg-green-100', 'bg-red-100');
+            statusDiv.innerHTML = '<p class="text-gray-600">Caricamento in corso...</p>';
+
+            logDiv.classList.remove('hidden');
+            logs.length = 0;
+
+            try {
+                const result = await loadFebruaryTasks();
+
+                statusDiv.classList.add('bg-green-100');
+                statusDiv.innerHTML = `
+                    <p class="text-green-700 font-semibold">Operazione completata!</p>
+                    <p class="text-green-600">Task aggiunti: ${result.added}</p>
+                    <p class="text-green-600">Task saltati (già esistenti): ${result.skipped}</p>
+                `;
+
+                loadBtn.textContent = 'Completato!';
+                loadBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                loadBtn.classList.add('bg-green-500');
+
+            } catch (error) {
+                statusDiv.classList.add('bg-red-100');
+                statusDiv.innerHTML = `
+                    <p class="text-red-700 font-semibold">Errore durante il caricamento</p>
+                    <p class="text-red-600">${error.message}</p>
+                `;
+
+                loadBtn.textContent = 'Riprova';
+                loadBtn.disabled = false;
+                loadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+    </script>
+</body>
+</html>
