@@ -158,8 +158,16 @@ export async function syncFromGoogleToFirebase() {
                 .map(e => e.googleEventId)
         );
 
+        // Titoli da escludere dalla sincronizzazione
+        const EXCLUDED_TITLES = ['gate radio - prenotazione live set'];
+
         // Sincronizza eventi da Google a Firebase
         for (const gEvent of googleEvents) {
+            const title = (gEvent.summary || '').toLowerCase().trim();
+            if (EXCLUDED_TITLES.includes(title)) {
+                console.log(`Evento escluso: ${gEvent.summary}`);
+                continue;
+            }
             if (!firebaseEventIds.has(gEvent.id)) {
                 // Evento nuovo da Google, aggiungilo a Firebase
                 const newEventRef = push(eventsRef);
