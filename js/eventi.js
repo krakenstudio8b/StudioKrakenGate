@@ -1,6 +1,6 @@
 // js/eventi.js
 import { database, auth } from './firebase-config.js';
-import { ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, onValue, get, query, orderByKey } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 
 // Setup listeners una sola volta quando l'utente è autenticato
@@ -221,21 +221,32 @@ onAuthStateChanged(auth, (user) => {
 
     // --- LISTENERS ---
 
-    onValue(eventsRef, (snapshot) => {
-        allEvents = [];
-        if (snapshot.exists()) {
-            snapshot.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
-        }
-        render();
-    });
+    async function loadData() {
+        try {
+            const [evSnap, taskSnap] = await Promise.all([
+                get(eventsRef),
+                get(tasksRef)
+            ]);
 
-    onValue(tasksRef, (snapshot) => {
-        const data = snapshot.val();
-        if (Array.isArray(data)) allTasks = data;
-        else if (typeof data === 'object' && data !== null) allTasks = Object.values(data);
-        else allTasks = [];
-        render();
-    });
+            allEvents = [];
+            if (evSnap.exists()) {
+                evSnap.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
+            }
+            console.log('[eventi] get() allEvents:', allEvents.length);
+
+            const taskData = taskSnap.val();
+            if (Array.isArray(taskData)) allTasks = taskData;
+            else if (typeof taskData === 'object' && taskData !== null) allTasks = Object.values(taskData);
+            else allTasks = [];
+
+            render();
+        } catch(err) {
+            console.error('[eventi] errore caricamento:', err);
+            if (container) container.innerHTML = `<p class="text-red-500 p-4">Errore caricamento dati: ${err.message}</p>`;
+        }
+    }
+
+    loadData();
 
     if (togglePastBtn) {
         togglePastBtn.addEventListener('click', () => {
