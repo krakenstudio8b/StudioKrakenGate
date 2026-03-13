@@ -90,14 +90,16 @@ onAuthStateChanged(auth, (user) => {
             return da - db;
         });
 
-        console.log('[eventi] allEvents totale:', allEvents.length);
-        sorted.forEach(e => console.log('  -', e.title, '| start:', e.start, '| parsed:', getEventDate(e).toISOString?.() ?? 'INVALID'));
-
-        // Mostra TUTTI gli eventi (passati in fondo se "Mostra passati" attivo)
-        const future = sorted;
-        const past = [];
-
-        console.log('[eventi] showing all:', future.length);
+        const future = sorted.filter(e => {
+            const d = getEventDate(e);
+            const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            return local >= today;
+        });
+        const past = sorted.filter(e => {
+            const d = getEventDate(e);
+            const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            return local < today;
+        }).reverse();
 
         // Stats (solo eventi futuri)
         const futureStat = sorted.filter(e => getDaysUntil(e) >= 0);
@@ -125,10 +127,8 @@ onAuthStateChanged(auth, (user) => {
 
         let currentMonth = null;
         let pastSepShown = false;
-        let errorCount = 0;
 
         toShow.forEach(event => { try {
-            console.log('[render] processing:', event?.title, '| start:', event?.start);
             // Separatore passati
             if (event._separator) {
                 if (past.length === 0) return;
@@ -206,17 +206,7 @@ onAuthStateChanged(auth, (user) => {
                 </div>
             `;
             container.appendChild(card);
-        } catch(err) {
-            errorCount++;
-            console.error('❌ CRASH evento:', event?.title, '| start:', event?.start, '| errore:', err.message, err);
-        } });
-
-        if (errorCount > 0) {
-            const errDiv = document.createElement('div');
-            errDiv.style.cssText = 'color:red;padding:12px;background:#fee;border-radius:8px;margin:8px 0;font-size:13px';
-            errDiv.textContent = `⚠️ ${errorCount} eventi non mostrati per errore — vedi Console (F12) per dettagli`;
-            container.appendChild(errDiv);
-        }
+        } catch(err) { console.error('Errore render evento:', event?.title, err); } });
     }
 
     // --- LISTENERS ---
@@ -230,17 +220,9 @@ onAuthStateChanged(auth, (user) => {
 
             allEvents = [];
             if (evSnap.exists()) {
-                evSnap.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
+                evSnap.forEach(child => { allEvents.push({ id: child.key, ...child.val() }); });
             }
 
-            // DEBUG VISIBILE - rimuovere dopo fix
-            const debugDiv = document.createElement('div');
-            debugDiv.id = 'debug-eventi';
-            debugDiv.style.cssText = 'background:#1e293b;color:#7dd3fc;font-family:monospace;font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:12px';
-            debugDiv.innerHTML = `📊 Firebase: <b>${evSnap.exists() ? evSnap.size : 0}</b> figli nel snapshot | allEvents: <b>${allEvents.length}</b> | tasks: <b>${taskSnap.exists() ? taskSnap.size : 0}</b>`;
-            if (container) container.before(debugDiv);
-
-            console.log('[eventi] get() allEvents:', allEvents.length, 'snapshot size:', evSnap.exists() ? evSnap.size : 0);
 
             const taskData = taskSnap.val();
             if (Array.isArray(taskData)) allTasks = taskData;
