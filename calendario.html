@@ -180,7 +180,7 @@
         import { database } from './js/firebase-config.js';
         import { ref, set, push, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
         import { currentUser } from './js/auth-guard.js';
-        import { syncEventToGoogle, initGoogleCalendar, handleAuthClick, isGoogleAuthorized } from './js/google-calendar-sync.js';
+        import { syncEventToGoogle, syncFromGoogleToFirebase, initGoogleCalendar, handleAuthClick, isGoogleAuthorized } from './js/google-calendar-sync.js';
 
         // Riferimenti Firebase
         const eventsRef = ref(database, 'calendarEvents');
@@ -206,9 +206,27 @@
             console.log('Google Calendar API pronto per la sincronizzazione');
         });
 
-        // Pulsante Aggiorna Calendario
-        refreshCalendarBtn.addEventListener('click', () => {
-            location.reload();
+        // Pulsante Aggiorna Calendario - sincronizza da Google Calendar e crea i task
+        refreshCalendarBtn.addEventListener('click', async () => {
+            refreshCalendarBtn.disabled = true;
+            refreshCalendarBtn.textContent = '⏳ Sincronizzazione...';
+            try {
+                if (isGoogleAuthorized()) {
+                    await syncFromGoogleToFirebase();
+                    alert('✅ Sincronizzazione completata! I nuovi eventi sono stati importati e le attività create.');
+                } else {
+                    handleAuthClick(async () => {
+                        await syncFromGoogleToFirebase();
+                        alert('✅ Sincronizzazione completata! I nuovi eventi sono stati importati e le attività create.');
+                    });
+                }
+            } catch (e) {
+                console.error(e);
+                alert('❌ Errore durante la sincronizzazione.');
+            } finally {
+                refreshCalendarBtn.disabled = false;
+                refreshCalendarBtn.textContent = '🔄 Aggiorna';
+            }
         });
 
         // Funzione per aprire la modale evento
