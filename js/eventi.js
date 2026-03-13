@@ -1,6 +1,6 @@
 // js/eventi.js
 import { database, auth } from './firebase-config.js';
-import { ref, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 
 onAuthStateChanged(auth, (user) => {
@@ -200,21 +200,26 @@ onAuthStateChanged(auth, (user) => {
 
     // --- LISTENERS ---
 
-    onValue(eventsRef, (snapshot) => {
-        allEvents = [];
-        if (snapshot.exists()) {
-            snapshot.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
-        }
-        render();
-    });
+    async function loadData() {
+        const [eventsSnap, tasksSnap] = await Promise.all([
+            get(eventsRef),
+            get(tasksRef)
+        ]);
 
-    onValue(tasksRef, (snapshot) => {
-        const data = snapshot.val();
-        if (Array.isArray(data)) allTasks = data;
-        else if (typeof data === 'object' && data !== null) allTasks = Object.values(data);
+        allEvents = [];
+        if (eventsSnap.exists()) {
+            eventsSnap.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
+        }
+
+        const tasksData = tasksSnap.val();
+        if (Array.isArray(tasksData)) allTasks = tasksData;
+        else if (typeof tasksData === 'object' && tasksData !== null) allTasks = Object.values(tasksData);
         else allTasks = [];
+
         render();
-    });
+    }
+
+    loadData();
 
     if (togglePastBtn) {
         togglePastBtn.addEventListener('click', () => {
