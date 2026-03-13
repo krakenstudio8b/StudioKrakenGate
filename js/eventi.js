@@ -232,7 +232,15 @@ onAuthStateChanged(auth, (user) => {
             if (evSnap.exists()) {
                 evSnap.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
             }
-            console.log('[eventi] get() allEvents:', allEvents.length);
+
+            // DEBUG VISIBILE - rimuovere dopo fix
+            const debugDiv = document.createElement('div');
+            debugDiv.id = 'debug-eventi';
+            debugDiv.style.cssText = 'background:#1e293b;color:#7dd3fc;font-family:monospace;font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:12px';
+            debugDiv.innerHTML = `📊 Firebase: <b>${evSnap.exists() ? evSnap.size : 0}</b> figli nel snapshot | allEvents: <b>${allEvents.length}</b> | tasks: <b>${taskSnap.exists() ? taskSnap.size : 0}</b>`;
+            if (container) container.before(debugDiv);
+
+            console.log('[eventi] get() allEvents:', allEvents.length, 'snapshot size:', evSnap.exists() ? evSnap.size : 0);
 
             const taskData = taskSnap.val();
             if (Array.isArray(taskData)) allTasks = taskData;
