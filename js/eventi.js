@@ -90,12 +90,6 @@ onAuthStateChanged(auth, (user) => {
         if (statWeek)  statWeek.textContent  = future.filter(e => getDaysUntil(e) <= 7).length;
         if (statMonth) statMonth.textContent = future.filter(e => getDaysUntil(e) <= 30).length;
 
-        // Debug temporaneo: mostra dati grezzi
-        const debugEl = document.getElementById('debug-info');
-        if (debugEl) {
-            const sample = allEvents.slice(0, 3).map(e => `"${e.title}" → ${e.start}`).join('<br>');
-            debugEl.innerHTML = `Totale in Firebase: <b>${allEvents.length}</b> | Futuri: <b>${future.length}</b> | Passati: <b>${past.length}</b><br>Primi 3: ${sample || 'nessuno'}`;
-        }
 
         // Next event banner
         if (future.length > 0) {
@@ -200,30 +194,21 @@ onAuthStateChanged(auth, (user) => {
 
     // --- LISTENERS ---
 
-    // Debug: mostra URL del database
-    const debugEl = document.getElementById('debug-info');
-    if (debugEl) debugEl.innerHTML += `DB URL: <b>${database.app.options.databaseURL || 'NON IMPOSTATO'}</b><br>`;
-
-    async function loadData() {
-        const [eventsSnap, tasksSnap] = await Promise.all([
-            get(eventsRef),
-            get(tasksRef)
-        ]);
-
+    onValue(eventsRef, (snapshot) => {
         allEvents = [];
-        if (eventsSnap.exists()) {
-            eventsSnap.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
+        if (snapshot.exists()) {
+            snapshot.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
         }
-
-        const tasksData = tasksSnap.val();
-        if (Array.isArray(tasksData)) allTasks = tasksData;
-        else if (typeof tasksData === 'object' && tasksData !== null) allTasks = Object.values(tasksData);
-        else allTasks = [];
-
         render();
-    }
+    });
 
-    loadData();
+    onValue(tasksRef, (snapshot) => {
+        const data = snapshot.val();
+        if (Array.isArray(data)) allTasks = data;
+        else if (typeof data === 'object' && data !== null) allTasks = Object.values(data);
+        else allTasks = [];
+        render();
+    });
 
     if (togglePastBtn) {
         togglePastBtn.addEventListener('click', () => {
