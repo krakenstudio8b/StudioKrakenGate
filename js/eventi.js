@@ -3,8 +3,13 @@ import { database, auth } from './firebase-config.js';
 import { ref, onValue, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 
+// Setup listeners una sola volta quando l'utente è autenticato
+let listenersReady = false;
+
 onAuthStateChanged(auth, (user) => {
-    if (!user) return;
+    if (!user || listenersReady) return;
+    listenersReady = true;
+
     const eventsRef = ref(database, 'calendarEvents');
     const tasksRef  = ref(database, 'tasks');
 

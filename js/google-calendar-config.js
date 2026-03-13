@@ -16,7 +16,7 @@ export const GOOGLE_CONFIG = {
     // ID del calendario da sincronizzare
     // 'primary' = calendario principale dell'utente autenticato
     // Oppure un ID specifico tipo: 'abc123@group.calendar.google.com'
-    CALENDAR_ID: 'primary',
+    CALENDAR_ID: 'gateradiorm@gmail.com',
 
     // Configurazione per Google Drive
     DRIVE_SCOPES: 'https://www.googleapis.com/auth/drive',
