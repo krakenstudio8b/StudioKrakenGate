@@ -19,6 +19,9 @@
         <button id="delete-btn" class="w-full bg-red-600 text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition hidden">
             🗑️ Elimina "Live gateradio" + duplicati
         </button>
+        <button id="delete-all-btn" class="w-full bg-gray-800 text-white font-semibold py-3 rounded-lg hover:bg-black transition mt-2">
+            💣 Svuota TUTTO calendarEvents (poi risincronizza)
+        </button>
     </div>
 
     <script type="module">
@@ -122,6 +125,18 @@
                 log('Niente da eliminare.');
             }
             scanBtn.disabled = false;
+        });
+
+        document.getElementById('delete-all-btn').addEventListener('click', async () => {
+            if (!confirm('Sei sicuro? Questo elimina TUTTI i calendarEvents da Firebase. Dopo dovrai risincronizzare dal Calendario.')) return;
+            const btn = document.getElementById('delete-all-btn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Eliminazione...';
+            logEl.innerHTML = 'Eliminazione di tutti gli eventi...';
+            await remove(ref(db, 'calendarEvents'));
+            log('<strong>✅ calendarEvents svuotato completamente.</strong>');
+            log('Ora vai su Calendario → Aggiorna per risincronizzare.');
+            btn.textContent = '✅ Fatto';
         });
 
         deleteBtn.addEventListener('click', async () => {
