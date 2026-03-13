@@ -68,26 +68,37 @@
 
             const snapshot = await get(ref(db, 'calendarEvents'));
             if (!snapshot.exists()) {
-                log('Nessun evento trovato.');
+                log('<strong>⚠️ calendarEvents è VUOTO in Firebase.</strong>');
+                log('Devi prima sincronizzare dal calendario.');
                 scanBtn.disabled = false;
                 return;
             }
 
+            // Conta tutti i titoli per diagnostica
+            const titleCount = {};
+            let total = 0;
             snapshot.forEach(child => {
-                const title = (child.val().title || '').toLowerCase().trim();
-                if (title === TITLE_TO_DELETE) {
+                total++;
+                const title = (child.val().title || '(senza titolo)').trim();
+                titleCount[title] = (titleCount[title] || 0) + 1;
+                if ((title.toLowerCase()) === TITLE_TO_DELETE) {
                     toDelete.push(child.key);
                 }
             });
 
-            log(`Trovati <strong>${toDelete.length}</strong> eventi da eliminare.`);
-            toDelete.slice(0, 5).forEach(k => log(`  - ${k}`));
-            if (toDelete.length > 5) log(`  ... e altri ${toDelete.length - 5}`);
+            log(`<strong>Totale eventi in Firebase: ${total}</strong>`);
+            log('--- Titoli presenti (per frequenza) ---');
+            Object.entries(titleCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 15)
+                .forEach(([t, c]) => log(`  ${c}x &nbsp; ${t}`));
+            log('---');
+            log(`Trovati <strong>${toDelete.length}</strong> eventi con titolo "${TITLE_TO_DELETE}"`);
 
             if (toDelete.length > 0) {
                 deleteBtn.classList.remove('hidden');
             } else {
-                log('Niente da eliminare!');
+                log('Niente da eliminare con quel titolo. Controlla i titoli sopra per trovare quello corretto.');
             }
             scanBtn.disabled = false;
         });
