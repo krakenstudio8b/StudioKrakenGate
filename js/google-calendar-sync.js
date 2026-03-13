@@ -162,22 +162,24 @@ export async function syncFromGoogleToFirebase() {
         const EXCLUDED_TITLES = ['gate radio - prenotazione live set'];
 
         // Sincronizza eventi da Google a Firebase
+        let importati = 0;
+        let saltati = 0;
         for (const gEvent of googleEvents) {
             const title = (gEvent.summary || '').toLowerCase().trim();
             if (EXCLUDED_TITLES.includes(title)) {
-                console.log(`Evento escluso: ${gEvent.summary}`);
+                saltati++;
                 continue;
             }
             if (!firebaseEventIds.has(gEvent.id)) {
-                // Evento nuovo da Google, aggiungilo a Firebase
                 const newEventRef = push(eventsRef);
                 const firebaseEvent = convertGoogleToFirebase(gEvent, newEventRef.key);
                 await set(newEventRef, firebaseEvent);
-                console.log(`Evento importato: ${gEvent.summary}`);
+                importati++;
             }
         }
 
-        console.log('Sincronizzazione completata!');
+        console.log(`Sincronizzazione completata! Importati: ${importati}, già presenti: ${googleEvents.length - importati - saltati}, esclusi: ${saltati}`);
+        return { importati, totaleGoogle: googleEvents.length };
     } catch (error) {
         console.error('Errore sincronizzazione:', error);
         alert('Errore durante la sincronizzazione con Google Calendar. Controlla la console.');

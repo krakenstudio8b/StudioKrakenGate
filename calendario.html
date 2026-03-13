@@ -213,12 +213,12 @@
             refreshCalendarBtn.textContent = '⏳ Sincronizzazione...';
             try {
                 if (isGoogleAuthorized()) {
-                    await syncFromGoogleToFirebase();
-                    alert('✅ Sincronizzazione completata! I nuovi eventi sono stati importati e le attività create.');
+                    const result = await syncFromGoogleToFirebase();
+                    alert(`✅ Sincronizzazione completata!\nEventi trovati su Google: ${result?.totaleGoogle ?? '?'}\nNuovi importati: ${result?.importati ?? '?'}`);
                 } else {
                     handleAuthClick(async () => {
-                        await syncFromGoogleToFirebase();
-                        alert('✅ Sincronizzazione completata! I nuovi eventi sono stati importati e le attività create.');
+                        const result = await syncFromGoogleToFirebase();
+                        alert(`✅ Sincronizzazione completata!\nEventi trovati su Google: ${result?.totaleGoogle ?? '?'}\nNuovi importati: ${result?.importati ?? '?'}`);
                     });
                 }
             } catch (e) {
