@@ -125,8 +125,10 @@ onAuthStateChanged(auth, (user) => {
 
         let currentMonth = null;
         let pastSepShown = false;
+        let errorCount = 0;
 
         toShow.forEach(event => { try {
+            console.log('[render] processing:', event?.title, '| start:', event?.start);
             // Separatore passati
             if (event._separator) {
                 if (past.length === 0) return;
@@ -204,7 +206,17 @@ onAuthStateChanged(auth, (user) => {
                 </div>
             `;
             container.appendChild(card);
-        } catch(err) { console.error('Errore render evento:', event?.title, err); } });
+        } catch(err) {
+            errorCount++;
+            console.error('❌ CRASH evento:', event?.title, '| start:', event?.start, '| errore:', err.message, err);
+        } });
+
+        if (errorCount > 0) {
+            const errDiv = document.createElement('div');
+            errDiv.style.cssText = 'color:red;padding:12px;background:#fee;border-radius:8px;margin:8px 0;font-size:13px';
+            errDiv.textContent = `⚠️ ${errorCount} eventi non mostrati per errore — vedi Console (F12) per dettagli`;
+            container.appendChild(errDiv);
+        }
     }
 
     // --- LISTENERS ---
