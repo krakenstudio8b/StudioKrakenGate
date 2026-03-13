@@ -90,25 +90,20 @@ onAuthStateChanged(auth, (user) => {
             return da - db;
         });
 
-        console.log('[eventi] allEvents:', allEvents.length, sorted.map(e => ({ title: e.title, start: e.start })));
+        console.log('[eventi] allEvents totale:', allEvents.length);
+        sorted.forEach(e => console.log('  -', e.title, '| start:', e.start, '| parsed:', getEventDate(e).toISOString?.() ?? 'INVALID'));
 
-        const future = sorted.filter(e => {
-            const d = getEventDate(e);
-            const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            return local >= today;
-        });
-        const past = sorted.filter(e => {
-            const d = getEventDate(e);
-            const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-            return local < today;
-        }).reverse();
+        // Mostra TUTTI gli eventi (passati in fondo se "Mostra passati" attivo)
+        const future = sorted;
+        const past = [];
 
-        console.log('[eventi] future:', future.length, 'past:', past.length);
+        console.log('[eventi] showing all:', future.length);
 
-        // Stats
-        if (statTotal) statTotal.textContent = future.length;
-        if (statWeek)  statWeek.textContent  = future.filter(e => getDaysUntil(e) <= 7).length;
-        if (statMonth) statMonth.textContent = future.filter(e => getDaysUntil(e) <= 30).length;
+        // Stats (solo eventi futuri)
+        const futureStat = sorted.filter(e => getDaysUntil(e) >= 0);
+        if (statTotal) statTotal.textContent = futureStat.length;
+        if (statWeek)  statWeek.textContent  = futureStat.filter(e => getDaysUntil(e) <= 7).length;
+        if (statMonth) statMonth.textContent = futureStat.filter(e => getDaysUntil(e) <= 30).length;
 
 
         // Next event banner
