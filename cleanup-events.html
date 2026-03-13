@@ -8,7 +8,7 @@
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
     <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-xl">
         <h1 class="text-2xl font-bold mb-2">🧹 Pulizia Eventi</h1>
-        <p class="text-gray-500 text-sm mb-6">Elimina tutti gli eventi con titolo <strong>"Gate Radio - Prenotazione Live Set"</strong> da Firebase.</p>
+        <p class="text-gray-500 text-sm mb-6">Elimina tutti i <strong>"Live gateradio"</strong> e i duplicati da Firebase.</p>
 
         <div id="status" class="mb-4 text-sm text-gray-500">In attesa...</div>
         <div id="log" class="bg-gray-50 rounded-lg p-4 text-xs font-mono text-gray-700 min-h-[120px] max-h-[300px] overflow-y-auto mb-6"></div>
@@ -17,7 +17,7 @@
             🔍 Scansiona (mostra quanti da eliminare)
         </button>
         <button id="delete-btn" class="w-full bg-red-600 text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition hidden">
-            🗑️ Elimina tutti
+            🗑️ Elimina "Live gateradio" + duplicati
         </button>
     </div>
 
@@ -42,7 +42,7 @@
         const scanBtn    = document.getElementById('scan-btn');
         const deleteBtn  = document.getElementById('delete-btn');
 
-        const TITLE_TO_DELETE = 'gate radio - prenotazione live set';
+        const TITLE_TO_DELETE = 'live gateradio';
 
         function log(msg) {
             logEl.innerHTML += msg + '<br>';
@@ -74,15 +74,34 @@
                 return;
             }
 
-            // Conta tutti i titoli per diagnostica
+            // Scansiona tutti gli eventi
             const titleCount = {};
+            const seenGoogleIds = {};
             let total = 0;
+            let dupCount = 0;
+
             snapshot.forEach(child => {
                 total++;
-                const title = (child.val().title || '(senza titolo)').trim();
+                const val = child.val();
+                const title = (val.title || '(senza titolo)').trim();
+                const googleId = val.googleEventId || null;
+
                 titleCount[title] = (titleCount[title] || 0) + 1;
-                if ((title.toLowerCase()) === TITLE_TO_DELETE) {
+
+                // Da eliminare: titolo "live gateradio"
+                if (title.toLowerCase() === TITLE_TO_DELETE) {
                     toDelete.push(child.key);
+                    return;
+                }
+
+                // Da eliminare: duplicati (stesso googleEventId, tieni il primo)
+                if (googleId) {
+                    if (seenGoogleIds[googleId]) {
+                        toDelete.push(child.key);
+                        dupCount++;
+                    } else {
+                        seenGoogleIds[googleId] = true;
+                    }
                 }
             });
 
@@ -93,12 +112,14 @@
                 .slice(0, 15)
                 .forEach(([t, c]) => log(`  ${c}x &nbsp; ${t}`));
             log('---');
-            log(`Trovati <strong>${toDelete.length}</strong> eventi con titolo "${TITLE_TO_DELETE}"`);
+            log(`"Live gateradio" da eliminare: <strong>${toDelete.length - dupCount}</strong>`);
+            log(`Duplicati da eliminare: <strong>${dupCount}</strong>`);
+            log(`Totale da eliminare: <strong>${toDelete.length}</strong>`);
 
             if (toDelete.length > 0) {
                 deleteBtn.classList.remove('hidden');
             } else {
-                log('Niente da eliminare con quel titolo. Controlla i titoli sopra per trovare quello corretto.');
+                log('Niente da eliminare.');
             }
             scanBtn.disabled = false;
         });
