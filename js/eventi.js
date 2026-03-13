@@ -200,6 +200,10 @@ onAuthStateChanged(auth, (user) => {
 
     // --- LISTENERS ---
 
+    // Debug: mostra URL del database
+    const debugEl = document.getElementById('debug-info');
+    if (debugEl) debugEl.innerHTML += `DB URL: <b>${database.app.options.databaseURL || 'NON IMPOSTATO'}</b><br>`;
+
     async function loadData() {
         const [eventsSnap, tasksSnap] = await Promise.all([
             get(eventsRef),
