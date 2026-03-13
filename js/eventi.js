@@ -51,20 +51,17 @@ onAuthStateChanged(auth, (user) => {
 
     function formatDateFull(event) {
         const d = getEventDate(event);
-        const isAllDay = !event.start.includes('T');
-        if (isAllDay) {
-            return d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-        }
         return d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     }
 
     function formatTime(event) {
-        if (!event.start.includes('T')) return 'Tutto il giorno';
+        const start = event.start || '';
+        if (!start.includes('T')) return 'Tutto il giorno';
         const d = getEventDate(event);
         let str = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-        if (event.end && event.end.includes('T')) {
-            const end = new Date(event.end);
-            str += ' – ' + end.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        const end = event.end || '';
+        if (end.includes('T')) {
+            str += ' – ' + new Date(end).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
         }
         return str;
     }
@@ -116,7 +113,7 @@ onAuthStateChanged(auth, (user) => {
         let currentMonth = null;
         let pastSepShown = false;
 
-        toShow.forEach(event => {
+        toShow.forEach(event => { try {
             // Separatore passati
             if (event._separator) {
                 if (past.length === 0) return;
@@ -194,7 +191,7 @@ onAuthStateChanged(auth, (user) => {
                 </div>
             `;
             container.appendChild(card);
-        });
+        } catch(err) { console.error('Errore render evento:', event?.title, err); } });
     }
 
     // --- LISTENERS ---
