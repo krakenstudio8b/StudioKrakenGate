@@ -1,8 +1,10 @@
 // js/eventi.js
-import { database } from './firebase-config.js';
+import { database, auth } from './firebase-config.js';
 import { ref, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 
-document.addEventListener('authReady', () => {
+onAuthStateChanged(auth, (user) => {
+    if (!user) return;
     const eventsRef = ref(database, 'calendarEvents');
     const tasksRef  = ref(database, 'tasks');
 
@@ -195,12 +197,6 @@ document.addEventListener('authReady', () => {
         allEvents = [];
         if (snapshot.exists()) {
             snapshot.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
-        }
-        // Debug visibile
-        if (container) {
-            const today = new Date(); today.setHours(0,0,0,0);
-            const future = allEvents.filter(e => new Date(e.start) >= today);
-            container.innerHTML = `<p class="text-xs text-gray-400 mb-4">Debug: ${allEvents.length} eventi totali in Firebase, ${future.length} futuri</p>`;
         }
         render();
     });
