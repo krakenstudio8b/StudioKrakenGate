@@ -12,7 +12,6 @@ let isAuthorized = false;
 
 // Riferimenti Firebase
 const eventsRef = ref(database, 'calendarEvents');
-const tasksRef = ref(database, 'tasks');
 
 // --- INIZIALIZZAZIONE GOOGLE API ---
 export async function initGoogleCalendar() {
@@ -167,9 +166,6 @@ export async function syncFromGoogleToFirebase() {
                 const firebaseEvent = convertGoogleToFirebase(gEvent, newEventRef.key);
                 await set(newEventRef, firebaseEvent);
                 console.log(`Evento importato: ${gEvent.summary}`);
-
-                // Crea automaticamente un task per questo evento
-                await createTaskFromCalendarEvent(gEvent, newEventRef.key);
             }
         }
 
@@ -231,64 +227,6 @@ export async function deleteEventFromGoogle(googleEventId) {
         console.log(`Evento eliminato da Google Calendar`);
     } catch (error) {
         console.error('Errore eliminazione evento da Google:', error);
-    }
-}
-
-// --- CREAZIONE AUTOMATICA TASK DA EVENTO GOOGLE ---
-async function createTaskFromCalendarEvent(gEvent, firebaseEventId) {
-    try {
-        // Leggi i task esistenti per evitare duplicati
-        const tasksSnapshot = await get(tasksRef);
-        const tasksData = tasksSnapshot.val();
-
-        let allTasks = [];
-        if (Array.isArray(tasksData)) {
-            allTasks = tasksData;
-        } else if (typeof tasksData === 'object' && tasksData !== null) {
-            allTasks = Object.values(tasksData);
-        }
-
-        // Controlla se esiste già un task collegato a questo evento
-        const alreadyExists = allTasks.some(t =>
-            t.googleCalendarEventId === gEvent.id || t.calendarEventId === firebaseEventId
-        );
-        if (alreadyExists) {
-            console.log(`Task già esistente per evento: ${gEvent.summary}`);
-            return;
-        }
-
-        // Estrai la data di inizio (YYYY-MM-DD)
-        const startRaw = gEvent.start.dateTime || gEvent.start.date || '';
-        const dueDate = startRaw.substring(0, 10);
-
-        // Mappa colore Google → priorità
-        const colorId = gEvent.colorId;
-        let priority = 'low';
-        if (colorId === '11' || colorId === '4') priority = 'high';       // rosso/pomodoro
-        else if (colorId === '6' || colorId === '5') priority = 'medium'; // arancione/banana
-
-        const now = Date.now();
-        const newTask = {
-            id: now.toString(),
-            title: gEvent.summary || 'Evento senza titolo',
-            description: gEvent.description || '',
-            priority,
-            dueDate,
-            status: 'todo',
-            owner: '',
-            assignedTo: [],
-            checklist: [],
-            createdAt: new Date(now).toISOString(),
-            calendarEventId: firebaseEventId,
-            googleCalendarEventId: gEvent.id,
-            fromCalendar: true,
-        };
-
-        allTasks.push(newTask);
-        await set(tasksRef, allTasks);
-        console.log(`Task creato automaticamente: ${newTask.title}`);
-    } catch (error) {
-        console.error('Errore creazione task da evento calendario:', error);
     }
 }
 
