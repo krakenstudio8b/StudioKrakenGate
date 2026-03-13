@@ -28,15 +28,16 @@ onAuthStateChanged(auth, (user) => {
     // --- HELPERS ---
 
     function getEventDate(event) {
+        if (!event.start) return new Date(0);
         return new Date(event.start);
     }
 
     function getDaysUntil(event) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const d = getEventDate(event);
-        d.setHours(0, 0, 0, 0);
-        return Math.ceil((d - today) / (1000 * 60 * 60 * 24));
+        const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        return Math.ceil((local - today) / (1000 * 60 * 60 * 24));
     }
 
     function getEventType(event) {
@@ -80,12 +81,29 @@ onAuthStateChanged(auth, (user) => {
         if (!container) return;
         container.innerHTML = '';
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-        const sorted = [...allEvents].sort((a, b) => new Date(a.start) - new Date(b.start));
-        const future = sorted.filter(e => getEventDate(e) >= today);
-        const past   = sorted.filter(e => getEventDate(e) < today).reverse();
+        const sorted = [...allEvents].sort((a, b) => {
+            const da = a.start ? new Date(a.start) : new Date(0);
+            const db = b.start ? new Date(b.start) : new Date(0);
+            return da - db;
+        });
+
+        console.log('[eventi] allEvents:', allEvents.length, sorted.map(e => ({ title: e.title, start: e.start })));
+
+        const future = sorted.filter(e => {
+            const d = getEventDate(e);
+            const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            return local >= today;
+        });
+        const past = sorted.filter(e => {
+            const d = getEventDate(e);
+            const local = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            return local < today;
+        }).reverse();
+
+        console.log('[eventi] future:', future.length, 'past:', past.length);
 
         // Stats
         if (statTotal) statTotal.textContent = future.length;
@@ -97,7 +115,7 @@ onAuthStateChanged(auth, (user) => {
         if (future.length > 0) {
             const next = future[0];
             if (nextTitle) nextTitle.textContent = next.title;
-            if (nextDate)  nextDate.textContent  = formatDateFull(next) + (next.start.includes('T') ? ' alle ' + formatTime(next).split('–')[0].trim() : '');
+            if (nextDate)  nextDate.textContent  = formatDateFull(next) + ((next.start || '').includes('T') ? ' alle ' + formatTime(next).split('–')[0].trim() : '');
         } else {
             if (nextTitle) nextTitle.textContent = 'Nessun evento in programma';
             if (nextDate)  nextDate.textContent  = '';
