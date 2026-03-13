@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <title>Pulizia Eventi Firebase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
+    <div class="bg-white rounded-xl shadow-lg p-8 w-full max-w-xl">
+        <h1 class="text-2xl font-bold mb-2">🧹 Pulizia Eventi</h1>
+        <p class="text-gray-500 text-sm mb-6">Elimina tutti gli eventi con titolo <strong>"Gate Radio - Prenotazione Live Set"</strong> da Firebase.</p>
+
+        <div id="status" class="mb-4 text-sm text-gray-500">In attesa...</div>
+        <div id="log" class="bg-gray-50 rounded-lg p-4 text-xs font-mono text-gray-700 min-h-[120px] max-h-[300px] overflow-y-auto mb-6"></div>
+
+        <button id="scan-btn" class="w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg hover:bg-indigo-700 transition mb-3">
+            🔍 Scansiona (mostra quanti da eliminare)
+        </button>
+        <button id="delete-btn" class="w-full bg-red-600 text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition hidden">
+            🗑️ Elimina tutti
+        </button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+        import { getDatabase, ref, get, remove } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+        import { ENV } from './js/env-config.js';
+
+        const app = initializeApp({
+            apiKey: ENV.FIREBASE_API_KEY,
+            authDomain: ENV.FIREBASE_AUTH_DOMAIN,
+            databaseURL: ENV.FIREBASE_DATABASE_URL,
+            projectId: ENV.FIREBASE_PROJECT_ID,
+            appId: ENV.FIREBASE_APP_ID,
+        });
+        const db   = getDatabase(app);
+        const auth = getAuth(app);
+
+        const statusEl   = document.getElementById('status');
+        const logEl      = document.getElementById('log');
+        const scanBtn    = document.getElementById('scan-btn');
+        const deleteBtn  = document.getElementById('delete-btn');
+
+        const TITLE_TO_DELETE = 'gate radio - prenotazione live set';
+
+        function log(msg) {
+            logEl.innerHTML += msg + '<br>';
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        let toDelete = [];
+
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                statusEl.textContent = '❌ Non sei loggato. Apri prima il gestionale e poi torna qui.';
+                scanBtn.disabled = true;
+            } else {
+                statusEl.textContent = `✅ Loggato come ${user.email}`;
+            }
+        });
+
+        scanBtn.addEventListener('click', async () => {
+            scanBtn.disabled = true;
+            logEl.innerHTML = '';
+            toDelete = [];
+            log('Lettura calendarEvents da Firebase...');
+
+            const snapshot = await get(ref(db, 'calendarEvents'));
+            if (!snapshot.exists()) {
+                log('Nessun evento trovato.');
+                scanBtn.disabled = false;
+                return;
+            }
+
+            snapshot.forEach(child => {
+                const title = (child.val().title || '').toLowerCase().trim();
+                if (title === TITLE_TO_DELETE) {
+                    toDelete.push(child.key);
+                }
+            });
+
+            log(`Trovati <strong>${toDelete.length}</strong> eventi da eliminare.`);
+            toDelete.slice(0, 5).forEach(k => log(`  - ${k}`));
+            if (toDelete.length > 5) log(`  ... e altri ${toDelete.length - 5}`);
+
+            if (toDelete.length > 0) {
+                deleteBtn.classList.remove('hidden');
+            } else {
+                log('Niente da eliminare!');
+            }
+            scanBtn.disabled = false;
+        });
+
+        deleteBtn.addEventListener('click', async () => {
+            if (!confirm(`Sei sicuro di voler eliminare ${toDelete.length} eventi? Operazione irreversibile.`)) return;
+            deleteBtn.disabled = true;
+            scanBtn.disabled = true;
+            log(`Eliminazione di ${toDelete.length} eventi...`);
+
+            let done = 0;
+            for (const key of toDelete) {
+                await remove(ref(db, `calendarEvents/${key}`));
+                done++;
+                if (done % 10 === 0) log(`Eliminati ${done}/${toDelete.length}...`);
+            }
+
+            log(`<strong>✅ Completato! ${done} eventi eliminati.</strong>`);
+            deleteBtn.classList.add('hidden');
+            toDelete = [];
+        });
+    </script>
+</body>
+</html>

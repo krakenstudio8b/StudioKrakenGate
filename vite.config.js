@@ -16,7 +16,8 @@ export default defineConfig({
         obiettivi: './obiettivi.html',
         'load-tasks': './load-tasks.html',
         archivio: './archivio.html',
-        eventi: './eventi.html'
+        eventi: './eventi.html',
+        'cleanup-events': './cleanup-events.html'
       }
     },
     outDir: 'dist',
