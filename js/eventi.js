@@ -196,6 +196,12 @@ document.addEventListener('authReady', () => {
         if (snapshot.exists()) {
             snapshot.forEach(child => allEvents.push({ id: child.key, ...child.val() }));
         }
+        // Debug visibile
+        if (container) {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const future = allEvents.filter(e => new Date(e.start) >= today);
+            container.innerHTML = `<p class="text-xs text-gray-400 mb-4">Debug: ${allEvents.length} eventi totali in Firebase, ${future.length} futuri</p>`;
+        }
         render();
     });
 
