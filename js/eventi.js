@@ -90,6 +90,13 @@ onAuthStateChanged(auth, (user) => {
         if (statWeek)  statWeek.textContent  = future.filter(e => getDaysUntil(e) <= 7).length;
         if (statMonth) statMonth.textContent = future.filter(e => getDaysUntil(e) <= 30).length;
 
+        // Debug temporaneo: mostra dati grezzi
+        const debugEl = document.getElementById('debug-info');
+        if (debugEl) {
+            const sample = allEvents.slice(0, 3).map(e => `"${e.title}" → ${e.start}`).join('<br>');
+            debugEl.innerHTML = `Totale in Firebase: <b>${allEvents.length}</b> | Futuri: <b>${future.length}</b> | Passati: <b>${past.length}</b><br>Primi 3: ${sample || 'nessuno'}`;
+        }
+
         // Next event banner
         if (future.length > 0) {
             const next = future[0];
