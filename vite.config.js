@@ -15,7 +15,8 @@ export default defineConfig({
         'attivita-personale': './attivita-personale.html',
         obiettivi: './obiettivi.html',
         'load-tasks': './load-tasks.html',
-        archivio: './archivio.html'
+        archivio: './archivio.html',
+        eventi: './eventi.html'
       }
     },
     outDir: 'dist',
