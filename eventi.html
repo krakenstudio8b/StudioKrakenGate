@@ -145,6 +145,76 @@
 
     </main>
 
+    <!-- Modal dettaglio attività evento -->
+    <div id="ev-task-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+            <h2 id="ev-task-modal-title" class="text-2xl font-semibold mb-6">Modifica Attività</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium">Titolo</label>
+                    <input type="text" id="ev-task-title" placeholder="Cosa bisogna fare?" class="w-full p-2 border rounded-lg mt-1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Descrizione</label>
+                    <textarea id="ev-task-description" rows="3" placeholder="Aggiungi dettagli..." class="w-full p-2 border rounded-lg mt-1"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Checklist</label>
+                    <div id="ev-checklist-container" class="mt-1 border rounded-lg p-3 space-y-2"></div>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        <input type="text" id="ev-new-checklist-item-input" placeholder="Aggiungi un punto..." class="flex-grow p-2 border rounded-lg min-w-[150px]">
+                        <select id="ev-new-checklist-assignee" class="p-2 border rounded-lg bg-white text-sm">
+                            <option value="">Nessuno</option>
+                        </select>
+                        <input type="date" id="ev-new-checklist-duedate" class="p-2 border rounded-lg text-sm">
+                        <button id="ev-add-checklist-item-btn" class="bg-indigo-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-indigo-600">Aggiungi</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Responsabile (Owner)</label>
+                    <select id="ev-task-owner" class="w-full p-2 border rounded-lg mt-1 bg-white">
+                        <option value="">-- Nessun responsabile --</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Partecipanti</label>
+                    <div id="ev-task-members-checkboxes" class="p-3 border rounded-lg max-h-32 overflow-y-auto space-y-2 mt-1">
+                        <p class="text-gray-400 text-sm">Caricamento membri...</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium">Scadenza</label>
+                        <input type="date" id="ev-task-due-date" class="w-full p-2 border rounded-lg mt-1">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Priorità</label>
+                        <select id="ev-task-priority" class="w-full p-2 border rounded-lg mt-1 bg-white">
+                            <option value="low">Bassa</option>
+                            <option value="medium">Media</option>
+                            <option value="high">Alta</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div id="ev-comments-section" class="mt-4 hidden">
+                <label class="block text-sm font-medium">Commenti</label>
+                <div id="ev-comments-container" class="mt-1 border rounded-lg p-3 space-y-3 max-h-48 overflow-y-auto"></div>
+                <div class="flex gap-2 mt-2">
+                    <input type="text" id="ev-new-comment-input" placeholder="Scrivi un commento..." class="flex-grow p-2 border rounded-lg">
+                    <button id="ev-add-comment-btn" class="bg-indigo-500 text-white font-semibold py-2 px-3 rounded-lg hover:bg-indigo-600">Invia</button>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-between items-center">
+                <button id="ev-delete-task-btn" class="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-600 hidden">Elimina</button>
+                <div class="flex gap-3 ml-auto">
+                    <button id="ev-cancel-task-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300">Annulla</button>
+                    <button id="ev-save-task-btn" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Salva</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="js/auth-guard.js"></script>
     <script type="module" src="js/eventi.js"></script>
 </body>

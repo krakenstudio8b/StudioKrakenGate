@@ -2,6 +2,7 @@
 import { database, auth } from './firebase-config.js';
 import { ref, onValue, get, set } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+import { currentUser } from './auth-guard.js';
 
 let listenersReady = false;
 
@@ -94,6 +95,245 @@ onAuthStateChanged(auth, (user) => {
         set(tasksRef, allTasks);
     }
 
+    // --- MODAL ATTIVITÀ COMPLETO ---
+
+    let currentModalTaskId = null;
+
+    const evModal           = document.getElementById('ev-task-modal');
+    const evModalTitle      = document.getElementById('ev-task-modal-title');
+    const evTitleInput      = document.getElementById('ev-task-title');
+    const evDescInput       = document.getElementById('ev-task-description');
+    const evChecklistContainer = document.getElementById('ev-checklist-container');
+    const evNewChecklistInput  = document.getElementById('ev-new-checklist-item-input');
+    const evNewChecklistAssignee = document.getElementById('ev-new-checklist-assignee');
+    const evNewChecklistDuedate  = document.getElementById('ev-new-checklist-duedate');
+    const evAddChecklistBtn  = document.getElementById('ev-add-checklist-item-btn');
+    const evOwnerSelect      = document.getElementById('ev-task-owner');
+    const evMembersContainer = document.getElementById('ev-task-members-checkboxes');
+    const evDueDateInput     = document.getElementById('ev-task-due-date');
+    const evPrioritySelect   = document.getElementById('ev-task-priority');
+    const evCommentsSection  = document.getElementById('ev-comments-section');
+    const evCommentsContainer = document.getElementById('ev-comments-container');
+    const evNewCommentInput  = document.getElementById('ev-new-comment-input');
+    const evAddCommentBtn    = document.getElementById('ev-add-comment-btn');
+    const evDeleteBtn        = document.getElementById('ev-delete-task-btn');
+    const evCancelBtn        = document.getElementById('ev-cancel-task-btn');
+    const evSaveBtn          = document.getElementById('ev-save-task-btn');
+
+    function populateModalMembers() {
+        if (!evOwnerSelect || !evMembersContainer) return;
+        evOwnerSelect.innerHTML = '<option value="">-- Nessun responsabile --</option>';
+        evMembersContainer.innerHTML = '';
+        allMembers.forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            evOwnerSelect.appendChild(opt);
+
+            const div = document.createElement('div');
+            div.className = 'flex items-center';
+            div.innerHTML = `
+                <input id="ev-member-${name}" type="checkbox" value="${name}" class="h-4 w-4 rounded border-gray-300 text-indigo-600">
+                <label for="ev-member-${name}" class="ml-2 text-sm text-gray-900">${name}</label>`;
+            evMembersContainer.appendChild(div);
+        });
+        if (evNewChecklistAssignee) {
+            evNewChecklistAssignee.innerHTML = '<option value="">Nessuno</option><option value="tutti">👥 Tutti</option>';
+            allMembers.forEach(name => {
+                const o = document.createElement('option');
+                o.value = name; o.textContent = name;
+                evNewChecklistAssignee.appendChild(o);
+            });
+        }
+    }
+
+    function renderModalChecklist(checklist = []) {
+        if (!evChecklistContainer) return;
+        evChecklistContainer.innerHTML = '';
+        checklist.forEach((item, index) => {
+            const hasLock  = item.locked === true;
+            const isBlocked = hasLock && index > 0 && !checklist[index - 1].done;
+            const lockCls  = hasLock ? 'text-red-500' : 'text-gray-300 hover:text-red-400';
+            const lockIcon = hasLock ? 'fa-lock' : 'fa-lock-open';
+            const assigneeOpts = allMembers.map(n =>
+                `<option value="${n}" ${item.assignee === n ? 'selected' : ''}>${n}</option>`
+            ).join('');
+            const itemEl = document.createElement('div');
+            itemEl.className = 'checklist-item flex items-center gap-1' + (isBlocked ? ' checklist-blocked' : '');
+            itemEl.innerHTML = `
+                <button type="button" class="ev-checklist-lock-btn mr-1 ${lockCls}" data-index="${index}" title="${hasLock ? 'Lucchetto attivo' : 'Lucchetto disattivo'}">
+                    <i class="fa-solid ${lockIcon} text-xs"></i>
+                </button>
+                <input type="checkbox" id="ev-check-${index}" ${item.done ? 'checked' : ''} ${isBlocked ? 'disabled' : ''}>
+                <label for="ev-check-${index}" class="text-sm flex-1">${item.text}</label>
+                <input type="date" class="ev-checklist-duedate text-xs p-1 border rounded bg-white ml-1" value="${item.dueDate || ''}" data-index="${index}">
+                <select class="ev-checklist-assignee text-xs p-1 border rounded bg-white ml-1" data-index="${index}">
+                    <option value="">Nessuno</option>
+                    <option value="tutti" ${item.assignee === 'tutti' ? 'selected' : ''}>👥 Tutti</option>
+                    ${assigneeOpts}
+                </select>
+                <button type="button" class="ev-checklist-delete-btn ml-1 text-red-500 hover:text-red-700" data-index="${index}">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>`;
+            evChecklistContainer.appendChild(itemEl);
+        });
+    }
+
+    function getModalChecklistState() {
+        const items = [];
+        evChecklistContainer?.querySelectorAll('.checklist-item').forEach(el => {
+            const cb    = el.querySelector('input[type="checkbox"]');
+            const label = el.querySelector('label');
+            const asel  = el.querySelector('.ev-checklist-assignee');
+            const dsel  = el.querySelector('.ev-checklist-duedate');
+            const lbtn  = el.querySelector('.ev-checklist-lock-btn');
+            if (label?.textContent) {
+                items.push({
+                    text:     label.textContent,
+                    done:     cb?.checked || false,
+                    assignee: asel?.value || '',
+                    dueDate:  dsel?.value || '',
+                    locked:   lbtn ? lbtn.querySelector('.fa-lock:not(.fa-lock-open)') !== null : false
+                });
+            }
+        });
+        return items;
+    }
+
+    function renderModalComments(comments = []) {
+        if (!evCommentsContainer) return;
+        evCommentsContainer.innerHTML = '';
+        if (comments.length === 0) {
+            evCommentsContainer.innerHTML = '<p class="text-gray-400 text-sm">Nessun commento</p>';
+            return;
+        }
+        comments.forEach(c => {
+            const dateStr = new Date(c.timestamp).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            const div = document.createElement('div');
+            div.className = 'comment-item';
+            div.innerHTML = `
+                <div class="comment-header">
+                    <span class="comment-author">${c.author}</span>
+                    <span class="comment-date">${dateStr}</span>
+                </div>
+                <p class="comment-text">${c.text}</p>`;
+            evCommentsContainer.appendChild(div);
+        });
+        evCommentsContainer.scrollTop = evCommentsContainer.scrollHeight;
+    }
+
+    function openTaskModal(taskId) {
+        const task = allTasks.find(t => t.id === taskId);
+        if (!task || !evModal) return;
+        currentModalTaskId = taskId;
+        populateModalMembers();
+        if (evModalTitle)  evModalTitle.textContent  = 'Modifica Attività';
+        if (evTitleInput)  evTitleInput.value        = task.title || '';
+        if (evDescInput)   evDescInput.value         = task.description || '';
+        if (evDueDateInput) evDueDateInput.value     = task.dueDate || '';
+        if (evPrioritySelect) evPrioritySelect.value = task.priority || 'medium';
+        if (evOwnerSelect) evOwnerSelect.value       = task.owner || '';
+        evMembersContainer?.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            cb.checked = (task.assignedTo || []).includes(cb.value);
+        });
+        renderModalChecklist(task.checklist || []);
+        renderModalComments(task.comments || []);
+        if (evCommentsSection) evCommentsSection.classList.remove('hidden');
+        if (evDeleteBtn) evDeleteBtn.classList.remove('hidden');
+        evModal.classList.remove('hidden');
+    }
+
+    function closeTaskModal() {
+        if (evModal) evModal.classList.add('hidden');
+        currentModalTaskId = null;
+    }
+
+    // Checklist: event delegation
+    evChecklistContainer?.addEventListener('click', e => {
+        if (e.target.closest('.ev-checklist-delete-btn')) {
+            e.target.closest('.checklist-item')?.remove();
+            return;
+        }
+        if (e.target.closest('.ev-checklist-lock-btn')) {
+            const cl = getModalChecklistState();
+            const idx = parseInt(e.target.closest('.ev-checklist-lock-btn').dataset.index);
+            if (cl[idx]) { cl[idx].locked = !cl[idx].locked; renderModalChecklist(cl); }
+        }
+    });
+    evChecklistContainer?.addEventListener('change', e => {
+        if (e.target.type === 'checkbox') renderModalChecklist(getModalChecklistState());
+    });
+
+    // Aggiungi item checklist
+    evAddChecklistBtn?.addEventListener('click', () => {
+        const text = evNewChecklistInput?.value.trim();
+        if (!text) return;
+        const assignee = evNewChecklistAssignee?.value || '';
+        const dueDate  = evNewChecklistDuedate?.value  || '';
+        const current  = getModalChecklistState();
+        current.push({ text, done: false, assignee, dueDate, locked: false });
+        renderModalChecklist(current);
+        if (evNewChecklistInput)    evNewChecklistInput.value = '';
+        if (evNewChecklistAssignee) evNewChecklistAssignee.value = '';
+        if (evNewChecklistDuedate)  evNewChecklistDuedate.value  = '';
+    });
+    evNewChecklistInput?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') evAddChecklistBtn?.click();
+    });
+
+    // Commenti
+    evAddCommentBtn?.addEventListener('click', () => {
+        const text = evNewCommentInput?.value.trim();
+        if (!text || !currentModalTaskId) return;
+        const task = allTasks.find(t => t.id === currentModalTaskId);
+        if (!task) return;
+        if (!task.comments) task.comments = [];
+        task.comments.push({ text, author: currentUser.name || 'Anonimo', timestamp: new Date().toISOString() });
+        saveTasks();
+        renderModalComments(task.comments);
+        if (evNewCommentInput) evNewCommentInput.value = '';
+    });
+    evNewCommentInput?.addEventListener('keydown', e => { if (e.key === 'Enter') evAddCommentBtn?.click(); });
+
+    // Salva
+    evSaveBtn?.addEventListener('click', () => {
+        const title = evTitleInput?.value.trim();
+        if (!title) { evTitleInput?.focus(); return; }
+        const task = allTasks.find(t => t.id === currentModalTaskId);
+        if (!task) return;
+        task.title       = title;
+        task.description = evDescInput?.value.trim() || '';
+        task.dueDate     = evDueDateInput?.value || '';
+        task.priority    = evPrioritySelect?.value || 'medium';
+        task.owner       = evOwnerSelect?.value || '';
+        task.assignedTo  = Array.from(evMembersContainer?.querySelectorAll('input:checked') || []).map(cb => cb.value);
+        task.checklist   = getModalChecklistState();
+        saveTasks();
+        const eventId = task.calendarEventId;
+        if (eventId) {
+            renderActivitiesPanel(eventId);
+            updateActivityCountBadge(eventId);
+        }
+        closeTaskModal();
+    });
+
+    // Elimina
+    evDeleteBtn?.addEventListener('click', () => {
+        if (!currentModalTaskId || !confirm('Eliminare questa attività?')) return;
+        const task = allTasks.find(t => t.id === currentModalTaskId);
+        const eventId = task?.calendarEventId;
+        allTasks = allTasks.filter(t => t.id !== currentModalTaskId);
+        saveTasks();
+        if (eventId) {
+            renderActivitiesPanel(eventId);
+            updateActivityCountBadge(eventId);
+        }
+        closeTaskModal();
+    });
+
+    evCancelBtn?.addEventListener('click', closeTaskModal);
+    evModal?.addEventListener('click', e => { if (e.target === evModal) closeTaskModal(); });
+
     function renderActivitiesPanel(eventId) {
         const panel = document.getElementById(`activities-panel-${eventId}`);
         if (!panel) return;
@@ -123,7 +363,7 @@ onAuthStateChanged(auth, (user) => {
                 <div class="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-100 shadow-sm">
                     <span class="w-2 h-2 rounded-full shrink-0 ${dot}"></span>
                     <div class="flex-1 min-w-0 flex items-center">
-                        <span class="text-sm text-gray-800 truncate">${task.title}</span>${checklistBadge}
+                        <button class="open-task-modal-btn text-sm text-gray-800 hover:text-indigo-600 text-left truncate transition-colors" data-task-id="${task.id}">${task.title}</button>${checklistBadge}
                     </div>
                     <div class="flex items-center gap-1 shrink-0">
                         ${statusButtons}
@@ -301,6 +541,14 @@ onAuthStateChanged(auth, (user) => {
 
     if (container) {
         container.addEventListener('click', (e) => {
+
+            // Apri modal dettaglio task
+            const modalOpenBtn = e.target.closest('.open-task-modal-btn');
+            if (modalOpenBtn) {
+                e.stopPropagation();
+                openTaskModal(modalOpenBtn.dataset.taskId);
+                return;
+            }
 
             // Toggle activities panel
             const toggleBtn = e.target.closest('.toggle-activities-btn');
