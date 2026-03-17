@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
         endOfWeek.setHours(23, 59, 59, 999);
 
         return allTasks.filter(task => {
-            if (!task.dueDate || task.status === 'done') return false;
+            if (!task.dueDate || task.status === 'done' || task.calendarEventId) return false;
             const due = new Date(task.dueDate + 'T00:00:00');
             return due >= today && due <= endOfWeek;
         });
@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderTasks = () => {
         if (!columns.todo) return;
         Object.values(columns).forEach(col => col.innerHTML = '');
-        const sorted = sortByDueDate(allTasks.filter(t => !t.archived));
+        const sorted = sortByDueDate(allTasks.filter(t => !t.archived && !t.calendarEventId));
         sorted.forEach(task => {
             const card = createTaskCard(task);
             columns[task.status]?.appendChild(card);
