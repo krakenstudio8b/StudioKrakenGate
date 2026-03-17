@@ -347,6 +347,9 @@ onAuthStateChanged(auth, (user) => {
                 ? `<span class="text-[10px] text-gray-400 ml-1.5 shrink-0"><i class="fa-regular fa-square-check"></i> ${doneCount}/${checklist.length}</span>`
                 : '';
             const dot = priorityDot[task.priority] || 'bg-gray-400';
+            const ownerBadge = task.owner
+                ? `<span class="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium bg-indigo-100 text-indigo-700 rounded-full px-1.5 py-0.5 ml-1.5"><i class="fa-solid fa-user-tie text-[9px]"></i>${task.owner}</span>`
+                : '';
 
             const statusButtons = [
                 { s: 'todo',       label: 'Da fare',  activeClass: 'bg-gray-200 text-gray-700 border-gray-300',       hoverClass: 'hover:bg-gray-100 hover:text-gray-600' },
@@ -363,7 +366,7 @@ onAuthStateChanged(auth, (user) => {
                 <div class="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-100 shadow-sm">
                     <span class="w-2 h-2 rounded-full shrink-0 ${dot}"></span>
                     <div class="flex-1 min-w-0 flex items-center">
-                        <button class="open-task-modal-btn text-sm text-gray-800 hover:text-indigo-600 text-left truncate transition-colors" data-task-id="${task.id}">${task.title}</button>${checklistBadge}
+                        <button class="open-task-modal-btn text-sm text-gray-800 hover:text-indigo-600 text-left truncate transition-colors" data-task-id="${task.id}">${task.title}</button>${ownerBadge}${checklistBadge}
                     </div>
                     <div class="flex items-center gap-1 shrink-0">
                         ${statusButtons}
