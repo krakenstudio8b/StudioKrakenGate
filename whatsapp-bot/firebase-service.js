@@ -6,8 +6,19 @@ const path  = require('path');
 let db = null;
 
 function initFirebase() {
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './service-account-key.json';
-    const serviceAccount = require(path.resolve(serviceAccountPath));
+    let serviceAccount;
+
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        // Railway / cloud: chiave passata come variabile d'ambiente
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        console.log('[Firebase] Credenziali caricate da variabile d\'ambiente');
+    } else {
+        // Locale: legge dal file
+        const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './service-account-key.json';
+        serviceAccount = require(path.resolve(serviceAccountPath));
+        console.log('[Firebase] Credenziali caricate da file');
+    }
+
     admin.initializeApp({
         credential:  admin.credential.cert(serviceAccount),
         databaseURL: process.env.FIREBASE_DATABASE_URL
