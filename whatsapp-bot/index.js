@@ -1,7 +1,7 @@
 // index.js
 require('dotenv').config();
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, delay, Browsers, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const pino    = require('pino');
 const qrcode  = require('qrcode-terminal');
 const firebaseService = require('./firebase-service');
@@ -34,9 +34,8 @@ async function startWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
 
     sock = makeWASocket({
-        auth:    state,
-        logger:  pino({ level: 'silent' }),
-        browser: ['Gestionale Bot', 'Chrome', '1.0.0']
+        auth:   state,
+        logger: pino({ level: 'silent' })
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -51,11 +50,12 @@ async function startWhatsApp() {
 
         if (connection === 'close') {
             const reason = lastDisconnect?.error?.output?.statusCode;
+            console.log('[WhatsApp] Connessione chiusa. Motivo:', reason, lastDisconnect?.error?.message || '');
             if (reason === DisconnectReason.loggedOut) {
                 console.log('[WhatsApp] Sessione terminata. Elimina auth_info/ e riavvia.');
                 process.exit(1);
             }
-            console.log('[WhatsApp] Connessione persa, riconnessione...');
+            console.log('[WhatsApp] Riconnessione in corso...');
             isReady = false;
             await delay(5000);
             startWhatsApp();
