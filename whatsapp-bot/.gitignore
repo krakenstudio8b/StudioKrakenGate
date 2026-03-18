@@ -1,4 +1,4 @@
 node_modules/
-auth_info/
+# auth_info/ — incluso per deploy Railway
 .env
 service-account-key.json
