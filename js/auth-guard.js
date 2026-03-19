@@ -3,6 +3,7 @@
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 import { ref, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { auth, database } from './firebase-config.js';
+import { trackLoginPoint, injectLoginBanner } from './login-points.js';
 
 // Riferimenti ai link della navbar
 const logoutBtn = document.getElementById('logout-btn');
@@ -65,6 +66,17 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             console.log(`Accesso effettuato come: ${currentUser.name} (Ruolo: ${currentUser.role})`);
+
+            // --- PUNTI LOGIN ---
+            if (currentPage !== 'login.html') {
+                try {
+                    const stats = await trackLoginPoint(user.uid, currentUser.name);
+                    injectLoginBanner(stats, currentUser.name);
+                } catch (e) {
+                    console.warn('Errore tracking login points:', e);
+                }
+            }
+            // --- FINE PUNTI LOGIN ---
 
             // --- CONTROLLO ACCESSO PAGINA (BUTTAFUORI) ---
             const forbiddenRoles = pagePermissions[currentPage];

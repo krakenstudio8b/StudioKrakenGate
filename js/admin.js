@@ -2,6 +2,7 @@
 import { database } from './firebase-config.js';
 import { ref, onValue, get, set, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
+import { renderLeaderboard, renderLeaderboardHistory } from './login-points.js';
 
 // --- RIFERIMENTI AGLI ELEMENTI HTML ---
 const calendarApprovalSection = document.getElementById('calendar-approval-section');
@@ -10,6 +11,12 @@ const userManagementSection = document.getElementById('user-management-section')
 const pendingEventsContainer = document.getElementById('pending-events-container');
 const pendingFinanceContainer = document.getElementById('pending-finance-container');
 const usersListEl = document.getElementById('users-list');
+
+// Riferimenti per il modulo CLASSIFICA
+const leaderboardSection = document.getElementById('leaderboard-section');
+const leaderboardContainer = document.getElementById('leaderboard-container');
+const leaderboardHistorySection = document.getElementById('leaderboard-history-section');
+const leaderboardHistoryContainer = document.getElementById('leaderboard-history-container');
 
 // Riferimenti per il modulo PULIZIE
 const cleaningManagementSection = document.getElementById('cleaning-management-section');
@@ -353,6 +360,11 @@ function initializeAdminPage() {
         renderPendingFinanceRequests();
         loadUsersForManagement();
         initializeCleaningModule();
+
+        leaderboardSection?.classList.remove('hidden');
+        leaderboardHistorySection?.classList.remove('hidden');
+        renderLeaderboard(leaderboardContainer);
+        renderLeaderboardHistory(leaderboardHistoryContainer);
     }
 }
 
