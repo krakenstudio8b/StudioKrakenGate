@@ -11,6 +11,15 @@ function urlBase64ToUint8Array(base64String) {
     return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
 
+function getDeviceId() {
+    let id = localStorage.getItem('push_device_id');
+    if (!id) {
+        id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem('push_device_id', id);
+    }
+    return id;
+}
+
 export async function setupPushNotifications(uid, userName) {
     if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
     if (Notification.permission === 'denied') return;
@@ -25,6 +34,7 @@ export async function setupPushNotifications(uid, userName) {
             applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
         });
 
+        const deviceId = getDeviceId();
         const subData = {
             endpoint: subscription.endpoint,
             keys: {
@@ -35,8 +45,9 @@ export async function setupPushNotifications(uid, userName) {
             savedAt: new Date().toISOString()
         };
 
-        await set(ref(database, `pushSubscriptions/${userName.toLowerCase()}`), subData);
-        console.log('✅ Push notifications attive per:', userName);
+        // Salva per dispositivo: pushSubscriptions/{username}/{deviceId}
+        await set(ref(database, `pushSubscriptions/${userName.toLowerCase()}/${deviceId}`), subData);
+        console.log('✅ Push notifications attive per:', userName, 'device:', deviceId);
     } catch (err) {
         console.warn('Push setup fallito:', err);
     }

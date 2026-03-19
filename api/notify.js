@@ -40,23 +40,28 @@ module.exports = async function handler(req, res) {
     for (const userName of targetUsers) {
         const key = userName.toLowerCase();
         const snap = await database.ref(`pushSubscriptions/${key}`).once('value');
-        const sub = snap.val();
-        if (!sub) {
+        const devicesData = snap.val();
+        if (!devicesData) {
             results.push({ user: userName, sent: false, error: 'no subscription' });
             continue;
         }
 
-        try {
-            await webpush.sendNotification(
-                { endpoint: sub.endpoint, keys: sub.keys },
-                JSON.stringify({ title, body: body || '', url: url || '/index.html' })
-            );
-            results.push({ user: userName, sent: true });
-        } catch (err) {
-            if (err.statusCode === 410) {
-                await database.ref(`pushSubscriptions/${key}`).remove();
+        // Invia a tutti i dispositivi dell'utente
+        const devices = Object.entries(devicesData);
+        for (const [deviceId, sub] of devices) {
+            if (!sub || !sub.endpoint) continue;
+            try {
+                await webpush.sendNotification(
+                    { endpoint: sub.endpoint, keys: sub.keys },
+                    JSON.stringify({ title, body: body || '', url: url || '/index.html' })
+                );
+                results.push({ user: userName, device: deviceId, sent: true });
+            } catch (err) {
+                if (err.statusCode === 410) {
+                    await database.ref(`pushSubscriptions/${key}/${deviceId}`).remove();
+                }
+                results.push({ user: userName, device: deviceId, sent: false, error: err.message });
             }
-            results.push({ user: userName, sent: false, error: err.message });
         }
     }
 

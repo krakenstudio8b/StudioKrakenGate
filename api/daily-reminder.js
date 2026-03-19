@@ -88,20 +88,25 @@ module.exports = async function handler(req, res) {
 
     const sent = [];
     for (const [key, messages] of Object.entries(userMessages)) {
-        const sub = subscriptions[key];
-        if (!sub) continue;
+        const devicesData = subscriptions[key];
+        if (!devicesData) continue;
 
         const body = messages.length === 1 ? messages[0] : `${messages.length} scadenze in arrivo`;
+        const payload = JSON.stringify({ title: '⏰ Gateradio — Scadenze', body, url: '/index.html' });
 
-        try {
-            await webpush.sendNotification(
-                { endpoint: sub.endpoint, keys: sub.keys },
-                JSON.stringify({ title: '⏰ Gateradio — Scadenze', body, url: '/index.html' })
-            );
-            sent.push(key);
-        } catch (err) {
-            if (err.statusCode === 410) {
-                await database.ref(`pushSubscriptions/${key}`).remove();
+        const devices = Object.entries(devicesData);
+        for (const [deviceId, sub] of devices) {
+            if (!sub || !sub.endpoint) continue;
+            try {
+                await webpush.sendNotification(
+                    { endpoint: sub.endpoint, keys: sub.keys },
+                    payload
+                );
+                sent.push(`${key}/${deviceId}`);
+            } catch (err) {
+                if (err.statusCode === 410) {
+                    await database.ref(`pushSubscriptions/${key}/${deviceId}`).remove();
+                }
             }
         }
     }
