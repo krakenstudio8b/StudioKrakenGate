@@ -80,7 +80,7 @@ export async function trackLoginPoint(uid, name) {
     return { totalPoints, weeklyPoints, weekStart, lastLoginDate, pointAwarded };
 }
 
-export function injectLoginBanner(stats, name) {
+export function injectLoginBanner(stats, name, uid, setupPushFn) {
     if (document.getElementById('login-points-banner')) return;
 
     const { weeklyPoints, pointAwarded } = stats;
@@ -90,6 +90,12 @@ export function injectLoginBanner(stats, name) {
     const nextText = next
         ? `+${next.min - weeklyPoints} per <span class="font-semibold">${next.label}</span>`
         : '<span class="font-semibold text-indigo-600">Livello massimo! 🎉</span>';
+
+    const notifGranted = ('Notification' in window) && Notification.permission === 'granted';
+    const notifSupported = ('Notification' in window) && ('PushManager' in window);
+    const bellHtml = notifSupported && !notifGranted
+        ? `<button id="enable-notif-btn" title="Attiva notifiche" class="text-gray-400 hover:text-indigo-600 transition-colors text-base">🔔</button>`
+        : '';
 
     const banner = document.createElement('div');
     banner.id = 'login-points-banner';
@@ -101,6 +107,7 @@ export function injectLoginBanner(stats, name) {
                 <span class="font-bold text-indigo-700">${medal.label}</span>
                 <span class="text-gray-300">|</span>
                 <span class="text-gray-500">${name}</span>
+                ${bellHtml}
             </div>
             <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-center sm:justify-end">
                 <div class="w-28 sm:w-36 bg-gray-200 rounded-full h-1.5">
@@ -115,6 +122,17 @@ export function injectLoginBanner(stats, name) {
     const nav = document.querySelector('nav');
     if (nav) {
         nav.insertAdjacentElement('afterend', banner);
+    }
+
+    // Listener pulsante notifiche
+    const bellBtn = document.getElementById('enable-notif-btn');
+    if (bellBtn && setupPushFn) {
+        bellBtn.addEventListener('click', async () => {
+            bellBtn.textContent = '⏳';
+            bellBtn.disabled = true;
+            await setupPushFn(uid, name);
+            bellBtn.textContent = Notification.permission === 'granted' ? '🔔✅' : '🔕';
+        });
     }
 
     // Toast solo se guadagna punto oggi

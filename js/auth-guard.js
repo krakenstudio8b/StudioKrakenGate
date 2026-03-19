@@ -72,10 +72,11 @@ onAuthStateChanged(auth, async (user) => {
             if (currentPage !== 'login.html') {
                 try {
                     const stats = await trackLoginPoint(user.uid, currentUser.name);
-                    injectLoginBanner(stats, currentUser.name);
+                    injectLoginBanner(stats, currentUser.name, user.uid, setupPushNotifications);
                 } catch (e) {
                     console.warn('Errore tracking login points:', e);
                 }
+                // Prova automatica (funziona su desktop, su iOS serve il tap sul 🔔)
                 setupPushNotifications(user.uid, currentUser.name);
             }
             // --- FINE PUNTI LOGIN + PUSH NOTIFICATIONS ---
