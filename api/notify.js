@@ -20,7 +20,7 @@ function getDb() {
 }
 
 webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT,
+    'mailto:szczepanski.mateusz22@gmail.com',
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY
 );
