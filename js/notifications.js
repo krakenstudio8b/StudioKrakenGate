@@ -120,6 +120,14 @@ function buildBody(type, payload) {
             url: '/index.html'
         };
     }
+    if (type === 'task_updated') {
+        return {
+            title: '✏️ Attività aggiornata',
+            body: `"${payload.taskTitle}": ${payload.changeDescription}`,
+            targetUsers: payload.targetUsers,
+            url: '/index.html'
+        };
+    }
     return null;
 }
 

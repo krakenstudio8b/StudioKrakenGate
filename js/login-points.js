@@ -93,8 +93,8 @@ export function injectLoginBanner(stats, name, uid, setupPushFn) {
 
     const notifGranted = ('Notification' in window) && Notification.permission === 'granted';
     const notifSupported = ('Notification' in window) && ('PushManager' in window);
-    const bellHtml = notifSupported && !notifGranted
-        ? `<button id="enable-notif-btn" title="Attiva notifiche" class="text-gray-400 hover:text-indigo-600 transition-colors text-base">🔔</button>`
+    const bellHtml = notifSupported
+        ? `<button id="enable-notif-btn" title="${notifGranted ? 'Notifiche attive — tocca per riattivare' : 'Attiva notifiche'}" class="transition-colors text-base ${notifGranted ? 'text-indigo-500' : 'text-gray-400 hover:text-indigo-600'}">🔔${notifGranted ? '✅' : ''}</button>`
         : '';
 
     const banner = document.createElement('div');

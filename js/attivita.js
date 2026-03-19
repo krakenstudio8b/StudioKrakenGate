@@ -502,10 +502,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // Notifica nuove checklist items con assignee specifico
+                // Destinatari generali (owner + assegnatari)
+                const allRecipients = [...new Set([
+                    ...(taskData.assignedTo || []),
+                    ...(taskData.owner ? [taskData.owner] : [])
+                ])];
+
+                // Notifica se la descrizione è cambiata
+                if ((taskData.description || '') !== (oldTask.description || '')) {
+                    if (allRecipients.length > 0) {
+                        sendNotification('task_updated', {
+                            taskTitle: taskData.title,
+                            changeDescription: 'descrizione modificata',
+                            targetUsers: allRecipients
+                        });
+                    }
+                }
+
+                // Notifica checklist: item nuovo, testo modificato, assignee cambiato, item completato
                 const oldChecklist = oldTask.checklist || [];
                 checklistItems.forEach((item, i) => {
-                    if (!oldChecklist[i] && item.assignee && item.assignee !== 'tutti' && item.assignee !== '') {
+                    const oldItem = oldChecklist[i];
+                    const isNew = !oldItem;
+                    const assigneeChanged = oldItem && oldItem.assignee !== item.assignee;
+                    const textChanged = oldItem && oldItem.text !== item.text;
+                    const justCompleted = oldItem && !oldItem.done && item.done;
+
+                    // Notifica assignee specifico se item nuovo o assignee cambiato
+                    if ((isNew || assigneeChanged) && item.assignee && item.assignee !== 'tutti' && item.assignee !== '') {
                         sendNotification('checklist_assigned', {
                             taskTitle: taskData.title,
                             itemText: item.text,
@@ -513,14 +537,27 @@ document.addEventListener('DOMContentLoaded', () => {
                             dueDate: item.dueDate
                         });
                     }
-                    // Notifica owner se item appena completato
-                    if (oldChecklist[i] && !oldChecklist[i].done && item.done) {
-                        const ownerToNotify = oldTask.owner;
-                        if (ownerToNotify) {
+
+                    // Notifica tutti se item aggiunto o testo modificato
+                    if ((isNew || textChanged) && allRecipients.length > 0) {
+                        sendNotification('task_updated', {
+                            taskTitle: taskData.title,
+                            changeDescription: isNew ? `nuova attività: "${item.text}"` : `attività modificata: "${item.text}"`,
+                            targetUsers: allRecipients
+                        });
+                    }
+
+                    // Notifica owner + assegnatari se item appena completato
+                    if (justCompleted) {
+                        const completionRecipients = [...new Set([
+                            ...(oldTask.owner ? [oldTask.owner] : []),
+                            ...(oldTask.assignedTo || [])
+                        ])];
+                        if (completionRecipients.length > 0) {
                             sendNotification('checklist_done', {
                                 taskTitle: taskData.title,
                                 itemText: item.text,
-                                targetUsers: [ownerToNotify]
+                                targetUsers: completionRecipients
                             });
                         }
                     }
