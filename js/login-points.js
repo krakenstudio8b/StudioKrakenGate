@@ -95,20 +95,19 @@ export function injectLoginBanner(stats, name) {
     banner.id = 'login-points-banner';
     banner.className = 'w-full bg-indigo-50 border-b border-indigo-100';
     banner.innerHTML = `
-        <div class="container mx-auto px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm">
+        <div class="container mx-auto px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-1 sm:gap-2 text-sm">
             <div class="flex items-center gap-2 flex-shrink-0">
                 <span class="text-lg">${medal.emoji}</span>
                 <span class="font-bold text-indigo-700">${medal.label}</span>
                 <span class="text-gray-300">|</span>
                 <span class="text-gray-500">${name}</span>
             </div>
-            <div class="flex items-center gap-3 w-full sm:w-auto">
-                <div class="flex-1 sm:w-36 bg-gray-200 rounded-full h-1.5">
+            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                <div class="w-28 sm:w-36 bg-gray-200 rounded-full h-1.5">
                     <div class="bg-indigo-500 h-1.5 rounded-full transition-all duration-700" style="width: ${progressPct}%"></div>
                 </div>
                 <span class="text-gray-600 whitespace-nowrap text-xs"><strong>${weeklyPoints}/7</strong> giorni</span>
-                <span class="text-gray-400 hidden sm:inline text-xs">→</span>
-                <span class="text-gray-500 hidden sm:inline text-xs">${nextText}</span>
+                <span class="text-gray-500 text-xs">→ ${nextText}</span>
             </div>
         </div>
     `;
