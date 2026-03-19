@@ -1,7 +1,7 @@
 // api/notify.js — Vercel serverless function: invia Web Push a utenti specifici
-import webpush from 'web-push';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getDatabase } from 'firebase-admin/database';
+const webpush = require('web-push');
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { getDatabase } = require('firebase-admin/database');
 
 let db;
 
@@ -25,7 +25,7 @@ webpush.setVapidDetails(
     process.env.VAPID_PRIVATE_KEY
 );
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
 
     const { title, body, targetUsers, url } = req.body;
@@ -41,7 +41,10 @@ export default async function handler(req, res) {
         const key = userName.toLowerCase();
         const snap = await database.ref(`pushSubscriptions/${key}`).once('value');
         const sub = snap.val();
-        if (!sub) continue;
+        if (!sub) {
+            results.push({ user: userName, sent: false, error: 'no subscription' });
+            continue;
+        }
 
         try {
             await webpush.sendNotification(
@@ -58,4 +61,4 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ results });
-}
+};

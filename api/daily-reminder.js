@@ -1,7 +1,7 @@
-// api/daily-reminder.js — Vercel cron: ogni mattina alle 8 avvisa scadenze del giorno dopo
-import webpush from 'web-push';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getDatabase } from 'firebase-admin/database';
+// api/daily-reminder.js — Vercel cron: ogni giorno alle 11 avvisa scadenze
+const webpush = require('web-push');
+const { initializeApp, cert, getApps } = require('firebase-admin/app');
+const { getDatabase } = require('firebase-admin/database');
 
 let db;
 
@@ -35,7 +35,7 @@ function getTodayStr() {
     return new Date().toISOString().split('T')[0];
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
     const database = getDb();
     const tomorrow = getTomorrowStr();
     const today = getTodayStr();
@@ -48,9 +48,7 @@ export default async function handler(req, res) {
     const tasks = Object.values(tasksSnap.val() || {}).filter(Boolean);
     const subscriptions = subsSnap.val() || {};
 
-    // Mappa: userName.toLowerCase() -> [messaggi]
     const userMessages = {};
-
     const addMsg = (name, msg) => {
         const key = name.toLowerCase();
         if (!userMessages[key]) userMessages[key] = [];
@@ -60,21 +58,18 @@ export default async function handler(req, res) {
     tasks.forEach(task => {
         if (task.status === 'done') return;
 
-        // Task scadono domani
         if (task.dueDate === tomorrow) {
             const users = [...(task.assignedTo || [])];
             if (task.owner && !users.includes(task.owner)) users.push(task.owner);
             users.forEach(name => addMsg(name, `📋 "${task.title}"`));
         }
 
-        // Task scaduti oggi (promemoria)
         if (task.dueDate === today) {
             const users = [...(task.assignedTo || [])];
             if (task.owner && !users.includes(task.owner)) users.push(task.owner);
             users.forEach(name => addMsg(name, `🔴 OGGI: "${task.title}"`));
         }
 
-        // Checklist items in scadenza domani o oggi
         (task.checklist || []).forEach(item => {
             if (!item || item.done) return;
             if (item.dueDate !== tomorrow && item.dueDate !== today) return;
@@ -91,15 +86,12 @@ export default async function handler(req, res) {
         });
     });
 
-    // Invia notifiche
     const sent = [];
     for (const [key, messages] of Object.entries(userMessages)) {
         const sub = subscriptions[key];
         if (!sub) continue;
 
-        const body = messages.length === 1
-            ? messages[0]
-            : `${messages.length} scadenze in arrivo`;
+        const body = messages.length === 1 ? messages[0] : `${messages.length} scadenze in arrivo`;
 
         try {
             await webpush.sendNotification(
@@ -115,4 +107,4 @@ export default async function handler(req, res) {
     }
 
     return res.status(200).json({ ok: true, sent, tomorrow });
-}
+};
