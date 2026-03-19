@@ -1,4 +1,10 @@
 {
   "buildCommand": "npm install && npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "crons": [
+    {
+      "path": "/api/daily-reminder",
+      "schedule": "0 8 * * *"
+    }
+  ]
 }

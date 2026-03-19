@@ -39,3 +39,8 @@ pnpm-debug.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Credenziali (non committare mai)
+*.txt
+*firebase*adminsdk*.json
+*service-account*.json

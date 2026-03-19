@@ -4,6 +4,7 @@
 import { database } from './firebase-config.js';
 import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
+import { sendNotification } from './notifications.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Riferimenti Firebase
@@ -471,8 +472,33 @@ document.addEventListener('DOMContentLoaded', () => {
             // Modifica task esistente - mantieni i commenti
             const taskIndex = allTasks.findIndex(t => t.id === currentTaskId);
             if (taskIndex !== -1) {
-                taskData.comments = allTasks[taskIndex].comments || [];
-                allTasks[taskIndex] = { ...allTasks[taskIndex], ...taskData };
+                const oldTask = allTasks[taskIndex];
+                taskData.comments = oldTask.comments || [];
+                allTasks[taskIndex] = { ...oldTask, ...taskData };
+
+                // Notifica nuovi assegnatari
+                const oldAssignees = oldTask.assignedTo || [];
+                const newAssignees = (taskData.assignedTo || []).filter(a => !oldAssignees.includes(a));
+                if (newAssignees.length > 0) {
+                    sendNotification('task_assigned', {
+                        taskTitle: taskData.title,
+                        assignees: newAssignees,
+                        dueDate: taskData.dueDate
+                    });
+                }
+
+                // Notifica nuove checklist items con assignee specifico
+                const oldChecklist = oldTask.checklist || [];
+                checklistItems.forEach((item, i) => {
+                    if (!oldChecklist[i] && item.assignee && item.assignee !== 'tutti' && item.assignee !== '') {
+                        sendNotification('checklist_assigned', {
+                            taskTitle: taskData.title,
+                            itemText: item.text,
+                            assignee: item.assignee,
+                            dueDate: item.dueDate
+                        });
+                    }
+                });
             }
         } else {
             // Nuovo task con createdAt
@@ -484,6 +510,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 ...taskData
             };
             allTasks.push(newTask);
+
+            // Notifica assegnatari (escludi chi ha creato il task)
+            const toNotify = (taskData.assignedTo || []).filter(
+                a => a.toLowerCase() !== (currentUser.name || '').toLowerCase()
+            );
+            if (toNotify.length > 0) {
+                sendNotification('task_assigned', {
+                    taskTitle: taskData.title,
+                    assignees: toNotify,
+                    dueDate: taskData.dueDate
+                });
+            }
         }
 
         saveData();

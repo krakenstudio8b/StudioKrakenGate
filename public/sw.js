@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gateradio-v1';
+const CACHE_NAME = 'gateradio-v2';
 
 const PRECACHE_URLS = [
   '/login.html',
@@ -29,6 +29,33 @@ self.addEventListener('activate', (e) => {
     )
   );
   self.clients.claim();
+});
+
+// --- PUSH NOTIFICATIONS ---
+self.addEventListener('push', (e) => {
+  const data = e.data?.json() || {};
+  const title = data.title || 'Gateradio';
+  const options = {
+    body: data.body || '',
+    icon: '/logogate.png',
+    badge: '/logogate.png',
+    data: { url: data.url || '/index.html' },
+    vibrate: [200, 100, 200]
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/index.html';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if ('focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
 });
 
 self.addEventListener('fetch', (e) => {
