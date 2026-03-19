@@ -46,14 +46,17 @@ export async function sendNotification(type, payload) {
     const body = buildBody(type, payload);
     if (!body) return;
 
+    console.log('[Push] Invio notifica:', type, body);
     try {
-        await fetch('/api/notify', {
+        const res = await fetch('/api/notify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
+        const json = await res.json();
+        console.log('[Push] Risposta API:', json);
     } catch (err) {
-        console.warn('Invio notifica fallito:', err);
+        console.warn('[Push] Invio fallito:', err);
     }
 }
 

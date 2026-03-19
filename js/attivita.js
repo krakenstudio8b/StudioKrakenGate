@@ -511,10 +511,11 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             allTasks.push(newTask);
 
-            // Notifica assegnatari (escludi chi ha creato il task)
-            const toNotify = (taskData.assignedTo || []).filter(
-                a => a.toLowerCase() !== (currentUser.name || '').toLowerCase()
-            );
+            // Notifica tutti gli assegnatari + owner
+            const toNotify = [...new Set([
+                ...(taskData.assignedTo || []),
+                ...(taskData.owner ? [taskData.owner] : [])
+            ])];
             if (toNotify.length > 0) {
                 sendNotification('task_assigned', {
                     taskTitle: taskData.title,
