@@ -40,13 +40,19 @@ module.exports = async function handler(req, res) {
     const tomorrow = getTomorrowStr();
     const today = getTodayStr();
 
-    const [tasksSnap, subsSnap] = await Promise.all([
+    const [tasksSnap, subsSnap, eventsSnap, cleaningSnap, obiettiviSnap] = await Promise.all([
         database.ref('tasks').once('value'),
-        database.ref('pushSubscriptions').once('value')
+        database.ref('pushSubscriptions').once('value'),
+        database.ref('calendarEvents').once('value'),
+        database.ref('cleaningSchedule').once('value'),
+        database.ref('obiettivi').once('value')
     ]);
 
     const tasks = Object.values(tasksSnap.val() || {}).filter(Boolean);
     const subscriptions = subsSnap.val() || {};
+    const events = Object.values(eventsSnap.val() || {}).filter(Boolean);
+    const cleaningSchedule = cleaningSnap.val() || {};
+    const obiettivi = Object.values(obiettiviSnap.val() || {}).filter(Boolean);
 
     const userMessages = {};
     const addMsg = (name, msg) => {
@@ -84,6 +90,39 @@ module.exports = async function handler(req, res) {
                 addMsg(assignee, msg);
             }
         });
+    });
+
+    // Eventi calendario domani
+    events.forEach(event => {
+        if (!event.start) return;
+        const eventDate = event.start.split('T')[0];
+        if (eventDate !== tomorrow) return;
+        (event.participants || []).forEach(name => {
+            addMsg(name, `📅 Evento domani: "${event.title}"`);
+        });
+    });
+
+    // Turni pulizie domani
+    const cleaningTomorrow = cleaningSchedule[tomorrow];
+    if (cleaningTomorrow && cleaningTomorrow.assignments) {
+        cleaningTomorrow.assignments.forEach(assignment => {
+            if (assignment.memberName) {
+                addMsg(assignment.memberName, `🧹 Turno pulizie domani: ${assignment.zone}`);
+            }
+        });
+    }
+
+    // Obiettivi in scadenza questa settimana
+    const endOfWeek = new Date();
+    endOfWeek.setDate(endOfWeek.getDate() + 7);
+    const endOfWeekStr = endOfWeek.toISOString().split('T')[0];
+    obiettivi.forEach(ob => {
+        if (ob.status === 'completed' || ob.status === 'archived') return;
+        const dueDate = ob.targetDate || ob.endDate;
+        if (!dueDate) return;
+        if (dueDate >= today && dueDate <= endOfWeekStr) {
+            if (ob.owner) addMsg(ob.owner, `🎯 Obiettivo in scadenza: "${ob.title}"`);
+        }
     });
 
     const sent = [];

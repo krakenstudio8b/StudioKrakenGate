@@ -356,14 +356,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const task = allTasks.find(t => t.id === currentTaskId);
         if (!task) return;
         if (!task.comments) task.comments = [];
+        const author = currentUser.name || 'Anonimo';
         task.comments.push({
             text,
-            author: currentUser.name || 'Anonimo',
+            author,
             timestamp: new Date().toISOString()
         });
         saveData();
         renderComments(task.comments);
         newCommentInput.value = '';
+
+        // Notifica owner + assegnati (escludi chi ha scritto il commento)
+        const toNotify = [...new Set([
+            ...(task.assignedTo || []),
+            ...(task.owner ? [task.owner] : [])
+        ])].filter(u => u.toLowerCase() !== author.toLowerCase());
+        if (toNotify.length > 0) {
+            sendNotification('task_comment', {
+                taskTitle: task.title,
+                author,
+                commentText: text.length > 60 ? text.slice(0, 60) + '…' : text,
+                targetUsers: toNotify
+            });
+        }
     });
 
     if (newCommentInput) newCommentInput.addEventListener('keydown', (e) => {
@@ -498,6 +513,17 @@ document.addEventListener('DOMContentLoaded', () => {
                             dueDate: item.dueDate
                         });
                     }
+                    // Notifica owner se item appena completato
+                    if (oldChecklist[i] && !oldChecklist[i].done && item.done) {
+                        const ownerToNotify = oldTask.owner;
+                        if (ownerToNotify) {
+                            sendNotification('checklist_done', {
+                                taskTitle: taskData.title,
+                                itemText: item.text,
+                                targetUsers: [ownerToNotify]
+                            });
+                        }
+                    }
                 });
             }
         } else {
@@ -556,6 +582,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (task && task.status !== newStatus) {
                         task.status = newStatus;
                         saveData();
+
+                        const involved = [...new Set([
+                            ...(task.assignedTo || []),
+                            ...(task.owner ? [task.owner] : [])
+                        ])];
+
+                        if (newStatus === 'inprogress' && involved.length > 0) {
+                            sendNotification('task_inprogress', {
+                                taskTitle: task.title,
+                                targetUsers: involved
+                            });
+                        } else if (newStatus === 'done' && involved.length > 0) {
+                            sendNotification('task_done', {
+                                taskTitle: task.title,
+                                targetUsers: involved
+                            });
+                        }
                     }
                 }
             });

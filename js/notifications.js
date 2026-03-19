@@ -88,6 +88,38 @@ function buildBody(type, payload) {
             url: '/index.html'
         };
     }
+    if (type === 'task_inprogress') {
+        return {
+            title: '🔄 Task in corso',
+            body: `"${payload.taskTitle}" è stato avviato`,
+            targetUsers: payload.targetUsers,
+            url: '/index.html'
+        };
+    }
+    if (type === 'task_done') {
+        return {
+            title: '✅ Task completato',
+            body: `"${payload.taskTitle}" è stato completato!`,
+            targetUsers: payload.targetUsers,
+            url: '/index.html'
+        };
+    }
+    if (type === 'task_comment') {
+        return {
+            title: `💬 Nuovo commento da ${payload.author}`,
+            body: `"${payload.taskTitle}": ${payload.commentText}`,
+            targetUsers: payload.targetUsers,
+            url: '/index.html'
+        };
+    }
+    if (type === 'checklist_done') {
+        return {
+            title: '✅ Sotto-attività completata',
+            body: `"${payload.itemText}" completata in "${payload.taskTitle}"`,
+            targetUsers: payload.targetUsers,
+            url: '/index.html'
+        };
+    }
     return null;
 }
 
