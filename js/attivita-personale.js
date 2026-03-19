@@ -127,8 +127,11 @@ async function loadMyActivities(userName) {
             Object.values(allTasks).forEach(task => {
                 if (!task) return; // Salta elementi nulli
 
-                // 4. Controlla se l'utente è nell'array 'assignedTo' E se non è 'done'
-                if (task.assignedTo && Array.isArray(task.assignedTo) && task.assignedTo.includes(userName) && task.status !== 'done') {
+                // 4. Controlla se l'utente è owner O assignedTo, e se non è 'done'
+                const isOwner = task.owner && task.owner.toLowerCase() === userName.toLowerCase();
+                const isAssigned = task.assignedTo && Array.isArray(task.assignedTo) &&
+                    task.assignedTo.some(a => a.toLowerCase() === userName.toLowerCase());
+                if ((isOwner || isAssigned) && task.status !== 'done') {
 
                     // 5. Aggiungiamo il task con dueDate raw per ordinamento
                     myActivities.push({
@@ -153,6 +156,63 @@ async function loadMyActivities(userName) {
 // ==========================================================
 
 
+// --- CARICA CHECKLIST ITEMS ASSEGNATI ALL'UTENTE ---
+async function loadMyChecklistItems(userName) {
+    const checklistContainer = document.getElementById('my-checklist-items');
+    if (!checklistContainer) return;
+
+    const tasksRef = ref(database, 'tasks');
+    onValue(tasksRef, (snapshot) => {
+        const myItems = [];
+        if (snapshot.exists()) {
+            Object.values(snapshot.val()).forEach(task => {
+                if (!task || task.status === 'done') return;
+                if (!task.checklist || !Array.isArray(task.checklist)) return;
+
+                task.checklist.forEach((item, idx) => {
+                    if (!item || item.done) return;
+                    const assignee = (item.assignee || '').toLowerCase();
+                    const tutti = assignee === 'tutti';
+                    const mine = assignee === userName.toLowerCase();
+                    if (!tutti && !mine) return;
+
+                    myItems.push({
+                        taskTitle: task.title,
+                        text: item.text,
+                        date: item.dueDate ? `Scadenza: ${formatEventDate(item.dueDate)}` : 'Nessuna scadenza',
+                        _dueDate: item.dueDate || '',
+                        tutti
+                    });
+                });
+            });
+        }
+
+        myItems.sort((a, b) => {
+            if (!a._dueDate && !b._dueDate) return 0;
+            if (!a._dueDate) return 1;
+            if (!b._dueDate) return -1;
+            return a._dueDate.localeCompare(b._dueDate);
+        });
+
+        checklistContainer.innerHTML = '';
+        if (myItems.length === 0) {
+            checklistContainer.innerHTML = '<p class="text-gray-500">Nessuna sotto-attività assegnata.</p>';
+            return;
+        }
+
+        myItems.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'p-3 bg-gray-50 rounded-lg border';
+            el.innerHTML = `
+                <span class="block text-xs text-indigo-400 font-semibold mb-0.5">${item.taskTitle}${item.tutti ? ' · <span class="text-orange-400">tutti</span>' : ''}</span>
+                <span class="block text-sm font-semibold text-gray-800">${item.text}</span>
+                <span class="block text-xs text-gray-500 mt-1">${item.date}</span>
+            `;
+            checklistContainer.appendChild(el);
+        });
+    });
+}
+
 // --- PUNTO DI INGRESSO ---
 document.addEventListener('authReady', () => {
     if (!currentUser || !currentUser.name) {
@@ -166,11 +226,11 @@ document.addEventListener('authReady', () => {
 
     const userName = currentUser.name;
     const today = getIsoDate(new Date());
-    
+
     welcomeTitle.textContent = `Ciao, ${userName}!`;
 
-    // Avvia le 3 query
     loadMyCalendarEvents(userName, today);
     loadMyCleaningTasks(userName, today);
-    loadMyActivities(userName); // Ora questa funzione è corretta
+    loadMyActivities(userName);
+    loadMyChecklistItems(userName);
 });
