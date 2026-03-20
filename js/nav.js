@@ -32,27 +32,47 @@ _scrollBtn.addEventListener('click', () => {
 });
 
 // ── HAMBURGER MENU ────────────────────────────────────
-document.addEventListener('DOMContentLoaded', function () {
+// Lo script è posizionato dopo il </nav>, quindi gli elementi esistono già nel DOM
+(function () {
     const menuBtn = document.getElementById('nav-menu-btn');
     const navLinks = document.getElementById('nav-links');
     const menuIcon = document.getElementById('nav-menu-icon');
 
     if (!menuBtn || !navLinks) return;
 
-    menuBtn.addEventListener('click', function () {
-        const isHidden = navLinks.classList.toggle('hidden');
-        if (menuIcon) {
-            menuIcon.classList.toggle('fa-bars', isHidden);
-            menuIcon.classList.toggle('fa-xmark', !isHidden);
-        }
+    let menuOpen = false;
+
+    function openMenu() {
+        menuOpen = true;
+        navLinks.style.display = 'flex';
+        navLinks.style.flexDirection = 'column';
+        navLinks.classList.remove('hidden');
+        if (menuIcon) { menuIcon.classList.replace('fa-bars', 'fa-xmark'); }
+    }
+
+    function closeMenu() {
+        menuOpen = false;
+        navLinks.style.display = '';
+        navLinks.classList.add('hidden');
+        if (menuIcon) { menuIcon.classList.replace('fa-xmark', 'fa-bars'); }
+    }
+
+    menuBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        menuOpen ? closeMenu() : openMenu();
     });
 
-    // Chiudi menu quando si clicca su un link
+    // Chiudi cliccando su un link (mobile)
     navLinks.querySelectorAll('a').forEach(link => {
         link.addEventListener('click', () => {
-            if (window.innerWidth < 768) {
-                navLinks.classList.add('hidden');
-            }
+            if (window.innerWidth < 768) closeMenu();
         });
     });
-});
+
+    // Chiudi cliccando fuori dal menu
+    document.addEventListener('click', function (e) {
+        if (menuOpen && !navLinks.contains(e.target) && e.target !== menuBtn) {
+            closeMenu();
+        }
+    });
+}());
