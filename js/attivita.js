@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allMembers = [];
     let allTemplates = [];
     let currentTaskId = null;
+    let originalFormState = null;
 
     // Riferimenti DOM
     const columns = {
@@ -47,11 +48,42 @@ document.addEventListener('DOMContentLoaded', () => {
     const templateSection = document.getElementById('template-section');
     const templateSelect = document.getElementById('template-select');
     const applyTemplateBtn = document.getElementById('apply-template-btn');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const unsavedConfirmModal = document.getElementById('unsaved-confirm-modal');
+    const unsavedYesBtn = document.getElementById('unsaved-yes-btn');
+    const unsavedNoBtn = document.getElementById('unsaved-no-btn');
 
     const priorityMap = {
         low: { label: 'Bassa', color: 'bg-blue-500' },
         medium: { label: 'Media', color: 'bg-orange-500' },
         high: { label: 'Alta', color: 'bg-red-500' },
+    };
+
+    // DIRTY STATE - rileva modifiche non salvate nel modale
+    const captureFormState = () => {
+        const checklistLabels = [];
+        checklistContainer.querySelectorAll('.checklist-item label').forEach(label => {
+            checklistLabels.push(label.textContent.trim());
+        });
+        return {
+            title: titleInput.value.trim(),
+            description: descriptionInput.value.trim(),
+            dueDate: dueDateInput.value,
+            priority: prioritySelect.value,
+            owner: ownerSelect ? ownerSelect.value : '',
+            assignedTo: Array.from(membersCheckboxesContainer.querySelectorAll('input:checked')).map(cb => cb.value).sort().join(','),
+            checklistCount: checklistLabels.length,
+            checklistText: checklistLabels.join('|')
+        };
+    };
+
+    const isDirty = () => {
+        if (!originalFormState) return false;
+        return JSON.stringify(captureFormState()) !== JSON.stringify(originalFormState);
+    };
+
+    const showUnsavedConfirm = () => {
+        if (unsavedConfirmModal) unsavedConfirmModal.classList.remove('hidden');
     };
 
     // FUNZIONI PRINCIPALI
@@ -124,7 +156,25 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="task-card-content">
                 <div class="flex items-start justify-between gap-2 mb-1">
                     <p class="task-card-title flex-1">${task.title}</p>
-                    ${ownerHtml}
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                        ${ownerHtml}
+                        <div class="relative">
+                            <button class="task-menu-btn text-gray-300 hover:text-gray-500 p-0.5 rounded hover:bg-gray-100 transition-colors" title="Sposta attività">
+                                <i class="fa-solid fa-ellipsis-vertical text-sm"></i>
+                            </button>
+                            <div class="task-menu-dropdown hidden absolute right-0 top-7 bg-white shadow-lg rounded-lg border border-gray-200 z-30 w-36 py-1">
+                                <button class="task-move-btn w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${task.status === 'todo' ? 'text-indigo-600 font-semibold' : 'text-gray-700'}" data-status="todo">
+                                    <span>📝</span> Da Fare
+                                </button>
+                                <button class="task-move-btn w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${task.status === 'inprogress' ? 'text-indigo-600 font-semibold' : 'text-gray-700'}" data-status="inprogress">
+                                    <span>⏳</span> In Corso
+                                </button>
+                                <button class="task-move-btn w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 ${task.status === 'done' ? 'text-indigo-600 font-semibold' : 'text-gray-700'}" data-status="done">
+                                    <span>✅</span> Fatto
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="task-card-footer">
                     <div class="flex -space-x-2">
@@ -140,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         card.addEventListener('click', () => openModalForEdit(task.id));
+
         const archiveBtnEl = card.querySelector('.archive-task-btn');
         if (archiveBtnEl) {
             archiveBtnEl.addEventListener('click', (e) => {
@@ -147,6 +198,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 archiveTask(task.id);
             });
         }
+
+        // Menu 3 puntini
+        const menuBtn = card.querySelector('.task-menu-btn');
+        const menuDropdown = card.querySelector('.task-menu-dropdown');
+        if (menuBtn && menuDropdown) {
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                document.querySelectorAll('.task-menu-dropdown').forEach(d => {
+                    if (d !== menuDropdown) d.classList.add('hidden');
+                });
+                menuDropdown.classList.toggle('hidden');
+            });
+            const statusLabels = { todo: '📝 Da Fare', inprogress: '⏳ In Corso', done: '✅ Fatto' };
+            card.querySelectorAll('.task-move-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const newStatus = btn.dataset.status;
+                    menuDropdown.classList.add('hidden');
+                    if (task.status !== newStatus) {
+                        task.status = newStatus;
+                        saveData();
+                        renderTasks();
+                        if (window.showToast) window.showToast(`Spostato in ${statusLabels[newStatus]}`);
+                        const involved = [...new Set([
+                            ...(task.assignedTo || []),
+                            ...(task.owner ? [task.owner] : [])
+                        ])];
+                        if (newStatus === 'inprogress' && involved.length > 0) {
+                            sendNotification('task_inprogress', { taskTitle: task.title, targetUsers: involved });
+                        } else if (newStatus === 'done' && involved.length > 0) {
+                            sendNotification('task_done', { taskTitle: task.title, targetUsers: involved });
+                        }
+                    }
+                });
+            });
+        }
+
         return card;
     };
 
@@ -422,6 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (commentsSection) commentsSection.classList.add('hidden');
         if (templateSection) templateSection.classList.remove('hidden');
         modal.classList.remove('hidden');
+        originalFormState = captureFormState();
     };
 
     const openModalForEdit = (taskId) => {
@@ -444,9 +533,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (commentsSection) commentsSection.classList.remove('hidden');
         if (templateSection) templateSection.classList.add('hidden');
         modal.classList.remove('hidden');
+        originalFormState = captureFormState();
     };
 
-    const closeModal = () => modal.classList.add('hidden');
+    const forceCloseModal = () => {
+        originalFormState = null;
+        modal.classList.add('hidden');
+    };
+
+    const closeModal = () => {
+        if (isDirty()) {
+            showUnsavedConfirm();
+            return;
+        }
+        forceCloseModal();
+    };
 
     if (saveTaskBtn) saveTaskBtn.addEventListener('click', () => {
         const title = titleInput.value.trim();
@@ -590,7 +691,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         saveData();
         renderTasks();
-        closeModal();
+        forceCloseModal();
     });
 
     if (deleteTaskBtn) deleteTaskBtn.addEventListener('click', () => {
@@ -598,20 +699,37 @@ document.addEventListener('DOMContentLoaded', () => {
             allTasks = allTasks.filter(t => t.id !== currentTaskId);
             saveData();
             renderTasks();
-            closeModal();
+            forceCloseModal();
         }
     });
 
     if (cancelTaskBtn) cancelTaskBtn.addEventListener('click', closeModal);
+    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
     if (addTaskBtn) addTaskBtn.addEventListener('click', openModalForNew);
 
-    // INIZIALIZZAZIONE DI SORTABLEJS (DRAG-AND-DROP)
+    // Popup modifiche non salvate
+    if (unsavedYesBtn) unsavedYesBtn.addEventListener('click', () => {
+        if (unsavedConfirmModal) unsavedConfirmModal.classList.add('hidden');
+        if (saveTaskBtn) saveTaskBtn.click();
+    });
+    if (unsavedNoBtn) unsavedNoBtn.addEventListener('click', () => {
+        if (unsavedConfirmModal) unsavedConfirmModal.classList.add('hidden');
+        forceCloseModal();
+    });
+
+    // Chiudi dropdown 3 puntini cliccando fuori
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.task-menu-dropdown').forEach(d => d.classList.add('hidden'));
+    });
+
+    // INIZIALIZZAZIONE DI SORTABLEJS (DRAG-AND-DROP) - disabilitato su mobile
     if (columns.todo) {
         Object.values(columns).forEach(columnEl => {
             new Sortable(columnEl, {
                 group: 'shared',
                 animation: 150,
                 ghostClass: 'sortable-ghost',
+                disabled: window.innerWidth < 768,
                 onEnd: (evt) => {
                     const taskId = evt.item.dataset.taskId;
                     const newStatus = evt.to.dataset.status;

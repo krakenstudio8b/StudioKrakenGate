@@ -104,8 +104,9 @@ body {
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
     cursor: grab;
     transition: all 0.15s ease-in-out;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid #e5e7eb;
+    position: relative;
 }
 
 .task-card:hover {
@@ -122,6 +123,7 @@ body {
 .priority-bar {
     width: 100%;
     height: 4px;
+    border-radius: 0.5rem 0.5rem 0 0;
 }
 
 .priority-bar.bg-blue-500 {
@@ -418,4 +420,93 @@ body {
 .macro-task-card .bg-yellow-500,
 .macro-task-card .bg-blue-500 {
     transition: width 0.5s ease-out;
+}
+
+/* ============================================
+   STICKY NAVBAR
+   ============================================ */
+nav.bg-white {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+/* ============================================
+   TOAST NOTIFICATION
+   ============================================ */
+.toast-container {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    pointer-events: none;
+}
+
+.toast {
+    background-color: #1f2937;
+    color: white;
+    padding: 0.6rem 1.25rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    animation: toast-in 0.25s ease-out;
+    white-space: nowrap;
+    max-width: 90vw;
+    text-align: center;
+}
+
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.toast.toast-out {
+    animation: toast-out 0.25s ease-in forwards;
+}
+
+@keyframes toast-out {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(8px); }
+}
+
+/* ============================================
+   SCROLL TO TOP BUTTON
+   ============================================ */
+#scroll-to-top {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1rem;
+    z-index: 50;
+    background-color: #4f46e5;
+    color: white;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+    cursor: pointer;
+    border: none;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s;
+    transform: translateY(10px);
+}
+
+#scroll-to-top.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+#scroll-to-top:hover {
+    background-color: #4338ca;
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.5);
 }
