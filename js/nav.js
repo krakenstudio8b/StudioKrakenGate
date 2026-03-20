@@ -32,7 +32,8 @@ _scrollBtn.addEventListener('click', () => {
 });
 
 // ── HAMBURGER MENU ────────────────────────────────────
-// Lo script è posizionato dopo il </nav>, quindi gli elementi esistono già nel DOM
+// Il CSS in style.css controlla la visibilità tramite classe .nav-open
+// Questo script aggiunge/rimuove quella classe
 (function () {
     const menuBtn = document.getElementById('nav-menu-btn');
     const navLinks = document.getElementById('nav-links');
@@ -40,26 +41,25 @@ _scrollBtn.addEventListener('click', () => {
 
     if (!menuBtn || !navLinks) return;
 
-    let menuOpen = false;
-
     function openMenu() {
-        menuOpen = true;
-        navLinks.style.display = 'flex';
-        navLinks.style.flexDirection = 'column';
-        navLinks.classList.remove('hidden');
-        if (menuIcon) { menuIcon.classList.replace('fa-bars', 'fa-xmark'); }
+        navLinks.classList.add('nav-open');
+        if (menuIcon) {
+            menuIcon.classList.remove('fa-bars');
+            menuIcon.classList.add('fa-xmark');
+        }
     }
 
     function closeMenu() {
-        menuOpen = false;
-        navLinks.style.display = '';
-        navLinks.classList.add('hidden');
-        if (menuIcon) { menuIcon.classList.replace('fa-xmark', 'fa-bars'); }
+        navLinks.classList.remove('nav-open');
+        if (menuIcon) {
+            menuIcon.classList.remove('fa-xmark');
+            menuIcon.classList.add('fa-bars');
+        }
     }
 
     menuBtn.addEventListener('click', function (e) {
         e.stopPropagation();
-        menuOpen ? closeMenu() : openMenu();
+        navLinks.classList.contains('nav-open') ? closeMenu() : openMenu();
     });
 
     // Chiudi cliccando su un link (mobile)
@@ -69,9 +69,12 @@ _scrollBtn.addEventListener('click', () => {
         });
     });
 
-    // Chiudi cliccando fuori dal menu
+    // Chiudi cliccando fuori
     document.addEventListener('click', function (e) {
-        if (menuOpen && !navLinks.contains(e.target) && e.target !== menuBtn) {
+        if (navLinks.classList.contains('nav-open') &&
+            !navLinks.contains(e.target) &&
+            e.target !== menuBtn &&
+            !menuBtn.contains(e.target)) {
             closeMenu();
         }
     });
