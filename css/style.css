@@ -423,7 +423,7 @@ body {
 }
 
 /* ============================================
-   STICKY NAVBAR + HAMBURGER MOBILE
+   STICKY NAVBAR + COMPACT MOBILE NAV
    ============================================ */
 nav.bg-white {
     position: sticky;
@@ -431,30 +431,48 @@ nav.bg-white {
     z-index: 40;
 }
 
-/* Mobile: nav-links nascosto di default, visibile con .nav-open */
+/* Nav links: always visible, horizontal scroll on mobile */
+#nav-links {
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.2rem;
+    padding: 0.25rem 0 0.1rem;
+    align-items: center;
+}
+
+#nav-links::-webkit-scrollbar { display: none; }
+
+/* Compact pill style on mobile */
 @media (max-width: 767px) {
-    #nav-links:not(.nav-open) {
-        display: none !important;
+    #nav-links a {
+        flex-shrink: 0;
+        font-size: 0.78rem !important;
+        padding: 0.28rem 0.65rem !important;
+        border-radius: 9999px !important;
+        white-space: nowrap;
+        border-bottom: none !important;
+        border-bottom-width: 0 !important;
     }
-    #nav-links.nav-open {
-        display: flex !important;
-        flex-direction: column;
-        gap: 0.5rem;
-        padding-top: 0.75rem;
-        padding-bottom: 0.5rem;
-        border-top: 1px solid #f3f4f6;
-        margin-top: 0.5rem;
+    #nav-links a.text-indigo-600 {
+        background-color: #eef2ff;
+    }
+    #nav-links button#logout-btn {
+        flex-shrink: 0;
+        font-size: 0.75rem !important;
+        padding: 0.28rem 0.65rem !important;
     }
 }
 
-/* Desktop: nav-links sempre visibile in riga */
+/* Desktop: normal wrapping layout */
 @media (min-width: 768px) {
     #nav-links {
-        display: flex !important;
+        overflow-x: visible;
         flex-wrap: wrap;
-        align-items: center;
         justify-content: flex-end;
         gap: 0.25rem 1rem;
+        padding: 0;
     }
 }
 

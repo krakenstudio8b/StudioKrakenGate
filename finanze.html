@@ -23,15 +23,10 @@
 
     <nav class="bg-white shadow-md mb-8">
         <div class="container mx-auto px-4 py-3">
-            <div class="flex justify-between items-center">
-                <div class="text-2xl font-bold text-indigo-600">
-                    Gateradio Gestionale
-                </div>
-                <button id="nav-menu-btn" class="md:hidden text-gray-600 p-2 rounded-lg hover:bg-gray-100 focus:outline-none" aria-label="Menu" onclick="var n=document.getElementById('nav-links'),i=document.getElementById('nav-menu-icon');n.classList.toggle('nav-open');i&&(i.classList.remove('fa-bars','fa-xmark'),i.classList.add(n.classList.contains('nav-open')?'fa-xmark':'fa-bars'))">
-                    <i id="nav-menu-icon" class="fa-solid fa-bars text-xl"></i>
-                </button>
+            <div class="text-xl font-bold text-indigo-600">
+                Gateradio Gestionale
             </div>
-            <div id="nav-links" class="hidden md:flex md:flex-wrap md:items-center md:justify-end md:gap-x-4 md:gap-y-1 flex-col space-y-2 pt-3 md:pt-0 mt-2 md:mt-0 border-t md:border-0 border-gray-100">
+            <div id="nav-links">
                 <a href="eventi.html" class="text-gray-500 hover:text-indigo-600">Live &amp; Eventi</a>
                 <a href="index.html" class="text-gray-500 hover:text-indigo-600">Attività</a>
                 <a href="attivita-personale.html" class="text-gray-500 hover:text-indigo-600">Attività Personale</a>
