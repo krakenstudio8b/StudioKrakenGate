@@ -893,9 +893,14 @@ const openEditModal = (id, type) => {
             } else if (type === 'cashMovement') {
                 dbRef = ref(database, `cassaComune/movements/${item.id}`);
             }
-            
+
             if(dbRef) {
                 update(dbRef, updatedData);
+                // Se è un'entrata e l'importo è cambiato, aggiusta il saldo cassa
+                if (type === 'incomeEntry' && updatedData.amount !== undefined && updatedData.amount !== item.amount) {
+                    const diff = (updatedData.amount || 0) - (item.amount || 0);
+                    update(cassaComuneRef, { balance: (cassaComune.balance || 0) + diff });
+                }
                 alert('Modifiche salvate!');
                 closeEditModal();
             } else {
@@ -918,10 +923,11 @@ const openEditModal = (id, type) => {
 
                 if(dbRef) {
                     remove(dbRef);
-                    // Logica speciale per ricalcolare il saldo cassa se si elimina un movimento
                     if (type === 'cashMovement') {
-                         const newBalance = cassaComune.balance + (item.type === 'deposit' ? -item.amount : item.amount);
-                         update(cassaComuneRef, { balance: newBalance });
+                        const newBalance = cassaComune.balance + (item.type === 'deposit' ? -item.amount : item.amount);
+                        update(cassaComuneRef, { balance: newBalance });
+                    } else if (type === 'incomeEntry') {
+                        update(cassaComuneRef, { balance: (cassaComune.balance || 0) - (item.amount || 0) });
                     }
                     alert('Elemento eliminato.');
                     closeEditModal();
@@ -1228,13 +1234,22 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
     }
     
     const newIncomeRef = push(incomeRef);
-    set(newIncomeRef, {
-        id: newIncomeRef.key,
-        date: date,
-        amount: amount,
-        description: description,
-        membersInvolved: membersInvolved
-    });
+    const newIncomeId = newIncomeRef.key;
+    const newCassaMovRef = push(ref(database, 'cassaComune/movements'));
+    const newCassaBalance = (cassaComune.balance || 0) + amount;
+
+    const incomeUpdates = {};
+    incomeUpdates[`incomeEntries/${newIncomeId}`] = { id: newIncomeId, date, amount, description, membersInvolved };
+    incomeUpdates[`cassaComune/balance`] = newCassaBalance;
+    incomeUpdates[`cassaComune/movements/${newCassaMovRef.key}`] = {
+        id: newCassaMovRef.key,
+        date,
+        amount,
+        description: `Entrata: ${description}`,
+        type: 'deposit',
+        sourceIncomeId: newIncomeId
+    };
+    update(ref(database), incomeUpdates);
 
     document.getElementById('income-form-section').classList.add('hidden');
     alert("Entrata aggiunta.");
