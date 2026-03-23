@@ -24,11 +24,11 @@ export function getNextMedal(points) {
     return MEDALS[idx - 1];
 }
 
-function getMondayOfWeek(date) {
+function getWednesdayOfWeek(date) {
     const d = new Date(date);
-    const day = d.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    d.setDate(d.getDate() + diff);
+    const day = d.getDay(); // 0=Dom, 1=Lun, 2=Mar, 3=Mer, 4=Gio, 5=Ven, 6=Sab
+    const diff = (day - 3 + 7) % 7; // giorni dall'ultimo mercoledì
+    d.setDate(d.getDate() - diff);
     return d.toISOString().split('T')[0];
 }
 
@@ -44,7 +44,7 @@ async function saveWeekHistory(uid, name, points, weekStart) {
 
 export async function trackLoginPoint(uid, name) {
     const today = getTodayStr();
-    const currentWeekStart = getMondayOfWeek(new Date());
+    const currentWeekStart = getWednesdayOfWeek(new Date());
     const pointsRef = ref(database, `loginPoints/${uid}`);
 
     const snapshot = await get(pointsRef);
@@ -152,7 +152,7 @@ export function injectLoginBanner(stats, name, uid, setupPushFn) {
 // --- LEADERBOARD PER ADMIN ---
 
 export function renderLeaderboard(containerEl) {
-    const currentWeekStart = getMondayOfWeek(new Date());
+    const currentWeekStart = getWednesdayOfWeek(new Date());
     const loginPointsRef = ref(database, 'loginPoints');
     const membersRef = ref(database, 'members');
 
