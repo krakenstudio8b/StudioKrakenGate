@@ -157,6 +157,13 @@ body {
     font-weight: 600;
     padding: 0.15rem 0.4rem;
     white-space: nowrap;
+    max-width: 80px;
+    overflow: hidden;
+}
+.owner-badge span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Footer card compatto */
