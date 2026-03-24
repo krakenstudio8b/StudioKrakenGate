@@ -253,6 +253,7 @@ export function renderLeaderboardHistory(containerEl) {
 
         weeks.forEach(weekStart => {
             const weekData = historyData[weekStart];
+            if (!weekData || typeof weekData !== 'object') return;
             const rankings = Object.values(weekData).sort((a, b) => b.points - a.points);
             const winner = rankings[0];
 
