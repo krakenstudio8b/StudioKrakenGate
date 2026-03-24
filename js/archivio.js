@@ -4,7 +4,7 @@
 import { database } from './firebase-config.js';
 import { ref, onValue, set } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('authReady', () => {
     const tasksRef = ref(database, 'tasks');
     const membersRef = ref(database, 'members');
 

@@ -6,7 +6,7 @@ import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/fir
 import { currentUser } from './auth-guard.js';
 import { sendNotification } from './notifications.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('authReady', () => {
     // Riferimenti Firebase
     const tasksRef = ref(database, 'tasks');
     const membersRef = ref(database, 'members');

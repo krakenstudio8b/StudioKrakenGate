@@ -1,14 +1,9 @@
 // js/eventi.js
-import { database, auth } from './firebase-config.js';
+import { database } from './firebase-config.js';
 import { ref, onValue, get, set } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
 import { currentUser } from './auth-guard.js';
 
-let listenersReady = false;
-
-onAuthStateChanged(auth, (user) => {
-    if (!user || listenersReady) return;
-    listenersReady = true;
+document.addEventListener('authReady', () => {
 
     const eventsRef  = ref(database, 'calendarEvents');
     const tasksRef   = ref(database, 'tasks');
