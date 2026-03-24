@@ -319,3 +319,50 @@ export async function adminSetWeeklyPoints(uid, weeklyPoints) {
     const data = snapshot.val();
     await set(pointsRef, { ...data, weeklyPoints: Math.min(Math.max(0, weeklyPoints), 7) });
 }
+
+// --- RIPRISTINO BULK: recupera punti salvati erroneamente nello storico ---
+// Cerca nella history le entry della settimana corrente (date entro ±1 giorno dal mercoledì)
+// e le rimette come weeklyPoints degli utenti, poi cancella quelle entry dalla history.
+export async function adminRestoreFromHistory() {
+    const currentWeekStart = getWednesdayOfWeek(new Date());
+    const currentWeekDate = new Date(currentWeekStart + 'T12:00:00');
+
+    const histSnap = await get(ref(database, 'loginPointsHistory'));
+    if (!histSnap.exists()) return { restored: 0, details: {} };
+
+    const historyData = histSnap.val();
+    const toRestore = {}; // uid -> max points trovati
+    const toDelete = []; // path da eliminare
+
+    for (const dateKey of Object.keys(historyData)) {
+        const entryDate = new Date(dateKey + 'T12:00:00');
+        const daysDiff = Math.round((currentWeekDate - entryDate) / (1000 * 60 * 60 * 24));
+
+        // Entro la finestra della settimana corrente (-1 … +6 giorni dal mercoledì)
+        if (daysDiff >= -1 && daysDiff <= 6) {
+            for (const uid of Object.keys(historyData[dateKey])) {
+                const pts = historyData[dateKey][uid].points || 0;
+                if (toRestore[uid] === undefined || pts > toRestore[uid]) {
+                    toRestore[uid] = pts;
+                }
+                toDelete.push(`loginPointsHistory/${dateKey}/${uid}`);
+            }
+        }
+    }
+
+    let restored = 0;
+    for (const uid of Object.keys(toRestore)) {
+        const pointsRef = ref(database, `loginPoints/${uid}`);
+        const snap = await get(pointsRef);
+        if (!snap.exists()) continue;
+        const data = snap.val();
+        await set(pointsRef, { ...data, weeklyPoints: toRestore[uid], weekStart: currentWeekStart });
+        restored++;
+    }
+
+    for (const path of toDelete) {
+        await set(ref(database, path), null);
+    }
+
+    return { restored, details: toRestore };
+}

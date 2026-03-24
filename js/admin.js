@@ -2,7 +2,7 @@
 import { database } from './firebase-config.js';
 import { ref, onValue, get, set, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
-import { renderLeaderboard, renderLeaderboardHistory, adminSetWeeklyPoints } from './login-points.js';
+import { renderLeaderboard, renderLeaderboardHistory, adminSetWeeklyPoints, adminRestoreFromHistory } from './login-points.js';
 
 // --- RIFERIMENTI AGLI ELEMENTI HTML ---
 const calendarApprovalSection = document.getElementById('calendar-approval-section');
@@ -402,6 +402,32 @@ document.addEventListener('click', async (e) => {
         rejectCalendarEvent(key);
     }
 });
+
+// --- RIPRISTINO BULK DA STORICO ---
+const restoreBtn = document.getElementById('restore-from-history-btn');
+const restoreFeedback = document.getElementById('restore-feedback');
+
+if (restoreBtn) {
+    restoreBtn.addEventListener('click', async () => {
+        restoreBtn.disabled = true;
+        restoreFeedback.textContent = '⏳ Ripristino in corso...';
+        try {
+            const result = await adminRestoreFromHistory();
+            if (result.restored === 0) {
+                restoreFeedback.textContent = 'ℹ️ Nessun dato trovato nella history per la settimana corrente.';
+            } else {
+                const names = Object.entries(result.details)
+                    .map(([, pts]) => `${pts}pt`)
+                    .join(', ');
+                restoreFeedback.textContent = `✅ Ripristinati ${result.restored} utenti. (${names})`;
+            }
+        } catch (e) {
+            restoreFeedback.textContent = '❌ Errore: ' + e.message;
+        } finally {
+            restoreBtn.disabled = false;
+        }
+    });
+}
 
 // --- OVERRIDE PUNTI SETTIMANALI ---
 const overrideBtn = document.getElementById('override-points-btn');
