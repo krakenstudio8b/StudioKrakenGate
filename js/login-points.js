@@ -177,11 +177,11 @@ export function injectLoginBanner(stats, name, uid, setupPushFn) {
 // --- LEADERBOARD PER ADMIN ---
 
 export function renderLeaderboard(containerEl) {
-    const currentWeekStart = getWednesdayOfWeek(new Date());
     const loginPointsRef = ref(database, 'loginPoints');
     const membersRef = ref(database, 'members');
 
     onValue(loginPointsRef, async (snapshot) => {
+        const currentWeekStart = getWednesdayOfWeek(new Date());
         const membersSnap = await get(membersRef);
         const membersData = membersSnap.val() || {};
 
