@@ -65,38 +65,24 @@ export async function trackLoginPoint(uid, name) {
 
     let { totalPoints, weeklyPoints, weekStart, lastLoginDate } = data;
 
-    // --- RECOVERY una-tantum: ripristina punti salvati per errore nello storico
-    // (bug timezone UTC/locale + cambio ancora lunedì→mercoledì)
-    if (!data.recoveryV1) {
-        const weekBase = new Date(currentWeekStart + 'T12:00:00');
-        // Controlla il giorno prima (-1) e i 6 giorni successivi al mercoledì
-        for (let offset = -1; offset <= 6; offset++) {
-            const checkDate = new Date(weekBase);
-            checkDate.setDate(checkDate.getDate() + offset);
-            const y = checkDate.getFullYear();
-            const m = String(checkDate.getMonth() + 1).padStart(2, '0');
-            const d2 = String(checkDate.getDate()).padStart(2, '0');
-            const wrongRef = ref(database, `loginPointsHistory/${y}-${m}-${d2}/${uid}`);
-            const wrongSnap = await get(wrongRef);
-            if (wrongSnap.exists()) {
-                weeklyPoints += wrongSnap.val().points || 0;
-                await set(wrongRef, null); // Rimuovi entry errata
-            }
-        }
+    // Se già registrato oggi nella settimana corretta, restituisci i dati senza scrivere
+    // (previene race condition e inconsistenze tra pagine diverse aperte contemporaneamente)
+    if (lastLoginDate === today && weekStart === currentWeekStart) {
+        return { totalPoints, weeklyPoints, weekStart, lastLoginDate, pointAwarded: false };
     }
-    // --- FINE RECOVERY ---
 
-    // Nuova settimana: salva storico e resetta
+    // Gestione cambio settimana
     if (weekStart !== currentWeekStart) {
         const storedDate = new Date(weekStart + 'T12:00:00');
         const currentDate = new Date(currentWeekStart + 'T12:00:00');
         const daysDiff = Math.round((storedDate - currentDate) / (1000 * 60 * 60 * 24));
 
         if (daysDiff > -2 && daysDiff < 7) {
-            // Stesso periodo (diversa ancora o timezone bug) — aggiorna solo weekStart
+            // weekStart è dentro la settimana corrente (cambio ancora o bug timezone)
+            // Aggiorna solo weekStart senza resettare i punti
             weekStart = currentWeekStart;
         } else {
-            // Vera nuova settimana
+            // Vera nuova settimana: salva storico e azzera
             if (weeklyPoints > 0) {
                 await saveWeekHistory(uid, name, weeklyPoints, weekStart);
             }
@@ -114,7 +100,7 @@ export async function trackLoginPoint(uid, name) {
         pointAwarded = true;
     }
 
-    await set(pointsRef, { totalPoints, weeklyPoints, weekStart, lastLoginDate, recoveryV1: true });
+    await set(pointsRef, { totalPoints, weeklyPoints, weekStart, lastLoginDate });
 
     return { totalPoints, weeklyPoints, weekStart, lastLoginDate, pointAwarded };
 }
