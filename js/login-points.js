@@ -29,12 +29,20 @@ function getWednesdayOfWeek(date) {
     const day = d.getDay(); // 0=Dom, 1=Lun, 2=Mar, 3=Mer, 4=Gio, 5=Ven, 6=Sab
     const diff = (day - 3 + 7) % 7; // giorni dall'ultimo mercoledì
     d.setDate(d.getDate() - diff);
-    return d.toISOString().split('T')[0];
+    // Usa data locale (non UTC) per evitare bug di timezone a mezzanotte
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const dayStr = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${dayStr}`;
 }
 
 function getTodayStr() {
     const now = new Date();
-    return now.toISOString().split('T')[0];
+    // Usa data locale (non UTC) per evitare bug di timezone a mezzanotte
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 async function saveWeekHistory(uid, name, points, weekStart) {
@@ -57,13 +65,44 @@ export async function trackLoginPoint(uid, name) {
 
     let { totalPoints, weeklyPoints, weekStart, lastLoginDate } = data;
 
+    // --- RECOVERY una-tantum: ripristina punti salvati per errore nello storico
+    // (bug timezone UTC/locale + cambio ancora lunedì→mercoledì)
+    if (!data.recoveryV1) {
+        const weekBase = new Date(currentWeekStart + 'T12:00:00');
+        // Controlla il giorno prima (-1) e i 6 giorni successivi al mercoledì
+        for (let offset = -1; offset <= 6; offset++) {
+            const checkDate = new Date(weekBase);
+            checkDate.setDate(checkDate.getDate() + offset);
+            const y = checkDate.getFullYear();
+            const m = String(checkDate.getMonth() + 1).padStart(2, '0');
+            const d2 = String(checkDate.getDate()).padStart(2, '0');
+            const wrongRef = ref(database, `loginPointsHistory/${y}-${m}-${d2}/${uid}`);
+            const wrongSnap = await get(wrongRef);
+            if (wrongSnap.exists()) {
+                weeklyPoints += wrongSnap.val().points || 0;
+                await set(wrongRef, null); // Rimuovi entry errata
+            }
+        }
+    }
+    // --- FINE RECOVERY ---
+
     // Nuova settimana: salva storico e resetta
     if (weekStart !== currentWeekStart) {
-        if (weeklyPoints > 0) {
-            await saveWeekHistory(uid, name, weeklyPoints, weekStart);
+        const storedDate = new Date(weekStart + 'T12:00:00');
+        const currentDate = new Date(currentWeekStart + 'T12:00:00');
+        const daysDiff = Math.round((storedDate - currentDate) / (1000 * 60 * 60 * 24));
+
+        if (daysDiff > -2 && daysDiff < 7) {
+            // Stesso periodo (diversa ancora o timezone bug) — aggiorna solo weekStart
+            weekStart = currentWeekStart;
+        } else {
+            // Vera nuova settimana
+            if (weeklyPoints > 0) {
+                await saveWeekHistory(uid, name, weeklyPoints, weekStart);
+            }
+            weeklyPoints = 0;
+            weekStart = currentWeekStart;
         }
-        weeklyPoints = 0;
-        weekStart = currentWeekStart;
     }
 
     // Nuovo giorno: assegna punto
@@ -75,7 +114,7 @@ export async function trackLoginPoint(uid, name) {
         pointAwarded = true;
     }
 
-    await set(pointsRef, { totalPoints, weeklyPoints, weekStart, lastLoginDate });
+    await set(pointsRef, { totalPoints, weeklyPoints, weekStart, lastLoginDate, recoveryV1: true });
 
     return { totalPoints, weeklyPoints, weekStart, lastLoginDate, pointAwarded };
 }
@@ -284,4 +323,13 @@ function formatDateIT(dateStr) {
 
 function capitalizeFirst(str) {
     return str ? str.charAt(0).toUpperCase() + str.slice(1) : str;
+}
+
+// --- OVERRIDE ADMIN: imposta manualmente i punti settimanali di un utente ---
+export async function adminSetWeeklyPoints(uid, weeklyPoints) {
+    const pointsRef = ref(database, `loginPoints/${uid}`);
+    const snapshot = await get(pointsRef);
+    if (!snapshot.exists()) return;
+    const data = snapshot.val();
+    await set(pointsRef, { ...data, weeklyPoints: Math.min(Math.max(0, weeklyPoints), 7) });
 }

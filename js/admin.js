@@ -2,7 +2,7 @@
 import { database } from './firebase-config.js';
 import { ref, onValue, get, set, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
-import { renderLeaderboard, renderLeaderboardHistory } from './login-points.js';
+import { renderLeaderboard, renderLeaderboardHistory, adminSetWeeklyPoints } from './login-points.js';
 
 // --- RIFERIMENTI AGLI ELEMENTI HTML ---
 const calendarApprovalSection = document.getElementById('calendar-approval-section');
@@ -402,6 +402,43 @@ document.addEventListener('click', async (e) => {
         rejectCalendarEvent(key);
     }
 });
+
+// --- OVERRIDE PUNTI SETTIMANALI ---
+const overrideBtn = document.getElementById('override-points-btn');
+const overrideFeedback = document.getElementById('override-feedback');
+const overrideSelect = document.getElementById('override-uid');
+
+// Popola il dropdown con tutti i membri
+get(ref(database, 'members')).then(snap => {
+    if (!snap.exists() || !overrideSelect) return;
+    overrideSelect.innerHTML = '';
+    snap.forEach(child => {
+        const name = child.val().name || child.key;
+        const opt = document.createElement('option');
+        opt.value = child.key;
+        opt.textContent = name;
+        overrideSelect.appendChild(opt);
+    });
+});
+
+if (overrideBtn) {
+    overrideBtn.addEventListener('click', async () => {
+        const uid = overrideSelect?.value;
+        const points = parseInt(document.getElementById('override-points').value, 10);
+        if (!uid) { overrideFeedback.textContent = '❌ Seleziona un utente.'; return; }
+        if (isNaN(points) || points < 0 || points > 7) { overrideFeedback.textContent = '❌ Punti non validi (0–7).'; return; }
+        overrideBtn.disabled = true;
+        overrideFeedback.textContent = '⏳ Salvataggio...';
+        try {
+            await adminSetWeeklyPoints(uid, points);
+            overrideFeedback.textContent = `✅ Punti impostati a ${points}.`;
+        } catch (e) {
+            overrideFeedback.textContent = '❌ Errore: ' + e.message;
+        } finally {
+            overrideBtn.disabled = false;
+        }
+    });
+}
 
 // --- PUNTO DI INGRESSO ---
 // Aspetta che l'autenticazione sia pronta, poi avvia la logica della pagina.

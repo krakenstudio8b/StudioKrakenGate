@@ -70,6 +70,27 @@
             <div id="leaderboard-container" class="space-y-3">
                 <p class="text-gray-500">Caricamento classifica...</p>
             </div>
+
+            <!-- Override punti admin -->
+            <div class="mt-6 border-t pt-4">
+                <h3 class="text-sm font-semibold text-gray-600 mb-3">🔧 Override Punti Settimanali</h3>
+                <div class="flex flex-wrap gap-2 items-end">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Utente</label>
+                        <select id="override-uid" class="p-2 border rounded-lg text-sm w-48">
+                            <option value="">Caricamento...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Punti (0–7)</label>
+                        <input id="override-points" type="number" min="0" max="7" value="5" class="p-2 border rounded-lg text-sm w-20">
+                    </div>
+                    <button id="override-points-btn" class="bg-orange-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-orange-600 text-sm">
+                        Imposta
+                    </button>
+                    <span id="override-feedback" class="text-sm"></span>
+                </div>
+            </div>
         </section>
 
         <section id="leaderboard-history-section" class="card hidden">

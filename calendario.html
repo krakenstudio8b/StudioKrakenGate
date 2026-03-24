@@ -211,23 +211,25 @@
             console.log('Google Calendar API pronto per la sincronizzazione');
         });
 
-        // Pulsante Aggiorna Calendario - sincronizza da Google Calendar e crea i task
+        // Pulsante Aggiorna Calendario
         refreshCalendarBtn.addEventListener('click', async () => {
             refreshCalendarBtn.disabled = true;
-            refreshCalendarBtn.textContent = '⏳ Sincronizzazione...';
+            refreshCalendarBtn.textContent = '⏳ Aggiornamento...';
             try {
                 if (isGoogleAuthorized()) {
+                    // Autenticato con Google: sincronizza eventi
                     const result = await syncFromGoogleToFirebase();
-                    alert(`✅ Sincronizzazione completata!\nEventi trovati su Google: ${result?.totaleGoogle ?? '?'}\nNuovi importati: ${result?.importati ?? '?'}`);
+                    showToast(`✅ Sincronizzati ${result?.importati ?? 0} nuovi eventi`);
                 } else {
-                    handleAuthClick(async () => {
-                        const result = await syncFromGoogleToFirebase();
-                        alert(`✅ Sincronizzazione completata!\nEventi trovati su Google: ${result?.totaleGoogle ?? '?'}\nNuovi importati: ${result?.importati ?? '?'}`);
-                    });
+                    // Non autenticato o GAPI non pronto: ricarica semplicemente la pagina
+                    location.reload();
+                    return;
                 }
             } catch (e) {
                 console.error(e);
-                alert('❌ Errore durante la sincronizzazione.');
+                // In caso di errore, ricarica comunque la pagina
+                location.reload();
+                return;
             } finally {
                 refreshCalendarBtn.disabled = false;
                 refreshCalendarBtn.textContent = '🔄 Aggiorna';
