@@ -3,6 +3,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
 import { getDatabase } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js";
+import { getStorage } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-storage.js";
 import { ENV } from './env-config.js';
 
 // Configurazione Firebase caricata da variabili d'ambiente
@@ -23,3 +24,4 @@ const app = initializeApp(firebaseConfig);
 // Crea ed esporta le istanze dei servizi
 export const database = getDatabase(app);
 export const auth = getAuth(app);
+export const storage = getStorage(app);

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gateradio - Riunioni</title>
+    <link rel="icon" type="image/png" href="logogate.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Gateradio">
+    <link rel="apple-touch-icon" href="/logogate.png">
+    <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));}</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen">
+
+    <nav class="bg-white shadow-md mb-8">
+        <div class="container mx-auto px-4 py-3">
+            <div class="text-xl font-bold text-indigo-600">
+                Gateradio Gestionale
+            </div>
+            <div id="nav-links">
+                <a href="eventi.html" class="text-gray-500 hover:text-indigo-600">Live &amp; Eventi</a>
+                <a href="index.html" class="text-gray-500 hover:text-indigo-600">Attività</a>
+                <a href="attivita-personale.html" class="text-gray-500 hover:text-indigo-600">Attività Personale</a>
+                <a href="calendario.html" class="text-gray-500 hover:text-indigo-600">Calendario</a>
+                <a href="obiettivi.html" class="text-gray-500 hover:text-indigo-600">Obiettivi</a>
+                <a id="finanze-link" href="finanze.html" class="text-gray-500 hover:text-indigo-600">Dashboard Finanze</a>
+                <a href="pulizie.html" class="text-gray-500 hover:text-indigo-600">Turni Pulizie</a>
+                <a href="documenti.html" class="text-gray-500 hover:text-indigo-600">Documenti</a>
+                <a href="riunioni.html" class="text-indigo-600 border-b-2 border-indigo-600 font-semibold">Riunioni</a>
+                <a href="archivio.html" class="text-gray-500 hover:text-indigo-600">Archivio</a>
+                <a id="admin-panel-link" href="admin.html" class="text-gray-500 hover:text-indigo-600 hidden">Pannello Admin</a>
+                <button id="logout-btn" class="bg-red-500 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-red-600 transition-colors self-start md:self-auto">Logout</button>
+            </div>
+        </div>
+    </nav>
+    <script src="js/nav.js"></script>
+
+    <main class="container mx-auto p-4 md:p-6">
+
+        <!-- HEADER -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Riunioni &amp; Assemblee</h1>
+                <p class="text-gray-500 mt-1">ODG, verbali e allegati delle riunioni</p>
+            </div>
+            <button id="nuova-riunione-btn" class="bg-indigo-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                <i class="fas fa-plus"></i> Nuova Riunione
+            </button>
+        </div>
+
+        <!-- FILTRI -->
+        <div class="flex gap-2 mb-6 flex-wrap">
+            <button data-filter="tutte" class="filter-btn active-filter px-4 py-2 rounded-full text-sm font-semibold border transition-colors">Tutte</button>
+            <button data-filter="pianificata" class="filter-btn px-4 py-2 rounded-full text-sm font-semibold border transition-colors">Pianificate</button>
+            <button data-filter="svolta" class="filter-btn px-4 py-2 rounded-full text-sm font-semibold border transition-colors">Svolte</button>
+        </div>
+
+        <!-- LOADING -->
+        <div id="loading-riunioni" class="text-center py-16">
+            <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-gray-200 border-t-indigo-600 mb-4"></div>
+            <p class="text-gray-500">Caricamento riunioni...</p>
+        </div>
+
+        <!-- EMPTY STATE -->
+        <div id="no-riunioni" class="hidden bg-white rounded-xl shadow-md p-12 text-center">
+            <i class="fas fa-calendar-alt text-5xl text-gray-300 mb-4"></i>
+            <h3 class="text-xl font-semibold text-gray-600 mb-2">Nessuna riunione trovata</h3>
+            <p class="text-gray-400">Crea la prima riunione con il pulsante in alto.</p>
+        </div>
+
+        <!-- LISTA RIUNIONI -->
+        <div id="riunioni-list" class="space-y-4 hidden"></div>
+
+    </main>
+
+    <!-- MODALE CREA/MODIFICA RIUNIONE -->
+    <div id="riunione-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="modal-title" class="text-xl font-bold text-gray-800">Nuova Riunione</h2>
+                    <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-xmark text-xl"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-5">
+                    <!-- Titolo -->
+                    <div>
+                        <label for="r-titolo" class="block text-sm font-medium text-gray-700 mb-1">Titolo</label>
+                        <input type="text" id="r-titolo" placeholder="Es: Riunione mensile, Assemblea straordinaria..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+
+                    <!-- Tipo e Data -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="r-tipo" class="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                            <select id="r-tipo" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                                <option value="riunione">Riunione</option>
+                                <option value="assemblea">Assemblea</option>
+                                <option value="altro">Altro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="r-data" class="block text-sm font-medium text-gray-700 mb-1">Data</label>
+                            <input type="date" id="r-data" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+
+                    <!-- Stato -->
+                    <div>
+                        <label for="r-stato" class="block text-sm font-medium text-gray-700 mb-1">Stato</label>
+                        <select id="r-stato" class="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                            <option value="pianificata">Pianificata</option>
+                            <option value="svolta">Svolta</option>
+                        </select>
+                    </div>
+
+                    <!-- ODG -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="block text-sm font-medium text-gray-700">Punti ODG</label>
+                            <button id="aggiungi-odg-btn" type="button" class="text-indigo-600 hover:text-indigo-800 text-sm font-semibold flex items-center gap-1">
+                                <i class="fas fa-plus text-xs"></i> Aggiungi punto
+                            </button>
+                        </div>
+                        <div id="odg-list" class="space-y-2">
+                            <!-- Popolato dinamicamente -->
+                        </div>
+                        <p id="odg-empty" class="text-sm text-gray-400 italic">Nessun punto ODG. Clicca "Aggiungi punto" per iniziare.</p>
+                    </div>
+
+                    <!-- Riassunto/Verbale -->
+                    <div>
+                        <label for="r-riassunto" class="block text-sm font-medium text-gray-700 mb-1">Riassunto / Verbale</label>
+                        <textarea id="r-riassunto" rows="5" placeholder="Scrivi il riassunto della riunione, le decisioni prese, le note importanti..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-y"></textarea>
+                    </div>
+
+                    <!-- Allegati via Google Drive -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Allegati</label>
+                        <div id="allegati-esistenti" class="space-y-2 mb-3">
+                            <!-- File già allegati -->
+                        </div>
+                        <div id="drive-section" class="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                            <!-- Pulsante autorizza Drive -->
+                            <button id="drive-auth-btn" type="button"
+                                class="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-600 hover:text-indigo-600 transition-colors">
+                                <i class="fab fa-google text-lg"></i>
+                                Collega Google Drive per allegare file
+                            </button>
+                            <!-- Pulsante upload (visibile dopo auth) -->
+                            <button id="drive-upload-btn" type="button"
+                                class="hidden w-full flex items-center justify-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
+                                <i class="fas fa-paperclip"></i>
+                                Allega file da Drive
+                            </button>
+                            <p id="upload-status-text" class="text-xs text-gray-400 text-center mt-2"></p>
+                        </div>
+                        <input type="file" id="r-allegati" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" class="hidden">
+                    </div>
+                </div>
+
+                <!-- Azioni -->
+                <div class="mt-6 flex gap-3">
+                    <button id="salva-riunione-btn" class="flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+                        <i class="fas fa-save"></i> Salva
+                    </button>
+                    <button id="elimina-riunione-btn" class="bg-red-500 text-white font-semibold py-3 px-4 rounded-lg hover:bg-red-600 transition-colors hidden">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <button id="annulla-modal-btn" class="bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+                        Annulla
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .filter-btn {
+            background: white;
+            color: #6b7280;
+            border-color: #d1d5db;
+        }
+        .filter-btn:hover {
+            border-color: #6366f1;
+            color: #6366f1;
+        }
+        .active-filter {
+            background: #6366f1;
+            color: white;
+            border-color: #6366f1;
+        }
+        .badge-riunione { background:#dbeafe; color:#1d4ed8; }
+        .badge-assemblea { background:#ede9fe; color:#7c3aed; }
+        .badge-altro { background:#f3f4f6; color:#374151; }
+        .badge-pianificata { background:#fef9c3; color:#92400e; }
+        .badge-svolta { background:#dcfce7; color:#166534; }
+    </style>
+
+    <script src="https://apis.google.com/js/api.js" onload="if(typeof initGapi==='function')initGapi()"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer onload="if(typeof initGis==='function')initGis()"></script>
+    <script type="module" src="js/riunioni.js"></script>
+    <script type="module" src="js/auth-guard.js"></script>
+</body>
+</html>
