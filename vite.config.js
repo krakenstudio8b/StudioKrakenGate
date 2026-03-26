@@ -17,6 +17,7 @@ export default defineConfig({
         'load-tasks': './load-tasks.html',
         archivio: './archivio.html',
         eventi: './eventi.html',
+        riunioni: './riunioni.html',
         'cleanup-events': './cleanup-events.html'
       }
     },
