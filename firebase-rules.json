@@ -1,0 +1,207 @@
+{
+  "rules": {
+
+    // ═══════════════════════════════════════════════════════════════════
+    // FIREBASE REALTIME DATABASE - SECURITY RULES
+    // Gateradio Gestionale
+    //
+    // RUOLI (stored in users/{uid}/role):
+    //   admin     → accesso completo
+    //   user      → accesso normale (submit spese, calendario, task, ecc.)
+    //   user_base → sola lettura su contenuti pubblici, NO dati finanziari
+    //
+    // PATTERN RIUTILIZZATI (non è possibile definire funzioni in JSON,
+    // quindi le espressioni vengono scritte per esteso):
+    //
+    //   isAdmin      = root.child('users').child(auth.uid).child('role').val() === 'admin'
+    //   isUser       = root.child('users').child(auth.uid).child('role').val() === 'user'
+    //   isUserOrAdmin= isUser || isAdmin
+    //   isAuth       = auth != null
+    // ═══════════════════════════════════════════════════════════════════
+
+    // ─────────────────────────────────────────────────────────────────
+    // BLOCCO TOTALE per utenti non autenticati (catch-all di default)
+    // ─────────────────────────────────────────────────────────────────
+    ".read":  false,
+    ".write": false,
+
+    // ─────────────────────────────────────────────────────────────────
+    // users/ — Ruoli utenti
+    //   Lettura: tutti gli autenticati (auth-guard e finanze.js leggono
+    //            l'intero nodo per caricare i ruoli di tutti i membri)
+    //   Scrittura: solo admin (assegnazione ruoli)
+    // ─────────────────────────────────────────────────────────────────
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // members/ — Anagrafica membri (nome, cleaningCount)
+    //   Lettura: tutti gli autenticati (usato ovunque per dropdown)
+    //   Scrittura: admin e user (pulizie.js aggiorna cleaningCount)
+    // ─────────────────────────────────────────────────────────────────
+    "members": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // ██ NODI FINANZIARI — vietati a user_base ██
+    // ─────────────────────────────────────────────────────────────────
+
+    // variableExpenses/ — Spese variabili
+    //   Scrittura: solo admin (user invia via expenseRequests)
+    "variableExpenses": {
+      ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    // fixedExpenses/ — Spese fisse mensili
+    //   Scrittura: solo admin
+    "fixedExpenses": {
+      ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    // incomeEntries/ — Entrate
+    //   Scrittura: admin e user (il form non richiede approvazione)
+    "incomeEntries": {
+      ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // cassaComune/ — Saldo e movimenti cassa
+    //   Scrittura: admin e user (le entrate scritte da user aggiornano anche la cassa)
+    "cassaComune": {
+      ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // pendingPayments/ — Pagamenti in sospeso
+    //   Scrittura: solo admin
+    "pendingPayments": {
+      ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    // expenseRequests/ — Richieste spese da approvare
+    //   Lettura: admin e user (non user_base)
+    //   Scrittura: admin e user (user invia nuove richieste via push)
+    "expenseRequests": {
+      ".read":  "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // NODI A VISIBILITÀ ALLARGATA (user_base può leggere)
+    // ─────────────────────────────────────────────────────────────────
+
+    // wishlist/ — Lista desideri
+    //   Scrittura: admin e user
+    "wishlist": {
+      ".read":  "auth != null",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // futureMovements/ — Movimenti futuri pianificati
+    //   Scrittura: admin e user
+    "futureMovements": {
+      ".read":  "auth != null",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // tasks/ — Task kanban (index.html)
+    //   Scrittura: admin e user
+    "tasks": {
+      ".read":  "auth != null",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // taskTemplates/ — Template task
+    //   Scrittura: solo admin
+    "taskTemplates": {
+      ".read":  "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    // calendarEvents/ — Eventi calendario approvati
+    //   Scrittura: admin e user
+    "calendarEvents": {
+      ".read":  "auth != null",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // pendingCalendarEvents/ — Proposte evento da approvare
+    //   Scrittura: tutti gli autenticati (anche user_base può proporre un evento)
+    "pendingCalendarEvents": {
+      ".read":  "auth != null",
+      ".write": "auth != null"
+    },
+
+    // cleaningSchedule/ — Turni pulizie
+    //   Scrittura: admin e user (tutti possono spuntare il proprio turno)
+    "cleaningSchedule": {
+      ".read":  "auth != null",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // cleaningState/ — Stato corrente turni pulizie
+    //   Scrittura: admin e user
+    "cleaningState": {
+      ".read":  "auth != null",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // riunioni/ — Verbali e riunioni
+    //   Scrittura: admin e user
+    "riunioni": {
+      ".read":  "auth != null",
+      ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'admin' || root.child('users').child(auth.uid).child('role').val() === 'user')"
+    },
+
+    // targets/ — Obiettivi aziendali
+    //   Scrittura: solo admin (i dati degli obiettivi sono sensibili)
+    "targets": {
+      ".read":  "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // NODI SISTEMA — login points, push notifications
+    // ─────────────────────────────────────────────────────────────────
+
+    // loginPoints/ — Punteggi login settimanali
+    //   Ogni utente scrive solo sul proprio uid, tutti leggono (classifica)
+    "loginPoints": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin')"
+      }
+    },
+
+    // loginPointsHistory/ — Storico settimanale punti login
+    //   Ogni utente scrive solo sul proprio uid
+    "loginPointsHistory": {
+      ".read": "auth != null",
+      "$week": {
+        "$uid": {
+          ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'admin')"
+        }
+      }
+    },
+
+    // pushSubscriptions/ — Sottoscrizioni notifiche push
+    //   Ogni utente scrive la propria, solo admin legge tutte
+    "pushSubscriptions": {
+      ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      "$userName": {
+        ".read":  "auth != null",
+        ".write": "auth != null"
+      }
+    }
+
+  }
+}
