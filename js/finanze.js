@@ -337,7 +337,7 @@ const renderMembers = () => {
     
     const incomeMembersCheckboxes = document.getElementById('income-members-checkboxes');
     if (incomeMembersCheckboxes) {
-        incomeMembersCheckboxes.innerHTML = members.map(m => `<div class="flex items-center"><input type="checkbox" id="income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600"><label for="income-member-${m.id}" class="ml-2 text-sm">${m.name}</label></div>`).join('');
+        incomeMembersCheckboxes.innerHTML = members.map(m => `<div class="flex items-center"><input type="checkbox" id="income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600"><label for="income-member-${m.id}" class="ml-2 text-sm">${m.name}</label></div>`).join('') + `<div class="flex items-center border-t pt-2 mt-1"><input type="checkbox" id="income-member-evento-esterno" name="income-member" value="EVENTO ESTERNO" class="form-checkbox h-4 w-4 text-teal-600"><label for="income-member-evento-esterno" class="ml-2 text-sm font-medium text-teal-700">EVENTO ESTERNO</label></div>`;
     }
 };
 
