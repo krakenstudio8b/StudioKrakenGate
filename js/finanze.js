@@ -667,9 +667,11 @@ const initializeCharts = () => {
     });
     createBarChart('membersContributionsChart', 'Contributi Totali (Spese + Cassa)', contributionsData, memberNames, memberColors);
     
-    // Grafico 2: Ripartizione Entrate
-    const incomeData = memberNames.map(name => data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / (i.membersInvolved.length || 1)) : 0), 0));
-    createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, memberNames, memberColors);
+    // Grafico 2: Ripartizione Entrate (membri + Evento Esterno)
+    const incomeLabelsAll = [...memberNames, 'EVENTO ESTERNO'];
+    const incomeColorsAll = [...memberColors, 'rgba(20, 184, 166, 0.6)'];
+    const incomeData = incomeLabelsAll.map(name => data.income.reduce((sum, i) => sum + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / (i.membersInvolved.length || 1)) : 0), 0));
+    createBarChart('membersIncomeChart', 'Ripartizione Entrate', incomeData, incomeLabelsAll, incomeColorsAll);
     
     // Grafico 3: Spese per Categoria
     const categoryMap = [...data.expenses, ...data.fixedExpenses].reduce((map, e) => {
