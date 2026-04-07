@@ -49,6 +49,10 @@ const displayDate = (dateString) => {
 };
 
 const getItemFromStore = (type, id) => {
+    if (type === 'cashMovement') {
+        const movements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
+        return movements.find(m => m.id === id) || null;
+    }
     let store;
     switch (type) {
         case 'variableExpense': store = variableExpenses; break;
@@ -307,6 +311,16 @@ const renderMembers = () => {
     if (membersListEl) {
         membersListEl.innerHTML = members.map(m => `<li class="flex justify-between items-center bg-gray-50 p-2 rounded-lg text-sm">${m.name}</li>`).join('');
     }
+
+    // Sostituisce il form "Aggiungi membro" deprecato con link al pannello admin (solo per admin)
+    const addMemberContainer = document.getElementById('new-member-name')?.closest('div.flex');
+    if (addMemberContainer) {
+        if (currentUser.role === 'admin') {
+            addMemberContainer.innerHTML = `<a href="admin.html" class="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm"><span>→</span> Gestisci i membri dal Pannello Admin</a>`;
+        } else {
+            addMemberContainer.classList.add('hidden');
+        }
+    }
     
     const memberOptions = members.map(m => `<option value="${m.name}">${m.name}</option>`).join('');
     
@@ -347,6 +361,7 @@ const renderCassaComune = () => {
                 <div class="flex justify-between items-center text-sm border-b pb-1 mb-1 group">
                     <div class="${m.type === 'deposit' ? 'text-green-700' : 'text-red-700'}">
                         <span class="font-medium">${m.description} (${m.member || 'Cassa'})</span>
+                        <span class="text-xs text-gray-400">${displayDate(m.date)}</span>
                         <span class="font-bold block">${m.type === 'deposit' ? '+' : '-'}€${(m.amount || 0).toFixed(2)}</span>
                     </div>
                     ${currentUser.role === 'admin' ? adminButtons : ''}
@@ -361,8 +376,11 @@ const renderPendingPayments = () => {
     if (!container) return;
     container.innerHTML = pendingPayments.map(p => `
         <div class="flex justify-between items-center bg-yellow-50 p-3 rounded-lg border-l-4 border-yellow-500">
-            <span class="text-sm font-medium">${p.member} deve pagare ${p.description}</span>
-            <span class="font-bold text-yellow-700">€${p.amount.toFixed(2)}</span>
+            <div>
+                <span class="text-sm font-medium">${p.member} deve pagare ${p.description}</span>
+                ${p.date ? `<span class="text-xs text-gray-400 block">Registrato il ${displayDate(p.date)}</span>` : ''}
+            </div>
+            <span class="font-bold text-yellow-700">€${(parseFloat(p.amount) || 0).toFixed(2)}</span>
             <button data-id="${p.id}" data-type="pendingPayment" class="complete-pending-btn text-sm bg-yellow-600 text-white py-1 px-3 rounded-lg hover:bg-yellow-700">Completa</button>
         </div>
     `).join('') || '<p class="text-gray-500">Nessun pagamento in sospeso.</p>';
@@ -370,94 +388,141 @@ const renderPendingPayments = () => {
 
 const renderFutureMovements = () => {
     const container = document.getElementById('future-movements-container');
-    if (container) {
-        container.innerHTML = (futureMovements || []).map(m => {
-            const sharesHtml = (m.shares && Array.isArray(m.shares))
-                ? m.shares.map((share, shareIndex) => `
-                    <div class="flex justify-between items-center text-xs py-1">
-                        <label for="share-${m.id}-${shareIndex}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">€</span>
-                            <input type="number" value="${(share.amount || 0).toFixed(2)}" 
-                                   data-movement-id="${m.id}" 
-                                   data-share-index="${shareIndex}" 
-                                   class="w-16 p-1 text-right border rounded-md future-share-amount">
-                            <input type="checkbox" id="share-${m.id}-${shareIndex}" 
-                                   data-movement-id="${m.id}" 
-                                   data-share-index="${shareIndex}" 
-                                   class="form-checkbox h-4 w-4 text-indigo-600 rounded cursor-pointer future-share-checkbox" ${share.paid ? 'checked' : ''}>
-                        </div>
-                    </div>`).join('')
-                : '<p class="text-xs text-gray-500">Nessuna suddivisione specificata.</p>';
+    if (!container) return;
 
-            const sharesContainerHtml = `<div id="shares-${m.id}" class="mt-2 pt-2 border-t border-blue-200 space-y-1 ${m.isExpanded ? '' : 'hidden'}">${sharesHtml}</div>`;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-            const adminButtonsHtml = currentUser.role === 'admin' ? `
-                <div class="flex gap-2 mt-2 justify-end">
-                    <button data-id="${m.id}" data-type="futureMovement" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800">Modifica</button>
-                    <button data-id="${m.id}" data-type="futureMovement" class="delete-future-movement-btn text-xs text-red-600 hover:text-red-800">Elimina</button>
-                </div>
-            ` : '';
+    const sorted = [...(futureMovements || [])].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
-            return `
-                <div class="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
-                    <div class="flex justify-between items-center cursor-pointer" data-movement-id="${m.id}">
-                        <span class="text-sm font-medium">${m.description} (Scadenza: ${displayDate(m.dueDate)})</span>
-                        <span class="font-bold text-blue-700">€${(m.totalCost || 0).toFixed(2)}</span>
+    container.innerHTML = sorted.map(m => {
+        const sharesEntries = m.shares ? Object.entries(m.shares) : [];
+        const allPaid = sharesEntries.length > 0 && sharesEntries.every(([, s]) => s.paid);
+        const dueDate = m.dueDate ? new Date(m.dueDate + 'T12:00:00Z') : null;
+        const daysUntilDue = dueDate ? Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24)) : null;
+
+        let borderColor = 'border-blue-500';
+        let bgColor = 'bg-blue-50';
+        let textColor = 'text-blue-700';
+        let urgencyBadge = '';
+
+        if (allPaid) {
+            borderColor = 'border-green-500'; bgColor = 'bg-green-50'; textColor = 'text-green-700';
+            urgencyBadge = '<span class="text-xs bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full ml-2">✓ Completo</span>';
+        } else if (daysUntilDue !== null && daysUntilDue < 0) {
+            borderColor = 'border-red-500'; bgColor = 'bg-red-50'; textColor = 'text-red-700';
+            urgencyBadge = '<span class="text-xs bg-red-100 text-red-700 font-semibold px-2 py-0.5 rounded-full ml-2">Scaduto</span>';
+        } else if (daysUntilDue !== null && daysUntilDue <= 7) {
+            borderColor = 'border-amber-500'; bgColor = 'bg-amber-50'; textColor = 'text-amber-700';
+            urgencyBadge = `<span class="text-xs bg-amber-100 text-amber-700 font-semibold px-2 py-0.5 rounded-full ml-2">Tra ${daysUntilDue} giorni</span>`;
+        }
+
+        const sharesHtml = sharesEntries.length > 0
+            ? sharesEntries.map(([shareKey, share]) => `
+                <div class="flex justify-between items-center text-xs py-1">
+                    <label for="share-${m.id}-${shareKey}" class="flex-grow cursor-pointer ${share.paid ? 'text-gray-400 line-through' : ''}">${share.member}</label>
+                    <div class="flex items-center gap-2">
+                        <span class="font-medium">€</span>
+                        <input type="number" value="${(share.amount || 0).toFixed(2)}"
+                               data-movement-id="${m.id}"
+                               data-share-index="${shareKey}"
+                               class="w-16 p-1 text-right border rounded-md future-share-amount">
+                        <input type="checkbox" id="share-${m.id}-${shareKey}"
+                               data-movement-id="${m.id}"
+                               data-share-index="${shareKey}"
+                               class="form-checkbox h-4 w-4 text-indigo-600 rounded cursor-pointer future-share-checkbox" ${share.paid ? 'checked' : ''}>
                     </div>
-                    ${sharesContainerHtml}
-                    ${adminButtonsHtml} 
-                </div>`;
-        }).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
-    }
+                </div>`).join('')
+            : '<p class="text-xs text-gray-500">Nessuna suddivisione specificata.</p>';
+
+        const sharesContainerHtml = `<div id="shares-${m.id}" class="mt-2 pt-2 border-t border-gray-200 space-y-1 ${m.isExpanded ? '' : 'hidden'}">${sharesHtml}</div>`;
+
+        const adminButtonsHtml = currentUser.role === 'admin' ? `
+            <div class="flex gap-2 mt-2 justify-end flex-wrap">
+                <button data-id="${m.id}" class="convert-future-btn text-xs bg-indigo-500 text-white py-1 px-3 rounded-lg hover:bg-indigo-600">Converti in Spesa</button>
+                <button data-id="${m.id}" data-type="futureMovement" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800">Modifica</button>
+                <button data-id="${m.id}" data-type="futureMovement" class="delete-future-movement-btn text-xs text-red-600 hover:text-red-800">Elimina</button>
+            </div>
+        ` : '';
+
+        return `
+            <div class="${bgColor} p-3 rounded-lg border-l-4 ${borderColor} future-movement-card">
+                <div class="flex justify-between items-center cursor-pointer" data-movement-id="${m.id}">
+                    <div class="flex items-center flex-wrap">
+                        <span class="text-sm font-medium">${m.description} (Scadenza: ${displayDate(m.dueDate)})</span>
+                        ${urgencyBadge}
+                    </div>
+                    <span class="font-bold ${textColor}">€${(m.totalCost || 0).toFixed(2)}</span>
+                </div>
+                ${sharesContainerHtml}
+                ${adminButtonsHtml}
+            </div>`;
+    }).join('') || '<p class="text-gray-500">Nessun movimento futuro pianificato.</p>';
 };
 const renderWishlist = () => {
     const container = document.getElementById('wishlist-container');
-    if (container) {
-        container.innerHTML = (wishlist || []).sort((a, b) => (b.priority || "").localeCompare(a.priority || "")).map(item => {
-            let linksHtml = '';
-            if (item.links && item.links.length > 0) {
-                linksHtml = `
-                    <div class="mt-2 pt-2 border-t border-indigo-200">
-                        <p class="text-xs font-bold text-indigo-800 mb-1">Link:</p>
-                        <div class="flex flex-col space-y-1">
-                            ${item.links.map(link => `
-                                <a href="${link}" target="_blank" class="text-xs text-blue-600 hover:underline truncate" title="${link}">${link}</a>
-                            `).join('')}
-                        </div>
-                    </div>
-                `;
-            }
+    if (!container) return;
 
-            return `
-                <div class="bg-indigo-50 p-3 rounded-lg border-l-4 border-indigo-500">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <p class="text-sm font-medium">${item.name}</p>
-                            <p class="text-xs text-gray-600">Priorità: ${item.priority || 'Non definita'}</p>
-                        </div>
-                        <div class="text-right flex-shrink-0 ml-4">
-                            <p class="font-bold text-indigo-700">€${(item.cost || 0).toFixed(2)}</p>
-                            <button data-id="${item.id}" data-type="wishlistItem" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800 mt-1">Modifica</button>
-                        </div>
+    const sorted = [...(wishlist || [])].sort((a, b) => {
+        if (a.purchased && !b.purchased) return 1;
+        if (!a.purchased && b.purchased) return -1;
+        return (b.priority || '').localeCompare(a.priority || '');
+    });
+
+    container.innerHTML = sorted.map(item => {
+        const isPurchased = !!item.purchased;
+        const borderColor = isPurchased ? 'border-gray-400' : 'border-indigo-500';
+        const bgColor = isPurchased ? 'bg-gray-50' : 'bg-indigo-50';
+        const nameClass = isPurchased ? 'text-sm font-medium line-through text-gray-400' : 'text-sm font-medium';
+        const amountColor = isPurchased ? 'text-gray-400' : 'text-indigo-700';
+
+        let linksHtml = '';
+        if (item.links && item.links.length > 0) {
+            linksHtml = `
+                <div class="mt-2 pt-2 border-t border-indigo-200">
+                    <p class="text-xs font-bold text-indigo-800 mb-1">Link:</p>
+                    <div class="flex flex-col space-y-1">
+                        ${item.links.map(link => `
+                            <a href="${link}" target="_blank" class="text-xs text-blue-600 hover:underline truncate" title="${link}">${link}</a>
+                        `).join('')}
                     </div>
-                    ${linksHtml}
                 </div>
             `;
-        }).join('') || '<p class="text-gray-500">Nessun articolo nella lista desideri.</p>';
-    }
+        }
+
+        const purchasedBadge = isPurchased
+            ? `<span class="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">✓ Acquistato${item.purchasedDate ? ' il ' + displayDate(item.purchasedDate) : ''}${item.purchasedPrice ? ' a €' + parseFloat(item.purchasedPrice).toFixed(2) : ''}</span>`
+            : `<button data-id="${item.id}" class="mark-purchased-btn text-xs bg-green-500 text-white px-2 py-0.5 rounded-lg hover:bg-green-600">Segna Acquistato</button>`;
+
+        return `
+            <div class="${bgColor} p-3 rounded-lg border-l-4 ${borderColor}">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="${nameClass}">${item.name}</p>
+                        <p class="text-xs text-gray-600">Priorità: ${item.priority || 'Non definita'}</p>
+                        <div class="mt-1">${purchasedBadge}</div>
+                    </div>
+                    <div class="text-right flex-shrink-0 ml-4">
+                        <p class="font-bold ${amountColor}">€${(item.cost || 0).toFixed(2)}</p>
+                        <button data-id="${item.id}" data-type="wishlistItem" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800 mt-1">Modifica</button>
+                    </div>
+                </div>
+                ${linksHtml}
+            </div>
+        `;
+    }).join('') || '<p class="text-gray-500">Nessun articolo nella lista desideri.</p>';
 };
 
 const renderIncomeEntries = () => {
     const container = document.getElementById('income-list-container');
     if (!container) return;
-    container.innerHTML = incomeEntries.sort((a, b) => new Date(b.date) - new Date(a.date)).map(i => `
+    container.innerHTML = [...incomeEntries].sort((a, b) => new Date(b.date) - new Date(a.date)).map(i => `
         <div class="flex justify-between items-center bg-green-50 p-3 rounded-lg border-l-4 border-green-500">
             <div>
-                <span class="font-medium">${i.description}</span>
+                <span class="font-medium">${i.description || ''}</span>
                 <span class="text-xs text-gray-500 block">Ricevuto da: ${(i.membersInvolved || []).join(', ')} il ${displayDate(i.date)}</span>
             </div>
-            <span class="font-bold text-green-700">€${i.amount.toFixed(2)}</span>
+            <span class="font-bold text-green-700">€${(parseFloat(i.amount) || 0).toFixed(2)}</span>
             <button data-id="${i.id}" data-type="incomeEntry" class="open-edit-modal-btn text-green-600 hover:text-green-800">Modifica</button>
         </div>
     `).join('') || '<p class="text-gray-500">Nessuna entrata registrata.</p>';
@@ -466,13 +531,13 @@ const renderIncomeEntries = () => {
 const renderVariableExpenses = () => {
     const container = document.getElementById('expenses-list-container');
     if (!container) return;
-    container.innerHTML = variableExpenses.sort((a, b) => new Date(b.date) - new Date(a.date)).map(e => `
+    container.innerHTML = [...variableExpenses].sort((a, b) => new Date(b.date) - new Date(a.date)).map(e => `
         <div class="flex justify-between items-center bg-red-50 p-3 rounded-lg border-l-4 border-red-500">
             <div>
-                <span class="font-medium">${e.description} - ${e.category}</span>
-                <span class="text-xs text-gray-500 block">Pagato da: ${e.payer} il ${displayDate(e.date)}</span>
+                <span class="font-medium">${e.description || ''} - ${e.category || ''}</span>
+                <span class="text-xs text-gray-500 block">Pagato da: ${e.payer || ''} il ${displayDate(e.date)}</span>
             </div>
-            <span class="font-bold text-red-700">€${e.amount.toFixed(2)}</span>
+            <span class="font-bold text-red-700">€${(parseFloat(e.amount) || 0).toFixed(2)}</span>
             <button data-id="${e.id}" data-type="variableExpense" class="open-edit-modal-btn text-red-600 hover:text-red-800">Modifica</button>
         </div>
     `).join('') || '<p class="text-gray-500">Nessuna spesa variabile registrata.</p>';
@@ -487,7 +552,7 @@ const renderFixedExpenses = () => {
                 <span class="font-medium">${f.description}</span>
                 <span class="text-xs text-gray-500 block">Paga: ${f.payer || 'Tutti'}</span>
             </div>
-            <span class="font-bold text-orange-700">€${f.amount.toFixed(2)}</span>
+            <span class="font-bold text-orange-700">€${(parseFloat(f.amount) || 0).toFixed(2)}</span>
             <button data-id="${f.id}" data-type="fixedExpense" class="open-edit-modal-btn text-orange-600 hover:text-orange-800">Modifica</button>
         </div>
     `).join('') || '<p class="text-gray-500">Nessuna spesa fissa registrata.</p>';
@@ -636,15 +701,26 @@ const initializeCharts = () => {
     }
 };
 
-const updateDashboardView = () => { 
-    const totalVar = variableExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const totalFix = fixedExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const totalInc = incomeEntries.reduce((sum, i) => sum + (i.amount || 0), 0);
-    
+const updateDashboardView = () => {
+    const selectedMonth = document.getElementById('month-filter')?.value || 'all';
+    const filterByMonth = (data) => {
+        if (selectedMonth === 'all') return data;
+        return data.filter(item => {
+            const d = new Date(item.date);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === selectedMonth;
+        });
+    };
+
+    const filteredVar = filterByMonth(variableExpenses);
+    const filteredInc = filterByMonth(incomeEntries);
+    const totalVar = filteredVar.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const totalFix = fixedExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const totalInc = filteredInc.reduce((sum, i) => sum + (parseFloat(i.amount) || 0), 0);
+
     if (totalVariableEl) totalVariableEl.textContent = `€${totalVar.toFixed(2)}`;
     if (totalFixedEl) totalFixedEl.textContent = `€${totalFix.toFixed(2)}`;
     if (totalIncomeEl) totalIncomeEl.textContent = `€${totalInc.toFixed(2)}`;
-    
+
     if (memberCountEl) memberCountEl.textContent = members.length;
     if (perPersonShareEl && members.length > 0) perPersonShareEl.textContent = `€${((totalVar + totalFix) / members.length).toFixed(2)}`;
     if (cashBalanceAmountEl) cashBalanceAmountEl.textContent = `€${(cassaComune.balance || 0).toFixed(2)}`;
@@ -698,7 +774,12 @@ const calculateAndRenderSettlement = (forExport = false) => {
     memberNames.forEach(name => {
         const expensesPaid = data.expenses.filter(e => e.payer === name).reduce((sum, e) => sum + (e.amount || 0), 0);
         const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
-            .filter(m => m.member === name && m.type === 'deposit')
+            .filter(m => {
+                if (m.member !== name || m.type !== 'deposit') return false;
+                if (selectedMonth === 'all') return true;
+                const mDate = new Date(m.date);
+                return `${mDate.getFullYear()}-${String(mDate.getMonth() + 1).padStart(2, '0')}` === selectedMonth;
+            })
             .reduce((sum, m) => sum + (m.amount || 0), 0);
         const totalContributed = expensesPaid + cashDeposits;
 
@@ -711,25 +792,51 @@ const calculateAndRenderSettlement = (forExport = false) => {
         .filter(([, amount]) => amount < -0.01)
         .map(([name, amount]) => ({ name, amountToPay: Math.abs(amount) }));
 
-    const totalToPay = debtors.reduce((sum, debtor) => sum + debtor.amountToPay, 0);
-    const totalInCredit = Object.values(balances).reduce((sum, amount) => sum + (amount > 0.01 ? amount : 0), 0);
-    
-    settlementList.innerHTML = ''; 
+    const creditors = Object.entries(balances)
+        .filter(([, amount]) => amount > 0.01)
+        .map(([name, amount]) => ({ name, credit: amount }))
+        .sort((a, b) => b.credit - a.credit);
 
-    if (debtors.length === 0) {
+    const totalToPay = debtors.reduce((sum, d) => sum + d.amountToPay, 0);
+    const totalInCredit = creditors.reduce((sum, c) => sum + c.credit, 0);
+
+    settlementList.innerHTML = '';
+
+    if (debtors.length === 0 && creditors.length === 0) {
         settlementList.innerHTML = '<li class="text-green-500 font-semibold">Perfetto! Tutti i conti sono in pari.</li>';
     } else {
-        debtors.forEach(debtor => {
-            const li = document.createElement('li');
-            li.className = 'text-gray-700';
-            li.innerHTML = `<span class="font-semibold text-red-500">${debtor.name}</span> deve versare <span class="font-bold text-lg text-indigo-600">€${debtor.amountToPay.toFixed(2)}</span> per pareggiare i conti.`;
-            settlementList.appendChild(li);
-        });
+        if (creditors.length > 0) {
+            const creditTitle = document.createElement('li');
+            creditTitle.className = 'text-xs font-bold text-gray-500 uppercase tracking-wide mb-1';
+            creditTitle.textContent = 'In credito:';
+            settlementList.appendChild(creditTitle);
+            creditors.forEach(creditor => {
+                const li = document.createElement('li');
+                li.className = 'text-gray-700 mb-1';
+                li.innerHTML = `<span class="font-semibold text-green-600">${creditor.name}</span> ha un credito di <span class="font-bold text-lg text-green-600">€${creditor.credit.toFixed(2)}</span>`;
+                settlementList.appendChild(li);
+            });
+        }
 
-        const summaryLi = document.createElement('li');
-        summaryLi.className = 'text-sm text-gray-500 mt-4 pt-2 border-t';
-        summaryLi.innerHTML = `Il totale da versare (€${totalToPay.toFixed(2)}) andrà a coprire il credito di chi ha speso di più (€${totalInCredit.toFixed(2)}).`;
-        settlementList.appendChild(summaryLi);
+        if (debtors.length > 0) {
+            const debitTitle = document.createElement('li');
+            debitTitle.className = 'text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 mt-3';
+            debitTitle.textContent = 'Da versare:';
+            settlementList.appendChild(debitTitle);
+            debtors.forEach(debtor => {
+                const li = document.createElement('li');
+                li.className = 'text-gray-700 mb-1';
+                li.innerHTML = `<span class="font-semibold text-red-500">${debtor.name}</span> deve versare <span class="font-bold text-lg text-indigo-600">€${debtor.amountToPay.toFixed(2)}</span>`;
+                settlementList.appendChild(li);
+            });
+        }
+
+        if (debtors.length > 0) {
+            const summaryLi = document.createElement('li');
+            summaryLi.className = 'text-sm text-gray-500 mt-4 pt-2 border-t';
+            summaryLi.innerHTML = `Totale da versare: €${totalToPay.toFixed(2)} → copre credito di €${totalInCredit.toFixed(2)}.`;
+            settlementList.appendChild(summaryLi);
+        }
     }
     
     if (forExport) {
@@ -773,6 +880,22 @@ const openEditModal = (id, type) => {
                 </select>
             </div>
             
+            <div>
+                <label class="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                    <input type="checkbox" name="purchased" id="edit-purchased" class="form-checkbox h-4 w-4" ${item.purchased ? 'checked' : ''}>
+                    Segnato come acquistato
+                </label>
+                <div id="purchased-fields" class="${item.purchased ? '' : 'hidden'} mt-2 space-y-2">
+                    <div>
+                        <label class="block text-xs text-gray-600">Data acquisto</label>
+                        <input type="date" id="edit-purchasedDate" name="purchasedDate" value="${item.purchasedDate || ''}" class="w-full p-2 border rounded-lg mt-1">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600">Prezzo pagato (€)</label>
+                        <input type="number" step="0.01" id="edit-purchasedPrice" name="purchasedPrice" value="${item.purchasedPrice || ''}" class="w-full p-2 border rounded-lg mt-1">
+                    </div>
+                </div>
+            </div>
             <div class="border p-3 rounded-lg">
                 <label class="block text-sm font-medium">Link di Acquisto</label>
                 <div id="edit-links-container" class="space-y-2 mt-2">
@@ -804,14 +927,41 @@ const openEditModal = (id, type) => {
                 <input type="date" id="edit-dueDate" name="dueDate" value="${item.dueDate || ''}" class="w-full p-2 border rounded-lg mt-1">
             </div>
         `;
+    } else if (type === 'cashMovement') {
+        formHtml += `
+            <div>
+                <label for="edit-type" class="block text-sm font-medium">Tipo Movimento</label>
+                <select id="edit-type" name="type" class="w-full p-2 border rounded-lg mt-1 bg-white">
+                    <option value="deposit" ${item.type === 'deposit' ? 'selected' : ''}>Deposito (+)</option>
+                    <option value="withdrawal" ${item.type === 'withdrawal' ? 'selected' : ''}>Prelievo (-)</option>
+                </select>
+            </div>
+            <div>
+                <label for="edit-amount" class="block text-sm font-medium">Importo (€)</label>
+                <input type="number" step="0.01" id="edit-amount" name="amount" value="${item.amount || 0}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-description" class="block text-sm font-medium">Descrizione</label>
+                <input type="text" id="edit-description" name="description" value="${item.description || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-date" class="block text-sm font-medium">Data</label>
+                <input type="date" id="edit-date" name="date" value="${item.date || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-member" class="block text-sm font-medium">Membro (opzionale)</label>
+                <input type="text" id="edit-member" name="member" value="${item.member || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+        `;
     } else {
-        // Logica generica
+        // Logica generica per gli altri tipi (fixedExpense, ecc.)
+        const hiddenKeys = ['id', 'payerId', 'sourceExpenseId', 'sourceIncomeId'];
         formHtml += Object.entries(item).map(([key, value]) => {
-            if (key === 'id' || typeof value === 'object') return '';
+            if (hiddenKeys.includes(key) || typeof value === 'object') return '';
             let inputType = 'text';
             if (typeof value === 'number') inputType = 'number';
             if (key.includes('date') || key.includes('dueDate')) inputType = 'date';
-            
+
             if (key === 'payer' && type === 'variableExpense') {
                 const memberOptions = members.map(m => `<option value="${m.name}" ${value === m.name ? 'selected' : ''}>${m.name}</option>`).join('');
                 return `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label>
@@ -820,7 +970,7 @@ const openEditModal = (id, type) => {
                             ${memberOptions}
                         </select></div>`;
             }
-            
+
             return `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label><input type="${inputType}" id="edit-${key}" name="${key}" value="${value}" class="w-full p-2 border rounded-lg mt-1"></div>`;
         }).join('');
     }
@@ -840,6 +990,14 @@ const openEditModal = (id, type) => {
     editModal.classList.remove('hidden');
 
     // --- LISTENER INTERNI ALLA MODALE ---
+    const purchasedCheckbox = document.getElementById('edit-purchased');
+    if (purchasedCheckbox) {
+        purchasedCheckbox.addEventListener('change', () => {
+            const fields = document.getElementById('purchased-fields');
+            if (fields) fields.classList.toggle('hidden', !purchasedCheckbox.checked);
+        });
+    }
+
     const addLinkBtn = document.getElementById('add-edit-link-btn');
     if (addLinkBtn) {
         addLinkBtn.addEventListener('click', () => {
@@ -869,38 +1027,118 @@ const openEditModal = (id, type) => {
         editForm.addEventListener('submit', (e) => {
             e.preventDefault();
             const formData = new FormData(editForm);
-            const updatedData = {}; // Non includere l'ID qui, usiamo la key
-            
+            const updatedData = {};
+
             for (const [key, value] of formData.entries()) {
                 const originalValue = item[key];
                 updatedData[key] = (typeof originalValue === 'number' && !isNaN(originalValue)) ? parseFloat(value) : value;
             }
-            
-            let dbRef;
-            
+
             if (type === 'wishlistItem') {
                 const linkInputs = document.querySelectorAll('.edit-link-input');
                 updatedData.links = Array.from(linkInputs).map(input => input.value.trim()).filter(link => link);
-                dbRef = ref(database, `wishlist/${item.id}`); // Assumendo che ID sia la chiave
-            } else if (type === 'futureMovement') {
-                dbRef = ref(database, `futureMovements/${item.id}`);
-            } else if (type === 'variableExpense') {
-                dbRef = ref(database, `variableExpenses/${item.id}`);
-            } else if (type === 'fixedExpense') {
-                dbRef = ref(database, `fixedExpenses/${item.id}`);
-            } else if (type === 'incomeEntry') {
-                dbRef = ref(database, `incomeEntries/${item.id}`);
-            } else if (type === 'cashMovement') {
-                dbRef = ref(database, `cassaComune/movements/${item.id}`);
+                const purchasedEl = document.getElementById('edit-purchased');
+                updatedData.purchased = purchasedEl ? purchasedEl.checked : (item.purchased || false);
+                if (!updatedData.purchased) {
+                    updatedData.purchasedDate = null;
+                    updatedData.purchasedPrice = null;
+                } else {
+                    const pdEl = document.getElementById('edit-purchasedDate');
+                    const ppEl = document.getElementById('edit-purchasedPrice');
+                    updatedData.purchasedDate = pdEl ? pdEl.value : (item.purchasedDate || null);
+                    updatedData.purchasedPrice = ppEl && ppEl.value ? parseFloat(ppEl.value) : (item.purchasedPrice || null);
+                }
             }
 
-            if(dbRef) {
-                update(dbRef, updatedData);
-                // Se è un'entrata e l'importo è cambiato, aggiusta il saldo cassa
-                if (type === 'incomeEntry' && updatedData.amount !== undefined && updatedData.amount !== item.amount) {
-                    const diff = (updatedData.amount || 0) - (item.amount || 0);
-                    update(cassaComuneRef, { balance: (cassaComune.balance || 0) + diff });
+            // --- VALIDAZIONE FONDI PRIMA DI SCRIVERE ---
+            if (type === 'variableExpense') {
+                const newPayer = updatedData.payer !== undefined ? updatedData.payer : item.payer;
+                const newAmount = updatedData.amount !== undefined ? parseFloat(updatedData.amount) : (item.amount || 0);
+                const oldWasCassa = item.payer === 'Cassa Comune';
+                const newIsCassa = newPayer === 'Cassa Comune';
+                if (newIsCassa) {
+                    const balanceAfter = oldWasCassa
+                        ? (cassaComune.balance || 0) - (newAmount - (item.amount || 0))
+                        : (cassaComune.balance || 0) - newAmount;
+                    if (balanceAfter < 0) {
+                        return alert("Errore: Fondi insufficienti nella cassa comune per questa modifica.");
+                    }
                 }
+            }
+
+            // --- COSTRUZIONE AGGIORNAMENTI ATOMICI ---
+            const allUpdates = {};
+            let hasDirectDbRef = false;
+
+            if (type === 'wishlistItem') {
+                allUpdates[`wishlist/${item.id}`] = { ...item, ...updatedData };
+                hasDirectDbRef = true;
+            } else if (type === 'futureMovement') {
+                allUpdates[`futureMovements/${item.id}`] = Object.assign({}, item, updatedData);
+                hasDirectDbRef = true;
+            } else if (type === 'fixedExpense') {
+                allUpdates[`fixedExpenses/${item.id}`] = Object.assign({}, item, updatedData);
+                hasDirectDbRef = true;
+            } else if (type === 'incomeEntry') {
+                allUpdates[`incomeEntries/${item.id}`] = Object.assign({}, item, updatedData);
+                if (updatedData.amount !== undefined && updatedData.amount !== item.amount) {
+                    const diff = (updatedData.amount || 0) - (item.amount || 0);
+                    allUpdates[`cassaComune/balance`] = (cassaComune.balance || 0) + diff;
+                    const movements = cassaComune.movements ? Object.entries(cassaComune.movements) : [];
+                    const linked = movements.find(([, m]) => m.sourceIncomeId === item.id);
+                    if (linked) allUpdates[`cassaComune/movements/${linked[0]}/amount`] = updatedData.amount;
+                }
+                hasDirectDbRef = true;
+            } else if (type === 'cashMovement') {
+                const newType = updatedData.type !== undefined ? updatedData.type : item.type;
+                const newAmount = updatedData.amount !== undefined ? parseFloat(updatedData.amount) : (item.amount || 0);
+                const oldImpact = item.type === 'deposit' ? (item.amount || 0) : -(item.amount || 0);
+                const newImpact = newType === 'deposit' ? newAmount : -newAmount;
+                const diff = newImpact - oldImpact;
+                allUpdates[`cassaComune/movements/${item.id}`] = Object.assign({}, item, updatedData);
+                if (Math.abs(diff) > 0.001) {
+                    allUpdates[`cassaComune/balance`] = (cassaComune.balance || 0) + diff;
+                }
+                hasDirectDbRef = true;
+            } else if (type === 'variableExpense') {
+                const newPayer = updatedData.payer !== undefined ? updatedData.payer : item.payer;
+                const newAmount = updatedData.amount !== undefined ? parseFloat(updatedData.amount) : (item.amount || 0);
+                const oldWasCassa = item.payer === 'Cassa Comune';
+                const newIsCassa = newPayer === 'Cassa Comune';
+                const cassaMovements = cassaComune.movements ? Object.entries(cassaComune.movements) : [];
+                const linkedMovement = cassaMovements.find(([, m]) => m.sourceExpenseId === item.id);
+
+                if (oldWasCassa && newIsCassa) {
+                    const diff = newAmount - (item.amount || 0);
+                    if (Math.abs(diff) > 0.001) {
+                        allUpdates[`cassaComune/balance`] = (cassaComune.balance || 0) - diff;
+                        if (linkedMovement) allUpdates[`cassaComune/movements/${linkedMovement[0]}/amount`] = newAmount;
+                    }
+                    allUpdates[`variableExpenses/${item.id}`] = Object.assign({}, item, updatedData, { payerId: 'Cassa Comune' });
+                } else if (oldWasCassa && !newIsCassa) {
+                    allUpdates[`cassaComune/balance`] = (cassaComune.balance || 0) + (item.amount || 0);
+                    if (linkedMovement) allUpdates[`cassaComune/movements/${linkedMovement[0]}`] = null;
+                    const payerMember = members.find(m => m.name === newPayer);
+                    allUpdates[`variableExpenses/${item.id}`] = Object.assign({}, item, updatedData, { payerId: payerMember?.id || newPayer });
+                } else if (!oldWasCassa && newIsCassa) {
+                    const newMovRef = push(ref(database, 'cassaComune/movements'));
+                    allUpdates[`cassaComune/balance`] = (cassaComune.balance || 0) - newAmount;
+                    allUpdates[`cassaComune/movements/${newMovRef.key}`] = {
+                        id: newMovRef.key, type: 'withdrawal', amount: newAmount, member: 'Cassa',
+                        date: updatedData.date || item.date,
+                        description: `Spesa: ${updatedData.description || item.description}`,
+                        sourceExpenseId: item.id
+                    };
+                    allUpdates[`variableExpenses/${item.id}`] = Object.assign({}, item, updatedData, { payerId: 'Cassa Comune' });
+                } else {
+                    const payerMember = members.find(m => m.name === newPayer);
+                    allUpdates[`variableExpenses/${item.id}`] = Object.assign({}, item, updatedData, { payerId: payerMember?.id || newPayer });
+                }
+                hasDirectDbRef = true;
+            }
+
+            if (hasDirectDbRef) {
+                update(ref(database), allUpdates);
                 alert('Modifiche salvate!');
                 closeEditModal();
             } else {
@@ -923,11 +1161,18 @@ const openEditModal = (id, type) => {
 
                 if(dbRef) {
                     remove(dbRef);
+                    const movements = cassaComune.movements ? Object.entries(cassaComune.movements) : [];
                     if (type === 'cashMovement') {
                         const newBalance = cassaComune.balance + (item.type === 'deposit' ? -item.amount : item.amount);
                         update(cassaComuneRef, { balance: newBalance });
                     } else if (type === 'incomeEntry') {
                         update(cassaComuneRef, { balance: (cassaComune.balance || 0) - (item.amount || 0) });
+                        const linked = movements.find(([, m]) => m.sourceIncomeId === item.id);
+                        if (linked) remove(ref(database, `cassaComune/movements/${linked[0]}`));
+                    } else if (type === 'variableExpense' && item.payer === 'Cassa Comune') {
+                        update(cassaComuneRef, { balance: (cassaComune.balance || 0) + (item.amount || 0) });
+                        const linked = movements.find(([, m]) => m.sourceExpenseId === item.id);
+                        if (linked) remove(ref(database, `cassaComune/movements/${linked[0]}`));
                     }
                     alert('Elemento eliminato.');
                     closeEditModal();
@@ -974,6 +1219,7 @@ function handleAddMovement() {
     document.getElementById('cash-form-section').classList.add('hidden');
     document.getElementById('cash-movement-amount').value = '';
     document.getElementById('cash-movement-description').value = '';
+    document.getElementById('cash-movement-date').value = '';
 }
 
 function handleExportData() { 
@@ -998,7 +1244,7 @@ function handleExportData() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `gateradio_finanze_backup_${formatDate(new Date().toISOString())}.json`;
+    a.download = `gateradio_finanze_backup_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1029,7 +1275,8 @@ function handleImportData(event) {
             updates['cassaComune'] = importedData.cassaComune || { balance: 0, movements: {} };
             updates['expenseRequests'] = importedData.expenseRequests || {};
             
-            set(ref(database), updates); // Sovrascrive l'intero DB con i nuovi dati
+            // Usa update (non set) per non sovrascrivere nodi non inclusi (es. users, loginStats, pushSubscriptions)
+            update(ref(database), updates);
             
             alert("Dati importati con successo e salvati su Firebase! La pagina verrà aggiornata.");
             location.reload(); // Ricarica per vedere i nuovi dati
@@ -1041,38 +1288,172 @@ function handleImportData(event) {
     reader.readAsText(file);
 }
 
-function exportToExcel() { 
+function exportToExcel() {
     if (typeof ExcelJS === 'undefined') {
         alert("Libreria di esportazione Excel non caricata.");
         return;
     }
-    const workbook = new ExcelJS.Workbook();
-    
-    // Sheet 1: Riepilogo
-    const summarySheet = workbook.addWorksheet('Riepilogo');
-    summarySheet.addRow(['Voce', 'Importo (€)']);
-    summarySheet.addRow(['Totale Spese Fisse', fixedExpenses.reduce((s, e) => s + (e.amount || 0), 0)]);
-    summarySheet.addRow(['Totale Spese Variabili', variableExpenses.reduce((s, e) => s + (e.amount || 0), 0)]);
-    summarySheet.addRow(['Totale Entrate', incomeEntries.reduce((s, e) => s + (e.amount || 0), 0)]);
-    summarySheet.addRow(['Saldo Cassa Comune', cassaComune.balance]);
-    
-    // Sheet 2: Conguaglio
-    const settlements = calculateAndRenderSettlement(true);
-    const settlementSheet = workbook.addWorksheet('Conguaglio');
-    settlementSheet.addRow(['Chi paga', 'Chi riceve', 'Importo (€)']);
-    if (settlements) settlements.forEach(s => settlementSheet.addRow([s.payer, s.recipient, s.amount.toFixed(2)]));
 
-    // Sheet 3: Spese Variabili
+    // --- Calcolo saldi GLOBALI (tutti i mesi, indipendente dal filtro UI) ---
+    const allExpenses = variableExpenses;
+    const allIncome = incomeEntries;
+    const allFixed = fixedExpenses;
+    const memberNames = members.map(m => m.name);
+
+    const totalVar = allExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+    const totalFix = allFixed.reduce((s, e) => s + (e.amount || 0), 0);
+    const totalInc = allIncome.reduce((s, e) => s + (e.amount || 0), 0);
+    const cassaBalance = cassaComune.balance || 0;
+
+    // Saldi per membro (logica identica a calculateAndRenderSettlement ma su tutti i dati)
+    const memberBalances = {};
+    const shareOfTotal = memberNames.length > 0 ? (totalVar + totalFix) / memberNames.length : 0;
+    memberNames.forEach(name => {
+        const expensesPaid = allExpenses.filter(e => e.payer === name).reduce((s, e) => s + (e.amount || 0), 0);
+        const cashDeposits = (cassaComune.movements ? Object.values(cassaComune.movements) : [])
+            .filter(m => m.member === name && m.type === 'deposit')
+            .reduce((s, m) => s + (m.amount || 0), 0);
+        const incomeShare = allIncome.reduce((s, i) => s + (i.membersInvolved && i.membersInvolved.includes(name) ? ((i.amount || 0) / (i.membersInvolved.length || 1)) : 0), 0);
+        memberBalances[name] = {
+            expensesPaid,
+            cashDeposits,
+            incomeShare,
+            shareOfTotal,
+            net: (expensesPaid + cashDeposits + incomeShare) - shareOfTotal
+        };
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Gateradio Gestionale';
+    workbook.created = new Date();
+
+    const styleHeader = (row) => {
+        row.eachCell(cell => {
+            cell.font = { bold: true };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+        });
+    };
+
+    // --- FOGLIO 1: Riepilogo Generale ---
+    const summarySheet = workbook.addWorksheet('Riepilogo');
+    summarySheet.columns = [{ width: 30 }, { width: 18 }];
+    styleHeader(summarySheet.addRow(['Voce', 'Importo (€)']));
+    summarySheet.addRow(['Totale Spese Fisse Mensili', totalFix]);
+    summarySheet.addRow(['Totale Spese Variabili', totalVar]);
+    summarySheet.addRow(['Totale Spese (Fisse + Variabili)', totalFix + totalVar]);
+    summarySheet.addRow(['Totale Entrate', totalInc]);
+    summarySheet.addRow(['Saldo Cassa Comune', cassaBalance]);
+    summarySheet.addRow(['Saldo Netto (Entrate - Spese)', totalInc - (totalFix + totalVar)]);
+    summarySheet.addRow(['Numero Membri', memberNames.length]);
+    if (memberNames.length > 0) {
+        summarySheet.addRow(['Quota Spese per Membro', (totalFix + totalVar) / memberNames.length]);
+    }
+    summarySheet.getColumn(2).numFmt = '€#,##0.00';
+
+    // --- FOGLIO 2: Saldi per Membro ---
+    const balanceSheet = workbook.addWorksheet('Saldi per Membro');
+    balanceSheet.columns = [{ width: 20 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 18 }, { width: 18 }];
+    styleHeader(balanceSheet.addRow(['Membro', 'Spese Pagate', 'Depositi Cassa', 'Quota Entrate', 'Quota Spese Totali', 'Saldo Netto']));
+    memberNames.forEach(name => {
+        const b = memberBalances[name];
+        const netRow = balanceSheet.addRow([name, b.expensesPaid, b.cashDeposits, b.incomeShare, b.shareOfTotal, b.net]);
+        netRow.getCell(6).font = { bold: true, color: { argb: b.net >= 0 ? 'FF16A34A' : 'FFDC2626' } };
+    });
+    [2, 3, 4, 5, 6].forEach(col => balanceSheet.getColumn(col).numFmt = '€#,##0.00');
+
+    // --- FOGLIO 3: Conguaglio ---
+    const settlementSheet = workbook.addWorksheet('Conguaglio');
+    settlementSheet.columns = [{ width: 20 }, { width: 20 }, { width: 18 }];
+    styleHeader(settlementSheet.addRow(['Chi deve pagare', 'A chi', 'Importo (€)']));
+    const creditors = memberNames
+        .filter(name => memberBalances[name].net > 0.01)
+        .map(name => ({ name, credit: memberBalances[name].net }))
+        .sort((a, b) => b.credit - a.credit);
+    const debtors = memberNames
+        .filter(name => memberBalances[name].net < -0.01)
+        .map(name => ({ name, debt: Math.abs(memberBalances[name].net) }))
+        .sort((a, b) => b.debt - a.debt);
+    if (debtors.length === 0) {
+        settlementSheet.addRow(['✓ Tutti i conti sono in pari', '', 0]);
+    } else {
+        // Distribuisce i debiti ai creditori in modo preciso
+        const creditorsQueue = creditors.map(c => ({ ...c }));
+        debtors.forEach(debtor => {
+            let remaining = debtor.debt;
+            for (const creditor of creditorsQueue) {
+                if (remaining < 0.01) break;
+                if (creditor.credit < 0.01) continue;
+                const payment = Math.min(remaining, creditor.credit);
+                settlementSheet.addRow([debtor.name, creditor.name, parseFloat(payment.toFixed(2))]);
+                remaining -= payment;
+                creditor.credit -= payment;
+            }
+        });
+    }
+    settlementSheet.getColumn(3).numFmt = '€#,##0.00';
+
+    // --- FOGLIO 4: Spese Variabili (ordinate per data) ---
     const varSheet = workbook.addWorksheet('Spese Variabili');
-    varSheet.addRow(['Data', 'Pagante', 'Importo (€)', 'Categoria', 'Descrizione']);
-    variableExpenses.forEach(e => varSheet.addRow([displayDate(e.date), e.payer, e.amount, e.category, e.description]));
-    
+    varSheet.columns = [{ width: 14 }, { width: 20 }, { width: 14 }, { width: 20 }, { width: 35 }];
+    styleHeader(varSheet.addRow(['Data', 'Pagante', 'Importo (€)', 'Categoria', 'Descrizione']));
+    [...allExpenses]
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .forEach(e => varSheet.addRow([
+            displayDate(e.date),
+            e.payer || '',
+            e.amount || 0,
+            e.category || '',
+            e.description || ''
+        ]));
+    varSheet.getColumn(3).numFmt = '€#,##0.00';
+
+    // --- FOGLIO 5: Entrate (ordinate per data) ---
+    const incomeSheet = workbook.addWorksheet('Entrate');
+    incomeSheet.columns = [{ width: 14 }, { width: 14 }, { width: 35 }, { width: 40 }];
+    styleHeader(incomeSheet.addRow(['Data', 'Importo (€)', 'Descrizione', 'Membri Coinvolti']));
+    [...allIncome]
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .forEach(i => incomeSheet.addRow([
+            displayDate(i.date),
+            i.amount || 0,
+            i.description || '',
+            (i.membersInvolved || []).join(', ')
+        ]));
+    incomeSheet.getColumn(2).numFmt = '€#,##0.00';
+
+    // --- FOGLIO 6: Spese Fisse ---
+    const fixedSheet = workbook.addWorksheet('Spese Fisse');
+    fixedSheet.columns = [{ width: 35 }, { width: 18 }];
+    styleHeader(fixedSheet.addRow(['Descrizione', 'Importo Mensile (€)']));
+    allFixed.forEach(f => fixedSheet.addRow([f.description || '', f.amount || 0]));
+    const fixedTotalRow = fixedSheet.addRow(['TOTALE', totalFix]);
+    fixedTotalRow.font = { bold: true };
+    fixedSheet.getColumn(2).numFmt = '€#,##0.00';
+
+    // --- FOGLIO 7: Storico Cassa (ordinato per data) ---
+    const cassaSheet = workbook.addWorksheet('Storico Cassa');
+    cassaSheet.columns = [{ width: 14 }, { width: 12 }, { width: 14 }, { width: 20 }, { width: 40 }];
+    styleHeader(cassaSheet.addRow(['Data', 'Tipo', 'Importo (€)', 'Membro', 'Descrizione']));
+    const allMovements = cassaComune.movements ? Object.values(cassaComune.movements) : [];
+    [...allMovements]
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .forEach(m => cassaSheet.addRow([
+            displayDate(m.date),
+            m.type === 'deposit' ? 'Deposito' : 'Prelievo',
+            m.type === 'deposit' ? (m.amount || 0) : -(m.amount || 0),
+            m.member || 'Cassa',
+            m.description || ''
+        ]));
+    const cassaTotalRow = cassaSheet.addRow(['', 'Saldo Finale', cassaBalance, '', '']);
+    cassaTotalRow.font = { bold: true };
+    cassaSheet.getColumn(3).numFmt = '€#,##0.00;[Red]-€#,##0.00';
+
     workbook.xlsx.writeBuffer().then(buffer => {
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `gateradio_conguaglio_${formatDate(new Date().toISOString())}.xlsx`;
+        a.download = `gateradio_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1083,6 +1464,7 @@ function exportToExcel() {
 
 // --- Event Listeners ---
 if (monthFilter) monthFilter.addEventListener('change', () => {
+    updateDashboardView();
     calculateAndRenderSettlement(false);
     if (typeof Chart !== 'undefined') {
         initializeCharts();
@@ -1117,6 +1499,9 @@ if (addPendingPaymentBtn) addPendingPaymentBtn.addEventListener('click', () => {
         date: new Date().toISOString().split('T')[0]
     });
     
+    document.getElementById('pending-payment-member').selectedIndex = 0;
+    document.getElementById('pending-payment-amount').value = '';
+    document.getElementById('pending-payment-description').value = '';
     document.getElementById('pending-payment-form-section').classList.add('hidden');
     alert("Richiesta quota aggiunta.");
 });
@@ -1163,7 +1548,7 @@ if (addFutureMovementBtn) addFutureMovementBtn.addEventListener('click', () => {
             alert("Movimento futuro pianificato con quote iniziali.");
             document.getElementById('future-movement-description').value = '';
             document.getElementById('future-movement-cost').value = '';
-            document.getElementById('future-movement-due-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('future-movement-due-date').value = '';
             document.getElementById('future-movement-form-section').classList.add('hidden');
         })
         .catch(error => {
@@ -1219,6 +1604,8 @@ if (addWishlistItemBtn) addWishlistItemBtn.addEventListener('click', () => {
         links: []
     });
     
+    document.getElementById('wishlist-item-name').value = '';
+    document.getElementById('wishlist-item-cost').value = '';
     document.getElementById('wishlist-form-section').classList.add('hidden');
     alert("Articolo aggiunto alla lista desideri.");
 });
@@ -1247,10 +1634,14 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
         amount,
         description: `Entrata: ${description}`,
         type: 'deposit',
+        member: membersInvolved.join(', '),
         sourceIncomeId: newIncomeId
     };
     update(ref(database), incomeUpdates);
 
+    document.getElementById('income-amount').value = '';
+    document.getElementById('income-description').value = '';
+    document.querySelectorAll('#income-members-checkboxes input:checked').forEach(cb => cb.checked = false);
     document.getElementById('income-form-section').classList.add('hidden');
     alert("Entrata aggiunta.");
 });
@@ -1296,7 +1687,8 @@ if (addExpenseBtn) {
                     amount: amount,
                     member: 'Cassa',
                     date: date,
-                    description: `Spesa: ${description}`
+                    description: `Spesa: ${description}`,
+                    sourceExpenseId: newExpenseRef.key
                 };
 
                 const newBalance = (cassaComune.balance || 0) - amount;
@@ -1335,6 +1727,14 @@ if (addExpenseBtn) {
             return;
         }
         
+        const payerEl = document.getElementById('payer');
+        const amountEl = document.getElementById('amount');
+        const categoryEl = document.getElementById('category');
+        const descEl = document.getElementById('description');
+        if (payerEl) payerEl.selectedIndex = 0;
+        if (amountEl) amountEl.value = '';
+        if (categoryEl) categoryEl.value = '';
+        if (descEl) descEl.value = '';
         document.getElementById('expense-form-section').classList.add('hidden');
     });
 }
@@ -1354,6 +1754,8 @@ if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
         payer: 'Tutti' // Default
     });
 
+    document.getElementById('fixed-desc').value = '';
+    document.getElementById('fixed-amount').value = '';
     document.getElementById('fixed-expenses-section').classList.add('hidden');
     alert("Spesa fissa aggiunta.");
 });
@@ -1374,7 +1776,7 @@ if (quickActionsContainer) quickActionsContainer.addEventListener('click', (e) =
 document.addEventListener('click', (e) => {
     const target = e.target;
     const movementCardHeader = target.closest('[data-movement-id]');
-    const movementCard = target.closest('.bg-blue-50'); 
+    const movementCard = target.closest('.future-movement-card');
 
     if (movementCardHeader && movementCard) {
         if (movementCardHeader === target || movementCardHeader.contains(target)) {
@@ -1403,17 +1805,36 @@ document.addEventListener('click', (e) => {
         const key = target.dataset.key;
         const req = expenseRequests[key];
         if (req) {
+            const amount = parseFloat(req.amount);
+            if (req.payer === 'Cassa Comune' && (cassaComune.balance || 0) < amount) {
+                return alert("Errore: Fondi insufficienti nella cassa comune per approvare questa spesa.");
+            }
             const newExpenseRef = push(varExpensesRef);
-            set(newExpenseRef, { 
-                id: newExpenseRef.key, 
-                payer: req.payer, 
+            const updates = {};
+            updates[`variableExpenses/${newExpenseRef.key}`] = {
+                id: newExpenseRef.key,
+                payer: req.payer,
                 payerId: req.payerId,
-                date: req.date, 
-                amount: req.amount, 
-                category: req.category, 
-                description: `[RICHIESTA] ${req.description}` 
-            });
-            update(ref(database, `expenseRequests/${key}`), { status: 'approved' });
+                date: req.date,
+                amount: amount,
+                category: req.category,
+                description: `[RICHIESTA] ${req.description}`
+            };
+            updates[`expenseRequests/${key}/status`] = 'approved';
+            if (req.payer === 'Cassa Comune') {
+                const newMovRef = push(ref(database, 'cassaComune/movements'));
+                updates[`cassaComune/balance`] = (cassaComune.balance || 0) - amount;
+                updates[`cassaComune/movements/${newMovRef.key}`] = {
+                    id: newMovRef.key,
+                    type: 'withdrawal',
+                    amount: amount,
+                    member: 'Cassa',
+                    date: req.date,
+                    description: `Spesa (approvata): ${req.description}`,
+                    sourceExpenseId: newExpenseRef.key
+                };
+            }
+            update(ref(database), updates);
         }
     } 
     else if (target.matches('.reject-request-btn')) {
@@ -1428,17 +1849,66 @@ document.addEventListener('click', (e) => {
                 .catch((error) => console.error("Errore eliminazione movimento futuro:", error));
         }
     }
+    else if (target.matches('.convert-future-btn')) {
+        const id = target.dataset.id;
+        const movement = futureMovements.find(m => m.id === id);
+        if (movement) {
+            const amount = parseFloat(movement.totalCost) || 0;
+            if ((cassaComune.balance || 0) < amount) {
+                return alert(`Errore: Fondi insufficienti in cassa (€${(cassaComune.balance || 0).toFixed(2)}) per coprire €${amount.toFixed(2)}.`);
+            }
+            if (confirm(`Converti "${movement.description}" in spesa reale di €${amount.toFixed(2)} dalla Cassa Comune?`)) {
+                const newExpenseRef = push(varExpensesRef);
+                const newMovRef = push(ref(database, 'cassaComune/movements'));
+                const today = new Date().toISOString().split('T')[0];
+                const updates = {};
+                updates[`variableExpenses/${newExpenseRef.key}`] = {
+                    id: newExpenseRef.key, date: today, payer: 'Cassa Comune',
+                    payerId: 'Cassa Comune', amount, category: 'Pianificato',
+                    description: movement.description
+                };
+                updates[`cassaComune/balance`] = (cassaComune.balance || 0) - amount;
+                updates[`cassaComune/movements/${newMovRef.key}`] = {
+                    id: newMovRef.key, type: 'withdrawal', amount, member: 'Cassa',
+                    date: today, description: `Spesa pianificata: ${movement.description}`,
+                    sourceExpenseId: newExpenseRef.key
+                };
+                updates[`futureMovements/${id}`] = null;
+                update(ref(database), updates);
+                alert('Movimento convertito in spesa reale dalla Cassa Comune.');
+            }
+        }
+    }
+    else if (target.matches('.mark-purchased-btn')) {
+        const id = target.dataset.id;
+        const item = wishlist.find(w => w.id === id);
+        if (item) {
+            const priceStr = prompt(`Prezzo finale pagato per "${item.name}" (€):`, (item.cost || 0).toFixed(2));
+            if (priceStr === null) return;
+            const purchasedPrice = parseFloat(priceStr);
+            if (isNaN(purchasedPrice) || purchasedPrice < 0) return alert("Prezzo non valido.");
+            const today = new Date().toISOString().split('T')[0];
+            update(ref(database, `wishlist/${id}`), { purchased: true, purchasedDate: today, purchasedPrice });
+        }
+    }
     else if (target.matches('.delete-item-btn')) { // Gestione eliminazione altri tipi (es. Cassa)
         const id = target.dataset.id;
         const type = target.dataset.type;
         if (id && type && confirm(`Sei sicuro di voler eliminare questo elemento?`)) {
             if (type === 'cashMovement') {
-                const movements = cassaComune.movements ? { ...cassaComune.movements } : {};
-                const movementToDelete = movements[id];
+                const movementToDelete = cassaComune.movements ? cassaComune.movements[id] : null;
                 if (movementToDelete) {
-                    const newBalance = cassaComune.balance + (movementToDelete.type === 'deposit' ? -movementToDelete.amount : movementToDelete.amount);
-                    delete movements[id];
-                    set(cassaComuneRef, { balance: newBalance, movements: movements });
+                    if (movementToDelete.sourceIncomeId) {
+                        return alert("Questo movimento è collegato a un'entrata. Per eliminarlo correttamente usa il tasto Elimina nell'elenco Entrate.");
+                    }
+                    if (movementToDelete.sourceExpenseId) {
+                        return alert("Questo movimento è collegato a una spesa. Per eliminarlo correttamente usa il tasto Elimina nell'elenco Spese Variabili.");
+                    }
+                    const newBalance = (cassaComune.balance || 0) + (movementToDelete.type === 'deposit' ? -movementToDelete.amount : movementToDelete.amount);
+                    const updates = {};
+                    updates[`cassaComune/balance`] = newBalance;
+                    updates[`cassaComune/movements/${id}`] = null;
+                    update(ref(database), updates);
                     alert('Movimento cassa eliminato e bilancio ricalcolato.');
                 }
             }
@@ -1452,12 +1922,22 @@ document.addEventListener('click', (e) => {
     } 
     else if (target.matches('.complete-pending-btn')) {
         const id = target.dataset.id;
-        if (confirm("Pagamento completato?")) {
-            // Dobbiamo trovare la chiave giusta per eliminare
-            const keyToRemove = Object.keys(pendingPayments).find(key => pendingPayments[key]?.id === id);
-            if(keyToRemove) {
-                remove(ref(database, `pendingPayments/${keyToRemove}`));
-            }
+        const payment = pendingPayments.find(p => p.id === id);
+        if (payment && confirm(`Confermi che ${payment.member} ha versato €${(parseFloat(payment.amount) || 0).toFixed(2)} per "${payment.description}"?`)) {
+            const newMovRef = push(ref(database, 'cassaComune/movements'));
+            const today = new Date().toISOString().split('T')[0];
+            const updates = {};
+            updates[`pendingPayments/${payment.id}`] = null;
+            updates[`cassaComune/balance`] = (cassaComune.balance || 0) + payment.amount;
+            updates[`cassaComune/movements/${newMovRef.key}`] = {
+                id: newMovRef.key,
+                type: 'deposit',
+                amount: payment.amount,
+                member: payment.member,
+                date: today,
+                description: `Versamento quota: ${payment.description}`
+            };
+            update(ref(database), updates);
         }
     }
     else if (target.id === 'close-settlement-btn') {
@@ -1504,11 +1984,12 @@ document.addEventListener('change', (e) => {
         const shareIndex = parseInt(target.dataset.shareIndex, 10);
         const newAmount = parseFloat(target.value);
 
-        if (movementId && !isNaN(shareIndex) && !isNaN(newAmount)) {
+        if (movementId && !isNaN(newAmount)) {
             const movement = futureMovements.find(m => m.id === movementId);
-            if (movement && movement.shares && movement.shares[shareIndex]) {
+            if (movement && movement.shares && movement.shares[shareIndex] !== undefined) {
                  movement.shares[shareIndex].amount = newAmount;
-                 const newTotalCost = movement.shares.reduce((sum, s) => sum + (s.amount || 0), 0);
+                 const allShares = Array.isArray(movement.shares) ? movement.shares : Object.values(movement.shares);
+                 const newTotalCost = allShares.reduce((sum, s) => sum + (s.amount || 0), 0);
                  const updates = {};
                  updates[`futureMovements/${movementId}/shares/${shareIndex}/amount`] = newAmount;
                  updates[`futureMovements/${movementId}/totalCost`] = newTotalCost; 
