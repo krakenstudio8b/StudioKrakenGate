@@ -860,7 +860,17 @@ const openEditModal = (id, type) => {
     const editModalFormContainer = document.getElementById('edit-modal-form-container');
     const editModalActions = document.getElementById('edit-modal-actions');
     
-    editModalTitle.textContent = `Modifica ${type}`;
+    const typeTitles = {
+        variableExpense: `Modifica Spesa: ${item.description || ''}`,
+        fixedExpense: `Modifica Spesa Fissa: ${item.description || ''}`,
+        incomeEntry: `Modifica Entrata: ${item.description || ''}`,
+        cashMovement: `Modifica Movimento Cassa: ${item.description || ''}`,
+        wishlistItem: `Modifica Wishlist: ${item.name || ''}`,
+        futureMovement: `Modifica Movimento Futuro: ${item.description || ''}`,
+        pendingPayment: `Modifica Pagamento: ${item.description || ''}`,
+        member: `Modifica Membro: ${item.name || ''}`,
+    };
+    editModalTitle.textContent = typeTitles[type] || `Modifica: ${item.description || item.name || ''}`;
     let formHtml = `<form id="edit-form" data-id="${id}" data-type="${type}" class="space-y-4">`;
 
     if (type === 'wishlistItem') {
@@ -955,25 +965,92 @@ const openEditModal = (id, type) => {
                 <input type="text" id="edit-member" name="member" value="${item.member || ''}" class="w-full p-2 border rounded-lg mt-1">
             </div>
         `;
+    } else if (type === 'incomeEntry') {
+        const memberCheckboxes = [...members.map(m => `
+            <div class="flex items-center">
+                <input type="checkbox" id="edit-income-member-${m.id}" name="income-member" value="${m.name}" class="form-checkbox h-4 w-4 text-indigo-600" ${(item.membersInvolved || []).includes(m.name) ? 'checked' : ''}>
+                <label for="edit-income-member-${m.id}" class="ml-2 text-sm">${m.name}</label>
+            </div>`),
+            `<div class="flex items-center border-t pt-2 mt-1">
+                <input type="checkbox" id="edit-income-member-evento-esterno" name="income-member" value="EVENTO ESTERNO" class="form-checkbox h-4 w-4 text-teal-600" ${(item.membersInvolved || []).includes('EVENTO ESTERNO') ? 'checked' : ''}>
+                <label for="edit-income-member-evento-esterno" class="ml-2 text-sm font-medium text-teal-700">EVENTO ESTERNO</label>
+            </div>`
+        ].join('');
+        formHtml += `
+            <div>
+                <label for="edit-description" class="block text-sm font-medium">Descrizione</label>
+                <input type="text" id="edit-description" name="description" value="${item.description || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-amount" class="block text-sm font-medium">Importo (€)</label>
+                <input type="number" step="0.01" id="edit-amount" name="amount" value="${item.amount || 0}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-date" class="block text-sm font-medium">Data</label>
+                <input type="date" id="edit-date" name="date" value="${item.date || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1">Membri Coinvolti</label>
+                <div id="edit-income-members" class="p-3 border rounded-lg space-y-2">${memberCheckboxes}</div>
+            </div>
+        `;
+    } else if (type === 'variableExpense') {
+        const memberOptions = members.map(m => `<option value="${m.name}" ${item.payer === m.name ? 'selected' : ''}>${m.name}</option>`).join('');
+        const categoryOptions = ['Affitto','Bollette','Attrezzatura','Materiali','Manutenzione','Cibo e Bevande','Altro'].map(c => `<option value="${c}" ${item.category === c ? 'selected' : ''}>${c}</option>`).join('');
+        formHtml += `
+            <div>
+                <label for="edit-description" class="block text-sm font-medium">Descrizione</label>
+                <input type="text" id="edit-description" name="description" value="${item.description || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-amount" class="block text-sm font-medium">Importo (€)</label>
+                <input type="number" step="0.01" id="edit-amount" name="amount" value="${item.amount || 0}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-date" class="block text-sm font-medium">Data</label>
+                <input type="date" id="edit-date" name="date" value="${item.date || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-payer" class="block text-sm font-medium">Pagato da</label>
+                <select id="edit-payer" name="payer" class="w-full p-2 border rounded-lg mt-1 bg-white">
+                    <option value="Cassa Comune" ${item.payer === 'Cassa Comune' ? 'selected' : ''}>Cassa Comune</option>
+                    ${memberOptions}
+                </select>
+            </div>
+            <div>
+                <label for="edit-category" class="block text-sm font-medium">Categoria</label>
+                <input type="text" id="edit-category" name="category" list="edit-category-list" value="${item.category || ''}" class="w-full p-2 border rounded-lg mt-1">
+                <datalist id="edit-category-list">${categoryOptions}</datalist>
+            </div>
+        `;
+    } else if (type === 'fixedExpense') {
+        const categoryOptions = ['Affitto','Bollette','Attrezzatura','Materiali','Manutenzione','Cibo e Bevande','Altro'].map(c => `<option value="${c}" ${item.category === c ? 'selected' : ''}>${c}</option>`).join('');
+        formHtml += `
+            <div>
+                <label for="edit-description" class="block text-sm font-medium">Descrizione</label>
+                <input type="text" id="edit-description" name="description" value="${item.description || ''}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-amount" class="block text-sm font-medium">Importo (€)</label>
+                <input type="number" step="0.01" id="edit-amount" name="amount" value="${item.amount || 0}" class="w-full p-2 border rounded-lg mt-1">
+            </div>
+            <div>
+                <label for="edit-category" class="block text-sm font-medium">Categoria</label>
+                <input type="text" id="edit-category" name="category" list="edit-category-list-fixed" value="${item.category || ''}" class="w-full p-2 border rounded-lg mt-1">
+                <datalist id="edit-category-list-fixed">${categoryOptions}</datalist>
+            </div>
+        `;
     } else {
-        // Logica generica per gli altri tipi (fixedExpense, ecc.)
+        // Logica generica per gli altri tipi (member, pendingPayment, ecc.)
         const hiddenKeys = ['id', 'payerId', 'sourceExpenseId', 'sourceIncomeId'];
+        const keyLabels = { name: 'Nome', amount: 'Importo (€)', date: 'Data', description: 'Descrizione', member: 'Membro', type: 'Tipo', dueDate: 'Data Scadenza', category: 'Categoria', payer: 'Pagato da' };
         formHtml += Object.entries(item).map(([key, value]) => {
             if (hiddenKeys.includes(key) || typeof value === 'object') return '';
             let inputType = 'text';
             if (typeof value === 'number') inputType = 'number';
             if (key.includes('date') || key.includes('dueDate')) inputType = 'date';
-
-            if (key === 'payer' && type === 'variableExpense') {
-                const memberOptions = members.map(m => `<option value="${m.name}" ${value === m.name ? 'selected' : ''}>${m.name}</option>`).join('');
-                return `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label>
-                        <select id="edit-${key}" name="${key}" class="w-full p-2 border rounded-lg mt-1 bg-white">
-                            <option value="Cassa Comune" ${value === 'Cassa Comune' ? 'selected' : ''}>Cassa Comune</option>
-                            ${memberOptions}
-                        </select></div>`;
-            }
-
-            return `<div><label for="edit-${key}" class="block text-sm font-medium capitalize">${key}</label><input type="${inputType}" id="edit-${key}" name="${key}" value="${value}" class="w-full p-2 border rounded-lg mt-1"></div>`;
+            const label = keyLabels[key] || key;
+            return `<div><label for="edit-${key}" class="block text-sm font-medium">${label}</label><input type="${inputType}" id="edit-${key}" name="${key}" value="${value}" class="w-full p-2 border rounded-lg mt-1"></div>`;
         }).join('');
     }
 
@@ -1034,6 +1111,13 @@ const openEditModal = (id, type) => {
             for (const [key, value] of formData.entries()) {
                 const originalValue = item[key];
                 updatedData[key] = (typeof originalValue === 'number' && !isNaN(originalValue)) ? parseFloat(value) : value;
+            }
+
+            if (type === 'incomeEntry') {
+                updatedData.membersInvolved = Array.from(document.querySelectorAll('#edit-income-members input[name="income-member"]:checked')).map(cb => cb.value);
+                if (updatedData.membersInvolved.length === 0) {
+                    return alert("Seleziona almeno un membro coinvolto.");
+                }
             }
 
             if (type === 'wishlistItem') {
