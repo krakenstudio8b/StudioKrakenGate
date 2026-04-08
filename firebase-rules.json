@@ -213,6 +213,22 @@
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
     },
 
+    // ─────────────────────────────────────────────────────────────────
+    // gateRadio/ — Contenuti pubblici del sito Gate Radio
+    //   Lettura: pubblica (sito Gate Radio non autenticato)
+    //   Scrittura: solo admin (pannello gestionale)
+    // ─────────────────────────────────────────────────────────────────
+    "gateRadio": {
+      "streams": {
+        ".read": true,
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      },
+      "events": {
+        ".read": true,
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
     // pushSubscriptions/ — Sottoscrizioni notifiche push
     //   Ogni utente scrive la propria, solo admin legge tutte
     "pushSubscriptions": {

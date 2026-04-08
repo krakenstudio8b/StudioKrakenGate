@@ -121,6 +121,17 @@
       ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
     },
 
+    "gateRadio": {
+      "streams": {
+        ".read": true,
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      },
+      "events": {
+        ".read": true,
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+      }
+    },
+
     "pushSubscriptions": {
       ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
       "$userName": {

@@ -569,8 +569,10 @@ function initializeAdminPage() {
 
         document.getElementById('audit-log-section')?.classList.remove('hidden');
         document.getElementById('backup-section')?.classList.remove('hidden');
+        document.getElementById('gate-radio-section')?.classList.remove('hidden');
         loadAuditLog();
         loadBackups();
+        initGateRadioCMS();
     }
 }
 
@@ -687,6 +689,128 @@ document.addEventListener('click', async (e) => {
 const runBackupBtn = document.getElementById('run-backup-btn');
 if (runBackupBtn) runBackupBtn.addEventListener('click', runBackupNow);
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GATE RADIO CMS
+// ═══════════════════════════════════════════════════════════════════════════
+
+window.grSwitchTab = function(tab) {
+    document.getElementById('gr-streams-tab').classList.toggle('hidden', tab !== 'streams');
+    document.getElementById('gr-events-tab').classList.toggle('hidden', tab !== 'events');
+    document.getElementById('gr-tab-streams').className = tab === 'streams'
+        ? 'gr-tab bg-indigo-600 text-white py-2 px-5 rounded-lg font-semibold text-sm transition-colors'
+        : 'gr-tab bg-gray-200 text-gray-700 py-2 px-5 rounded-lg font-semibold text-sm transition-colors';
+    document.getElementById('gr-tab-events').className = tab === 'events'
+        ? 'gr-tab bg-indigo-600 text-white py-2 px-5 rounded-lg font-semibold text-sm transition-colors'
+        : 'gr-tab bg-gray-200 text-gray-700 py-2 px-5 rounded-lg font-semibold text-sm transition-colors';
+};
+
+function grFeedback(id, msg, ok = true) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = ok ? '#16a34a' : '#dc2626';
+    setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+function grDeleteItem(path, label) {
+    if (!confirm(`Eliminare "${label}"?`)) return;
+    remove(ref(database, path))
+        .then(() => logAudit('gate_radio_delete', { path, label }))
+        .catch(err => alert('Errore: ' + err.message));
+}
+window.grDeleteItem = grDeleteItem;
+
+function initGateRadioCMS() {
+    // ── Streams ────────────────────────────────────────────────────────────
+    const streamsRef = ref(database, 'gateRadio/streams');
+
+    onValue(streamsRef, snap => {
+        const container = document.getElementById('gr-streams-list');
+        if (!container) return;
+        const data = snap.val();
+        if (!data) { container.innerHTML = '<p class="text-gray-400 text-sm">Nessuna live ancora.</p>'; return; }
+        const items = Object.entries(data).sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
+        container.innerHTML = items.map(([key, s]) => `
+            <div class="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2 border text-sm">
+                <div>
+                    <span class="font-semibold">${s.artist}</span>
+                    <span class="text-gray-400 ml-2">${s.date}</span>
+                    <span class="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">${s.season}</span>
+                </div>
+                <button onclick="grDeleteItem('gateRadio/streams/${key}', '${s.artist.replace(/'/g,"\'")}')"
+                    class="text-red-500 hover:text-red-700 text-xs font-semibold ml-4">Elimina</button>
+            </div>
+        `).join('');
+    });
+
+    document.getElementById('gr-stream-form')?.addEventListener('submit', async e => {
+        e.preventDefault();
+        const stream = {
+            artist:       document.getElementById('gr-s-artist').value.trim(),
+            title:        document.getElementById('gr-s-title').value.trim() || 'LIVE STREAMING',
+            date:         document.getElementById('gr-s-date').value,
+            season:       document.getElementById('gr-s-season').value,
+            soundcloudUrl: document.getElementById('gr-s-url').value.trim() || '#',
+            imageUrl:     document.getElementById('gr-s-image').value.trim(),
+            tags:         document.getElementById('gr-s-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+        };
+        try {
+            await push(streamsRef, stream);
+            await logAudit('gate_radio_stream_add', { artist: stream.artist, date: stream.date });
+            grFeedback('gr-stream-feedback', '✓ Live pubblicata!');
+            e.target.reset();
+            document.getElementById('gr-s-title').value = 'LIVE STREAMING';
+        } catch (err) {
+            grFeedback('gr-stream-feedback', 'Errore: ' + err.message, false);
+        }
+    });
+
+    // ── Events ─────────────────────────────────────────────────────────────
+    const eventsRef = ref(database, 'gateRadio/events');
+
+    onValue(eventsRef, snap => {
+        const container = document.getElementById('gr-events-list');
+        if (!container) return;
+        const data = snap.val();
+        if (!data) { container.innerHTML = '<p class="text-gray-400 text-sm">Nessun evento ancora.</p>'; return; }
+        const items = Object.entries(data).sort((a, b) => new Date(b[1].date) - new Date(a[1].date));
+        container.innerHTML = items.map(([key, ev]) => `
+            <div class="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2 border text-sm">
+                <div>
+                    <span class="font-semibold">${ev.title}</span>
+                    <span class="text-gray-400 ml-2">${ev.date}</span>
+                    <span class="text-gray-500 ml-2 text-xs">${ev.location || ''}</span>
+                </div>
+                <button onclick="grDeleteItem('gateRadio/events/${key}', '${ev.title.replace(/'/g,"\'")}')"
+                    class="text-red-500 hover:text-red-700 text-xs font-semibold ml-4">Elimina</button>
+            </div>
+        `).join('');
+    });
+
+    document.getElementById('gr-event-form')?.addEventListener('submit', async e => {
+        e.preventDefault();
+        const event = {
+            title:       document.getElementById('gr-e-title').value.trim(),
+            date:        document.getElementById('gr-e-date').value,
+            location:    document.getElementById('gr-e-location').value.trim(),
+            description: document.getElementById('gr-e-description').value.trim(),
+            details:     document.getElementById('gr-e-details').value.trim(),
+            mainImage:   document.getElementById('gr-e-image').value.trim(),
+            galleryImages: document.getElementById('gr-e-image').value.trim()
+                ? [document.getElementById('gr-e-image').value.trim()] : [],
+            tags: document.getElementById('gr-e-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+        };
+        try {
+            await push(eventsRef, event);
+            await logAudit('gate_radio_event_add', { title: event.title, date: event.date });
+            grFeedback('gr-event-feedback', '✓ Evento pubblicato!');
+            e.target.reset();
+        } catch (err) {
+            grFeedback('gr-event-feedback', 'Errore: ' + err.message, false);
+        }
+    });
+}
 
 // --- PUNTO DI INGRESSO ---
 // Aspetta che l'autenticazione sia pronta, poi avvia la logica della pagina.
