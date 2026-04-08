@@ -72,7 +72,7 @@
 
     "pendingCalendarEvents": {
       ".read":  "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() !== null"
     },
 
     "cleaningSchedule": {
@@ -111,11 +111,21 @@
       }
     },
 
+    "auditLog": {
+      ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() !== null"
+    },
+
+    "backups": {
+      ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
     "pushSubscriptions": {
       ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
       "$userName": {
-        ".read":  "auth != null",
-        ".write": "auth != null"
+        ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() !== null",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() !== null"
       }
     }
   }

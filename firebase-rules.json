@@ -135,10 +135,10 @@
     },
 
     // pendingCalendarEvents/ — Proposte evento da approvare
-    //   Scrittura: tutti gli autenticati (anche user_base può proporre un evento)
+    //   Scrittura: utenti registrati nell'app (hanno un ruolo assegnato)
     "pendingCalendarEvents": {
       ".read":  "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() !== null"
     },
 
     // cleaningSchedule/ — Turni pulizie
@@ -193,13 +193,33 @@
       }
     },
 
+    // ─────────────────────────────────────────────────────────────────
+    // auditLog/ — Registro operazioni critiche
+    //   Lettura: solo admin (visualizzazione nel pannello admin)
+    //   Scrittura: utenti con ruolo assegnato (admin, user, user_base)
+    // ─────────────────────────────────────────────────────────────────
+    "auditLog": {
+      ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() !== null"
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // backups/ — Snapshot giornalieri dei dati finanziari
+    //   Lettura: solo admin
+    //   Scrittura: solo admin (da pannello o via cron server-side)
+    // ─────────────────────────────────────────────────────────────────
+    "backups": {
+      ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    },
+
     // pushSubscriptions/ — Sottoscrizioni notifiche push
     //   Ogni utente scrive la propria, solo admin legge tutte
     "pushSubscriptions": {
       ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
       "$userName": {
-        ".read":  "auth != null",
-        ".write": "auth != null"
+        ".read":  "auth != null && root.child('users').child(auth.uid).child('role').val() !== null",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() !== null"
       }
     }
 

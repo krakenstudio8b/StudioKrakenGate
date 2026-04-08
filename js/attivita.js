@@ -5,6 +5,7 @@ import { database } from './firebase-config.js';
 import { ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 import { sendNotification } from './notifications.js';
+import { logAudit } from './audit.js';
 
 document.addEventListener('authReady', () => {
     // Riferimenti Firebase
@@ -217,8 +218,10 @@ document.addEventListener('authReady', () => {
                     const newStatus = btn.dataset.status;
                     menuDropdown.classList.add('hidden');
                     if (task.status !== newStatus) {
+                        const oldStatus = task.status;
                         task.status = newStatus;
                         saveData();
+                        logAudit('task_status_changed', { title: task.title, taskId: task.id, from: oldStatus, to: newStatus });
                         renderTasks();
                         if (window.showToast) window.showToast(`Spostato in ${statusLabels[newStatus]}`);
                         const involved = [...new Set([
@@ -314,6 +317,7 @@ document.addEventListener('authReady', () => {
         if (!task) return;
         task.archived = true;
         saveData();
+        logAudit('task_archived', { title: task.title, taskId });
         renderTasks();
     };
 
@@ -591,6 +595,7 @@ document.addEventListener('authReady', () => {
                 const oldTask = allTasks[taskIndex];
                 taskData.comments = oldTask.comments || [];
                 allTasks[taskIndex] = { ...oldTask, ...taskData };
+                logAudit('task_updated', { title: taskData.title, taskId: currentTaskId });
 
                 // Notifica nuovi assegnatari
                 const oldAssignees = oldTask.assignedTo || [];
@@ -674,6 +679,7 @@ document.addEventListener('authReady', () => {
                 ...taskData
             };
             allTasks.push(newTask);
+            logAudit('task_created', { title: taskData.title, owner: taskData.owner, priority: taskData.priority });
 
             // Notifica tutti gli assegnatari + owner
             const toNotify = [...new Set([
@@ -696,8 +702,10 @@ document.addEventListener('authReady', () => {
 
     if (deleteTaskBtn) deleteTaskBtn.addEventListener('click', () => {
         if (currentTaskId && confirm('Sei sicuro di voler eliminare questo task?')) {
+            const taskToDelete = allTasks.find(t => t.id === currentTaskId);
             allTasks = allTasks.filter(t => t.id !== currentTaskId);
             saveData();
+            logAudit('task_deleted', { title: taskToDelete?.title || 'N/D', taskId: currentTaskId });
             renderTasks();
             forceCloseModal();
         }
@@ -735,8 +743,10 @@ document.addEventListener('authReady', () => {
                     const newStatus = evt.to.dataset.status;
                     const task = allTasks.find(t => t.id === taskId);
                     if (task && task.status !== newStatus) {
+                        const oldStatus = task.status;
                         task.status = newStatus;
                         saveData();
+                        logAudit('task_status_changed', { title: task.title, taskId, from: oldStatus, to: newStatus });
 
                         const involved = [...new Set([
                             ...(task.assignedTo || []),

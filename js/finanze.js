@@ -3,6 +3,7 @@
 import { database } from './firebase-config.js';
 import { ref, set, onValue, push, update, remove, get } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
+import { logAudit } from './audit.js';
 
 
 // --- Riferimenti ai nodi del tuo database ---
@@ -1260,6 +1261,11 @@ const openEditModal = (id, type) => {
                         const linked = movements.find(([, m]) => m.sourceExpenseId === item.id);
                         if (linked) remove(ref(database, `cassaComune/movements/${linked[0]}`));
                     }
+                    logAudit('item_deleted', {
+                        type,
+                        description: item.description || item.name || 'N/D',
+                        amount: item.amount
+                    });
                     alert('Elemento eliminato.');
                     closeEditModal();
                 }
@@ -1300,6 +1306,7 @@ function handleAddMovement() {
     updates[`cassaComune/balance`] = newBalance;
 
     update(ref(database), updates);
+    logAudit('cash_movement_added', { type: movementType, amount, description, member });
 
     alert(`Movimento di ${movementType} registrato. Nuovo saldo: €${newBalance.toFixed(2)}`);
     document.getElementById('cash-form-section').classList.add('hidden');
@@ -1724,6 +1731,7 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
         sourceIncomeId: newIncomeId
     };
     update(ref(database), incomeUpdates);
+    logAudit('income_added', { amount, description, members: membersInvolved.join(', ') });
 
     document.getElementById('income-amount').value = '';
     document.getElementById('income-description').value = '';
@@ -1784,12 +1792,14 @@ if (addExpenseBtn) {
                 updates[`cassaComune/movements/${newMovementRef.key}`] = newMovement;
 
                 update(ref(database), updates);
+                logAudit('expense_added', { amount, description, payer: 'Cassa Comune', category });
                 alert('Spesa pagata dalla Cassa Comune aggiunta.');
 
             } else {
                 // Pagante è un membro, Admin lo aggiunge direttamente
                 const newExpenseRef = push(varExpensesRef);
                 set(newExpenseRef, { id: newExpenseRef.key, date, payer, amount, category, description, payerId });
+                logAudit('expense_added', { amount, description, payer, category });
                 alert('Spesa aggiunta con successo.');
             }
         } else if (currentUser.role === 'user') {
@@ -1806,6 +1816,7 @@ if (addExpenseBtn) {
                 description,
                 status: 'pending'
             });
+            logAudit('expense_request_submitted', { amount, description, payer, category });
             alert("Richiesta di spesa inviata.");
         } else {
             // user_base non può inserire spese
@@ -1839,6 +1850,7 @@ if (addFixedExpenseBtn) addFixedExpenseBtn.addEventListener('click', () => {
         amount: amount,
         payer: 'Tutti' // Default
     });
+    logAudit('fixed_expense_added', { description, amount });
 
     document.getElementById('fixed-desc').value = '';
     document.getElementById('fixed-amount').value = '';
@@ -1930,8 +1942,15 @@ document.addEventListener('click', (e) => {
     else if (target.matches('.delete-future-movement-btn')) {
         const idToDelete = target.dataset.id;
         if (idToDelete && confirm(`Sei sicuro di voler eliminare questo movimento futuro?`)) {
+            const movToDelete = futureMovements.find(m => m.id === idToDelete);
             remove(ref(database, `futureMovements/${idToDelete}`))
-                .then(() => alert('Movimento futuro eliminato.'))
+                .then(() => {
+                    logAudit('future_movement_deleted', {
+                        description: movToDelete?.description || 'N/D',
+                        amount: movToDelete?.totalCost
+                    });
+                    alert('Movimento futuro eliminato.');
+                })
                 .catch((error) => console.error("Errore eliminazione movimento futuro:", error));
         }
     }

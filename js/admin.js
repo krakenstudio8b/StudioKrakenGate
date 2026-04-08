@@ -1,8 +1,9 @@
 // js/admin.js (VERSIONE COMPLETA - Team Rotation con Conteggio)
 import { database } from './firebase-config.js';
-import { ref, onValue, get, set, push, remove, update } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { ref, onValue, get, set, push, remove, update, query, orderByKey, limitToLast } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
 import { currentUser } from './auth-guard.js';
 import { renderLeaderboard, renderLeaderboardHistory, adminSetWeeklyPoints, adminRestoreFromHistory } from './login-points.js';
+import { logAudit } from './audit.js';
 
 // --- RIFERIMENTI AGLI ELEMENTI HTML ---
 const calendarApprovalSection = document.getElementById('calendar-approval-section');
@@ -101,12 +102,24 @@ async function approveExpenseRequest(requestKey, requestData) {
     }
     const requestToUpdateRef = ref(database, `expenseRequests/${requestKey}`);
     await update(requestToUpdateRef, { status: 'approved' });
+    logAudit('expense_approved', {
+        amount: requestData.amount,
+        description: requestData.description,
+        requester: requestData.requesterName || 'N/D'
+    });
     alert('Spesa approvata e registrata con successo!');
 }
 async function rejectExpenseRequest(requestKey) {
     if (confirm("Sei sicuro di voler rifiutare questa richiesta? L'azione è irreversibile.")) {
         const requestToUpdateRef = ref(database, `expenseRequests/${requestKey}`);
+        const snap = await get(requestToUpdateRef);
+        const reqData = snap.val() || {};
         await update(requestToUpdateRef, { status: 'rejected' });
+        logAudit('expense_rejected', {
+            description: reqData.description || 'N/D',
+            requester: reqData.requesterName || 'N/D',
+            amount: reqData.amount
+        });
         alert('Richiesta rifiutata.');
     }
 }
@@ -152,11 +165,13 @@ async function approveCalendarEvent(eventKey, eventData) {
     const newEventRef = push(calendarEventsRef);
     await set(newEventRef, eventData);
     await remove(ref(database, `pendingCalendarEvents/${eventKey}`));
+    logAudit('calendar_event_approved', { title: eventData.title, date: eventData.start });
     alert('Evento approvato e aggiunto al calendario.');
 }
-async function rejectCalendarEvent(eventKey) {
+async function rejectCalendarEvent(eventKey, eventData) {
     if (confirm("Sei sicuro di voler rifiutare questo evento?")) {
         await remove(ref(database, `pendingCalendarEvents/${eventKey}`));
+        logAudit('calendar_event_rejected', { title: eventData?.title || 'N/D', date: eventData?.start });
         alert('Richiesta di evento rifiutata.');
     }
 }
@@ -329,7 +344,8 @@ async function handleGeneration() {
         // 5. Esegui l'aggiornamento
         await update(ref(database), updates);
 
-        // 6. Feedback
+        // 6. Audit + Feedback
+        logAudit('cleaning_generated', { date: nextCleaningDateStr });
         generationFeedback.textContent = `Turno generato per ${nextCleaningDateStr} con successo!`;
         generationFeedback.className = "mt-4 text-sm text-green-600 font-semibold";
         lastCleaningDayInfo.innerHTML = `Ultima sessione generata: <strong>${nextCleaningDateStr}</strong>.`;
@@ -340,6 +356,191 @@ async function handleGeneration() {
         generationFeedback.className = "mt-4 text-sm text-red-600 font-semibold";
     } finally {
         generateCleaningBtn.disabled = false;
+    }
+}
+
+
+// --- AUDIT LOG ---
+
+const AUDIT_ACTION_LABELS = {
+    expense_approved:          'Spesa approvata',
+    expense_rejected:          'Spesa rifiutata',
+    expense_added:             'Spesa aggiunta',
+    expense_request_submitted: 'Richiesta spesa inviata',
+    fixed_expense_added:       'Spesa fissa aggiunta',
+    income_added:              'Entrata aggiunta',
+    cash_movement_added:       'Movimento cassa',
+    calendar_event_approved:   'Evento approvato',
+    calendar_event_rejected:   'Evento rifiutato',
+    role_changed:              'Ruolo modificato',
+    cleaning_generated:        'Turno pulizie generato',
+    task_created:              'Task creato',
+    task_updated:              'Task modificato',
+    task_deleted:              'Task eliminato',
+    task_status_changed:       'Stato task cambiato',
+    task_archived:             'Task archiviato',
+    item_deleted:              'Elemento eliminato',
+    future_movement_deleted:   'Movimento futuro eliminato',
+};
+
+function formatAuditDetails(entry) {
+    const skip = new Set(['action', 'user', 'uid', 'timestamp']);
+    return Object.entries(entry)
+        .filter(([k]) => !skip.has(k))
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(' | ') || '—';
+}
+
+async function loadAuditLog() {
+    const container = document.getElementById('audit-log-container');
+    if (!container) return;
+
+    try {
+        const auditQuery = query(ref(database, 'auditLog'), orderByKey(), limitToLast(100));
+        const snapshot   = await get(auditQuery);
+
+        if (!snapshot.exists()) {
+            container.innerHTML = '<tr><td colspan="4" class="p-3 text-gray-400 text-center">Nessuna voce registrata.</td></tr>';
+            return;
+        }
+
+        const entries = [];
+        snapshot.forEach(child => entries.push(child.val()));
+        entries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        const actionColors = {
+            approved: 'text-green-700 bg-green-50',
+            rejected: 'text-red-700 bg-red-50',
+            deleted:  'text-red-700 bg-red-50',
+            added:    'text-blue-700 bg-blue-50',
+            created:  'text-blue-700 bg-blue-50',
+            changed:  'text-orange-700 bg-orange-50',
+            generated:'text-indigo-700 bg-indigo-50',
+        };
+
+        function badgeClass(action) {
+            const key = Object.keys(actionColors).find(k => action.includes(k));
+            return key ? actionColors[key] : 'text-gray-700 bg-gray-100';
+        }
+
+        container.innerHTML = entries.map(entry => {
+            const label   = AUDIT_ACTION_LABELS[entry.action] || entry.action;
+            const dt      = new Date(entry.timestamp);
+            const dateStr = dt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const timeStr = dt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            const details = formatAuditDetails(entry);
+            const badge   = badgeClass(entry.action);
+            return `
+                <tr class="border-b hover:bg-gray-50 transition-colors">
+                    <td class="p-2 text-xs text-gray-500 whitespace-nowrap">${dateStr} ${timeStr}</td>
+                    <td class="p-2 text-sm font-medium">${entry.user || '—'}</td>
+                    <td class="p-2"><span class="text-xs font-semibold px-2 py-0.5 rounded-full ${badge}">${label}</span></td>
+                    <td class="p-2 text-xs text-gray-600 max-w-xs truncate" title="${details}">${details}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = `<tr><td colspan="4" class="p-3 text-red-500">Errore caricamento: ${err.message}</td></tr>`;
+    }
+}
+
+
+// --- BACKUP ---
+
+async function loadBackups() {
+    const container = document.getElementById('backup-list-container');
+    if (!container) return;
+
+    try {
+        const snapshot = await get(ref(database, 'backups'));
+        if (!snapshot.exists()) {
+            container.innerHTML = '<p class="text-gray-400 text-sm">Nessun backup disponibile. Il primo verrà creato automaticamente alle 03:00.</p>';
+            return;
+        }
+
+        const keys = Object.keys(snapshot.val()).sort().reverse(); // più recente prima
+        container.innerHTML = keys.map(dateKey => {
+            const backupData = snapshot.val()[dateKey];
+            const createdAt  = backupData?.createdAt ? new Date(backupData.createdAt).toLocaleString('it-IT') : dateKey;
+            const expCount   = backupData?.variableExpenses ? Object.keys(backupData.variableExpenses).length : 0;
+            const incCount   = backupData?.incomeEntries    ? Object.keys(backupData.incomeEntries).length    : 0;
+            const balance    = backupData?.cassaComune?.balance != null ? `€${parseFloat(backupData.cassaComune.balance).toFixed(2)}` : 'N/D';
+            return `
+                <div class="flex justify-between items-center bg-gray-50 p-3 rounded-lg border flex-wrap gap-2">
+                    <div>
+                        <p class="font-semibold text-sm">${dateKey}</p>
+                        <p class="text-xs text-gray-500">${createdAt} · ${expCount} spese · ${incCount} entrate · Cassa: ${balance}</p>
+                    </div>
+                    <button data-backup-key="${dateKey}" class="download-backup-btn bg-indigo-600 text-white font-semibold text-sm py-1 px-3 rounded-lg hover:bg-indigo-700 transition-colors">
+                        Scarica JSON
+                    </button>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = `<p class="text-red-500 text-sm">Errore caricamento backup: ${err.message}</p>`;
+    }
+}
+
+async function downloadBackup(dateKey) {
+    const snapshot = await get(ref(database, `backups/${dateKey}`));
+    if (!snapshot.exists()) return alert('Backup non trovato.');
+    const data = snapshot.val();
+    const blob  = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url   = URL.createObjectURL(blob);
+    const a     = document.createElement('a');
+    a.href     = url;
+    a.download = `gateradio-backup-${dateKey}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function runBackupNow() {
+    const btn      = document.getElementById('run-backup-btn');
+    const feedback = document.getElementById('backup-feedback');
+    if (!btn || !feedback) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Backup in corso...';
+    feedback.textContent = '';
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        const [cassaSnap, varExpSnap, fixedExpSnap, incomeSnap, membersSnap, targetsSnap] =
+            await Promise.all([
+                get(ref(database, 'cassaComune')),
+                get(ref(database, 'variableExpenses')),
+                get(ref(database, 'fixedExpenses')),
+                get(ref(database, 'incomeEntries')),
+                get(ref(database, 'members')),
+                get(ref(database, 'targets'))
+            ]);
+
+        const snapshot = {
+            date:             today,
+            createdAt:        new Date().toISOString(),
+            cassaComune:      cassaSnap.val(),
+            variableExpenses: varExpSnap.val(),
+            fixedExpenses:    fixedExpSnap.val(),
+            incomeEntries:    incomeSnap.val(),
+            members:          membersSnap.val(),
+            targets:          targetsSnap.val()
+        };
+
+        await set(ref(database, `backups/${today}`), snapshot);
+        logAudit('backup_created', { date: today });
+        feedback.textContent = `Backup del ${today} completato.`;
+        feedback.className = 'mt-3 text-sm font-medium text-green-600';
+        await loadBackups();
+    } catch (err) {
+        feedback.textContent = `Errore: ${err.message}`;
+        feedback.className = 'mt-3 text-sm font-medium text-red-600';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Esegui Backup Ora';
     }
 }
 
@@ -365,6 +566,11 @@ function initializeAdminPage() {
         leaderboardHistorySection?.classList.remove('hidden');
         renderLeaderboard(leaderboardContainer);
         renderLeaderboardHistory(leaderboardHistoryContainer);
+
+        document.getElementById('audit-log-section')?.classList.remove('hidden');
+        document.getElementById('backup-section')?.classList.remove('hidden');
+        loadAuditLog();
+        loadBackups();
     }
 }
 
@@ -375,7 +581,10 @@ document.addEventListener('change', (e) => {
         const newRole = e.target.value;
         const userRoleRef = ref(database, `users/${uid}/role`);
         set(userRoleRef, newRole)
-            .then(() => alert(`Ruolo aggiornato con successo.`))
+            .then(() => {
+                logAudit('role_changed', { targetUid: uid, newRole });
+                alert(`Ruolo aggiornato con successo.`);
+            })
             .catch(err => console.error(err));
     }
 });
@@ -399,7 +608,8 @@ document.addEventListener('click', async (e) => {
     }
     if (target.matches('.reject-calendar-btn')) {
         const key = target.dataset.key;
-        rejectCalendarEvent(key);
+        const snapshot = await get(ref(database, `pendingCalendarEvents/${key}`));
+        rejectCalendarEvent(key, snapshot.val());
     }
 });
 
@@ -465,6 +675,18 @@ if (overrideBtn) {
         }
     });
 }
+
+// --- BACKUP: event listeners ---
+document.addEventListener('click', async (e) => {
+    if (e.target.matches('.download-backup-btn')) {
+        const dateKey = e.target.dataset.backupKey;
+        if (dateKey) downloadBackup(dateKey);
+    }
+});
+
+const runBackupBtn = document.getElementById('run-backup-btn');
+if (runBackupBtn) runBackupBtn.addEventListener('click', runBackupNow);
+
 
 // --- PUNTO DI INGRESSO ---
 // Aspetta che l'autenticazione sia pronta, poi avvia la logica della pagina.
