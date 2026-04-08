@@ -842,6 +842,8 @@ window.grOpenEditModal = function(type, key) {
         } else {
             document.getElementById('gr-edit-artist').value = data.artist || '';
             document.getElementById('gr-edit-season').value = data.season || 'winter';
+            document.getElementById('gr-edit-time-start').value = data.timeStart || '18:00';
+            document.getElementById('gr-edit-time-end').value = data.timeEnd || '19:00';
             document.getElementById('gr-edit-url').value = data.soundcloudUrl || '';
             _grEditGallery = data.imageUrl ? [data.imageUrl] : [];
         }
@@ -942,6 +944,8 @@ document.getElementById('gr-edit-form')?.addEventListener('submit', async functi
                 title: document.getElementById('gr-edit-title').value.trim(),
                 artist: document.getElementById('gr-edit-artist').value.trim(),
                 date: date,
+                timeStart: document.getElementById('gr-edit-time-start').value || '18:00',
+                timeEnd: document.getElementById('gr-edit-time-end').value || '19:00',
                 season: document.getElementById('gr-edit-season').value,
                 soundcloudUrl: document.getElementById('gr-edit-url').value.trim() || '#',
                 imageUrl: _grEditGallery[0] || '',
@@ -1015,6 +1019,8 @@ function initGateRadioCMS() {
                 artist:       document.getElementById('gr-s-artist').value.trim(),
                 title:        document.getElementById('gr-s-title').value.trim() || 'LIVE STREAMING',
                 date:         document.getElementById('gr-s-date').value,
+                timeStart:    document.getElementById('gr-s-time-start').value || '18:00',
+                timeEnd:      document.getElementById('gr-s-time-end').value || '19:00',
                 season:       document.getElementById('gr-s-season').value,
                 soundcloudUrl: document.getElementById('gr-s-url').value.trim() || '#',
                 imageUrl:     imageUrl,

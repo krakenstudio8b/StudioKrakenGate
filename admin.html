@@ -200,6 +200,14 @@
                         <input id="gr-s-date" type="date" class="form-input w-full" required>
                     </div>
                     <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Orario</label>
+                        <div class="flex gap-2 items-center">
+                            <input id="gr-s-time-start" type="time" class="form-input w-full" value="18:00">
+                            <span class="text-gray-400 font-semibold">→</span>
+                            <input id="gr-s-time-end" type="time" class="form-input w-full" value="19:00">
+                        </div>
+                    </div>
+                    <div>
                         <label class="block text-xs font-semibold text-gray-500 mb-1">Stagione</label>
                         <select id="gr-s-season" class="form-input w-full">
                             <option value="winter">❄️ Inverno</option>
@@ -351,6 +359,14 @@
                             <option value="summer">Estate</option>
                             <option value="autumn">Autunno</option>
                         </select>
+                    </div>
+                    <div class="gr-edit-stream-only">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Orario</label>
+                        <div class="flex gap-2 items-center">
+                            <input id="gr-edit-time-start" type="time" class="form-input w-full">
+                            <span class="text-gray-400 font-semibold">→</span>
+                            <input id="gr-edit-time-end" type="time" class="form-input w-full">
+                        </div>
                     </div>
                     <div class="gr-edit-stream-only">
                         <label class="block text-xs font-semibold text-gray-500 mb-1">URL YouTube (opzionale)</label>
