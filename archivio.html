@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Gateradio">
     <link rel="apple-touch-icon" href="/logogate.png">
-    <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'));}</script>
+    <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').then(r=>{r.update();r.addEventListener('updatefound',()=>{const w=r.installing;if(w)w.addEventListener('statechange',()=>{if(w.state==='activated'){caches.keys().then(k=>Promise.all(k.map(c=>caches.delete(c))));location.reload();}});});});}</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
