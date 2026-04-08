@@ -809,6 +809,111 @@ function grFeedback(id, msg, ok = true) {
     setTimeout(() => { el.textContent = ''; }, 3000);
 }
 
+// ── Modale modifica evento/stream ──────────────────────────────────────────
+let _grEditGallery = []; // array di URL immagini correnti
+
+window.grOpenEditModal = function(type, key) {
+    const modal = document.getElementById('gr-edit-modal');
+    const path = type === 'stream' ? `gateRadio/streams/${key}` : `gateRadio/events/${key}`;
+
+    get(ref(database, path)).then(snap => {
+        const data = snap.val();
+        if (!data) return alert('Elemento non trovato');
+
+        document.getElementById('gr-edit-key').value = key;
+        document.getElementById('gr-edit-type').value = type;
+        document.getElementById('gr-edit-modal-title').textContent =
+            type === 'stream' ? `Modifica: ${data.artist}` : `Modifica: ${data.title}`;
+
+        // Campi comuni
+        document.getElementById('gr-edit-title').value = type === 'stream' ? data.title : data.title;
+        document.getElementById('gr-edit-date').value = data.date || '';
+        document.getElementById('gr-edit-tags').value = (data.tags || []).join(', ');
+
+        // Mostra/nascondi campi specifici
+        document.querySelectorAll('.gr-edit-event-only').forEach(el => el.style.display = type === 'event' ? '' : 'none');
+        document.querySelectorAll('.gr-edit-stream-only').forEach(el => el.style.display = type === 'stream' ? '' : 'none');
+
+        if (type === 'event') {
+            document.getElementById('gr-edit-location').value = data.location || '';
+            document.getElementById('gr-edit-description').value = data.description || '';
+            document.getElementById('gr-edit-details').value = data.details || '';
+            _grEditGallery = data.galleryImages ? [...data.galleryImages] : (data.mainImage ? [data.mainImage] : []);
+        } else {
+            document.getElementById('gr-edit-artist').value = data.artist || '';
+            document.getElementById('gr-edit-season').value = data.season || 'winter';
+            document.getElementById('gr-edit-url').value = data.soundcloudUrl || '';
+            _grEditGallery = data.imageUrl ? [data.imageUrl] : [];
+        }
+
+        grRenderEditGallery();
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    });
+};
+
+window.grCloseEditModal = function() {
+    const modal = document.getElementById('gr-edit-modal');
+    modal.style.display = 'none';
+    modal.classList.add('hidden');
+    _grEditGallery = [];
+};
+
+function grRenderEditGallery() {
+    const container = document.getElementById('gr-edit-gallery');
+    if (!container) return;
+    if (_grEditGallery.length === 0) {
+        container.innerHTML = '<p class="text-gray-400 text-xs">Nessuna immagine</p>';
+        return;
+    }
+    container.innerHTML = _grEditGallery.map((url, i) => `
+        <div class="relative group">
+            <img src="${url}" class="h-20 w-20 object-cover rounded-lg border" alt="Img ${i + 1}">
+            <button type="button" onclick="grRemoveEditImage(${i})"
+                class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>
+            ${i === 0 ? '<span class="absolute bottom-0 left-0 right-0 bg-indigo-600/80 text-white text-[10px] text-center rounded-b-lg">Principale</span>' : ''}
+        </div>
+    `).join('');
+}
+
+window.grRemoveEditImage = function(index) {
+    _grEditGallery.splice(index, 1);
+    grRenderEditGallery();
+};
+
+window.grAddEditImage = async function() {
+    const fileInput = document.getElementById('gr-edit-new-image');
+    const urlInput = document.getElementById('gr-edit-new-image-url');
+    const feedback = document.getElementById('gr-edit-image-feedback');
+    const type = document.getElementById('gr-edit-type').value;
+    const folder = type === 'stream' ? 'Grafiche Gate' : 'Eventi Gate';
+
+    try {
+        let newUrl = '';
+        if (fileInput.files[0]) {
+            feedback.textContent = 'Upload in corso...';
+            feedback.style.color = '#2563eb';
+            newUrl = await grUploadImage(fileInput, folder);
+            fileInput.value = '';
+        } else if (urlInput.value.trim()) {
+            newUrl = urlInput.value.trim();
+            urlInput.value = '';
+        } else {
+            feedback.textContent = 'Seleziona un file o incolla un URL';
+            feedback.style.color = '#dc2626';
+            return;
+        }
+        _grEditGallery.push(newUrl);
+        grRenderEditGallery();
+        feedback.textContent = '✓ Immagine aggiunta';
+        feedback.style.color = '#16a34a';
+        setTimeout(() => { feedback.textContent = ''; }, 2000);
+    } catch (err) {
+        feedback.textContent = 'Errore: ' + err.message;
+        feedback.style.color = '#dc2626';
+    }
+};
+
 function grDeleteItem(path, label) {
     if (!confirm(`Eliminare "${label}"?`)) return;
     remove(ref(database, path))
@@ -816,6 +921,57 @@ function grDeleteItem(path, label) {
         .catch(err => alert('Errore: ' + err.message));
 }
 window.grDeleteItem = grDeleteItem;
+
+// Submit modifica
+document.getElementById('gr-edit-form')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const key = document.getElementById('gr-edit-key').value;
+    const type = document.getElementById('gr-edit-type').value;
+    const path = type === 'stream' ? `gateRadio/streams/${key}` : `gateRadio/events/${key}`;
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.textContent = 'Salvataggio...';
+
+    try {
+        let updates = {};
+        const tags = document.getElementById('gr-edit-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+        const date = document.getElementById('gr-edit-date').value;
+
+        if (type === 'stream') {
+            updates = {
+                title: document.getElementById('gr-edit-title').value.trim(),
+                artist: document.getElementById('gr-edit-artist').value.trim(),
+                date: date,
+                season: document.getElementById('gr-edit-season').value,
+                soundcloudUrl: document.getElementById('gr-edit-url').value.trim() || '#',
+                imageUrl: _grEditGallery[0] || '',
+                tags: tags,
+            };
+        } else {
+            updates = {
+                title: document.getElementById('gr-edit-title').value.trim(),
+                date: date,
+                location: document.getElementById('gr-edit-location').value.trim(),
+                description: document.getElementById('gr-edit-description').value.trim(),
+                details: document.getElementById('gr-edit-details').value.trim(),
+                mainImage: _grEditGallery[0] || '',
+                galleryImages: _grEditGallery.length > 0 ? _grEditGallery : [],
+                tags: tags,
+            };
+        }
+
+        await update(ref(database, path), updates);
+        await logAudit('gate_radio_edit', { type, key, title: updates.title || updates.artist });
+        grCloseEditModal();
+    } catch (err) {
+        const feedback = document.getElementById('gr-edit-feedback');
+        feedback.textContent = 'Errore: ' + err.message;
+        feedback.style.color = '#dc2626';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Salva Modifiche';
+    }
+});
 
 function initGateRadioCMS() {
     // ── Streams ────────────────────────────────────────────────────────────
@@ -834,8 +990,12 @@ function initGateRadioCMS() {
                     <span class="text-gray-400 ml-2">${s.date}</span>
                     <span class="ml-2 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">${s.season}</span>
                 </div>
-                <button onclick="grDeleteItem('gateRadio/streams/${key}', '${s.artist.replace(/'/g,"\'")}')"
-                    class="text-red-500 hover:text-red-700 text-xs font-semibold ml-4">Elimina</button>
+                <div class="flex gap-2 ml-4">
+                    <button onclick="grOpenEditModal('stream', '${key}')"
+                        class="text-indigo-500 hover:text-indigo-700 text-xs font-semibold">Modifica</button>
+                    <button onclick="grDeleteItem('gateRadio/streams/${key}', '${s.artist.replace(/'/g,"\'")}')"
+                        class="text-red-500 hover:text-red-700 text-xs font-semibold">Elimina</button>
+                </div>
             </div>
         `).join('');
     });
@@ -890,8 +1050,12 @@ function initGateRadioCMS() {
                     <span class="text-gray-400 ml-2">${ev.date}</span>
                     <span class="text-gray-500 ml-2 text-xs">${ev.location || ''}</span>
                 </div>
-                <button onclick="grDeleteItem('gateRadio/events/${key}', '${ev.title.replace(/'/g,"\'")}')"
-                    class="text-red-500 hover:text-red-700 text-xs font-semibold ml-4">Elimina</button>
+                <div class="flex gap-2 ml-4">
+                    <button onclick="grOpenEditModal('event', '${key}')"
+                        class="text-indigo-500 hover:text-indigo-700 text-xs font-semibold">Modifica</button>
+                    <button onclick="grDeleteItem('gateRadio/events/${key}', '${ev.title.replace(/'/g,"\'")}')"
+                        class="text-red-500 hover:text-red-700 text-xs font-semibold">Elimina</button>
+                </div>
             </div>
         `).join('');
     });

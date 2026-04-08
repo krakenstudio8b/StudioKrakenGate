@@ -307,6 +307,85 @@
             </div>
         </section>
 
+        <!-- ═══ MODALE MODIFICA EVENTO ═══════════════════════════════════════ -->
+        <div id="gr-edit-modal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4" style="display:none;">
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold" id="gr-edit-modal-title">Modifica Evento</h3>
+                    <button onclick="grCloseEditModal()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+                </div>
+                <form id="gr-edit-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="hidden" id="gr-edit-key">
+                    <input type="hidden" id="gr-edit-type">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Titolo</label>
+                        <input id="gr-edit-title" type="text" class="form-input w-full" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Data</label>
+                        <input id="gr-edit-date" type="date" class="form-input w-full" required>
+                    </div>
+                    <!-- Campi solo evento -->
+                    <div class="md:col-span-2 gr-edit-event-only">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Location</label>
+                        <input id="gr-edit-location" type="text" class="form-input w-full">
+                    </div>
+                    <div class="md:col-span-2 gr-edit-event-only">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Descrizione</label>
+                        <textarea id="gr-edit-description" rows="2" class="form-input w-full"></textarea>
+                    </div>
+                    <div class="md:col-span-2 gr-edit-event-only">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Dettagli</label>
+                        <textarea id="gr-edit-details" rows="2" class="form-input w-full"></textarea>
+                    </div>
+                    <!-- Campi solo stream -->
+                    <div class="gr-edit-stream-only">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Artista</label>
+                        <input id="gr-edit-artist" type="text" class="form-input w-full">
+                    </div>
+                    <div class="gr-edit-stream-only">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Stagione</label>
+                        <select id="gr-edit-season" class="form-input w-full">
+                            <option value="winter">Inverno</option>
+                            <option value="spring">Primavera</option>
+                            <option value="summer">Estate</option>
+                            <option value="autumn">Autunno</option>
+                        </select>
+                    </div>
+                    <div class="gr-edit-stream-only">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">URL YouTube</label>
+                        <input id="gr-edit-url" type="url" class="form-input w-full">
+                    </div>
+                    <!-- Tags -->
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Tag (separati da virgola)</label>
+                        <input id="gr-edit-tags" type="text" class="form-input w-full">
+                    </div>
+                    <!-- Gallery immagini -->
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-semibold text-gray-500 mb-1">Immagini</label>
+                        <div id="gr-edit-gallery" class="flex flex-wrap gap-3 mb-3"></div>
+                        <div class="flex gap-2">
+                            <input id="gr-edit-new-image" type="file" accept="image/*" class="form-input flex-1 text-sm">
+                            <input id="gr-edit-new-image-url" type="url" placeholder="oppure incolla URL" class="form-input flex-1 text-sm">
+                            <button type="button" onclick="grAddEditImage()" class="bg-green-600 text-white text-xs font-semibold px-4 py-2 rounded-lg hover:bg-green-700">+ Aggiungi</button>
+                        </div>
+                        <span id="gr-edit-image-feedback" class="text-xs font-medium mt-1 block"></span>
+                    </div>
+                    <!-- Submit -->
+                    <div class="md:col-span-2 flex gap-3 mt-2">
+                        <button type="submit" class="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors text-sm">
+                            Salva Modifiche
+                        </button>
+                        <button type="button" onclick="grCloseEditModal()" class="bg-gray-200 text-gray-700 font-semibold py-2 px-6 rounded-lg hover:bg-gray-300 transition-colors text-sm">
+                            Annulla
+                        </button>
+                        <span id="gr-edit-feedback" class="text-sm font-medium self-center"></span>
+                    </div>
+                </form>
+            </div>
+        </div>
+
     </main>
 
 
