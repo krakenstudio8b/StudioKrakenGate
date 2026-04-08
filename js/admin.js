@@ -765,6 +765,42 @@ function grSetupImagePreview(inputId, previewId) {
     });
 }
 
+// Toggle tra upload file e URL esistente
+window.grToggleImageMode = function(prefix, mode) {
+    const uploadDiv = document.getElementById(`gr-${prefix}-image-upload`);
+    const urlDiv = document.getElementById(`gr-${prefix}-image-url`);
+    const btnUpload = document.querySelector(`.gr-img-mode-${prefix}-upload`);
+    const btnUrl = document.querySelector(`.gr-img-mode-${prefix}-url`);
+    if (mode === 'upload') {
+        uploadDiv.classList.remove('hidden');
+        urlDiv.classList.add('hidden');
+        btnUpload.className = `gr-img-mode-${prefix}-upload text-xs px-3 py-1 rounded-full bg-indigo-600 text-white font-semibold`;
+        btnUrl.className = `gr-img-mode-${prefix}-url text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-700 font-semibold`;
+    } else {
+        uploadDiv.classList.add('hidden');
+        urlDiv.classList.remove('hidden');
+        btnUrl.className = `gr-img-mode-${prefix}-url text-xs px-3 py-1 rounded-full bg-indigo-600 text-white font-semibold`;
+        btnUpload.className = `gr-img-mode-${prefix}-upload text-xs px-3 py-1 rounded-full bg-gray-200 text-gray-700 font-semibold`;
+    }
+    document.getElementById(`gr-${prefix}-image-preview`).classList.add('hidden');
+};
+
+// Ottieni URL immagine: da upload o da URL esistente
+async function grGetImageUrl(prefix, folder) {
+    const uploadDiv = document.getElementById(`gr-${prefix}-image-upload`);
+    const isUploadMode = !uploadDiv.classList.contains('hidden');
+
+    if (isUploadMode) {
+        const fileInput = document.getElementById(`gr-${prefix}-image`);
+        if (fileInput.files[0]) {
+            return await grUploadImage(fileInput, folder);
+        }
+        return '';
+    } else {
+        return document.getElementById(`gr-${prefix}-image-existing`).value.trim();
+    }
+}
+
 function grFeedback(id, msg, ok = true) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -812,13 +848,8 @@ function initGateRadioCMS() {
         btn.disabled = true;
         btn.textContent = 'Caricamento...';
         try {
-            // Upload immagine se presente
-            const imageInput = document.getElementById('gr-s-image');
-            let imageUrl = '';
-            if (imageInput.files[0]) {
-                grFeedback('gr-stream-feedback', 'Upload immagine in corso...');
-                imageUrl = await grUploadImage(imageInput, 'Grafiche Gate');
-            }
+            grFeedback('gr-stream-feedback', 'Caricamento...');
+            const imageUrl = await grGetImageUrl('s', 'Grafiche Gate');
 
             const stream = {
                 artist:       document.getElementById('gr-s-artist').value.trim(),
@@ -873,13 +904,8 @@ function initGateRadioCMS() {
         btn.disabled = true;
         btn.textContent = 'Caricamento...';
         try {
-            // Upload immagine se presente
-            const imageInput = document.getElementById('gr-e-image');
-            let mainImage = '';
-            if (imageInput.files[0]) {
-                grFeedback('gr-event-feedback', 'Upload immagine in corso...');
-                mainImage = await grUploadImage(imageInput, 'Eventi Gate');
-            }
+            grFeedback('gr-event-feedback', 'Caricamento...');
+            const mainImage = await grGetImageUrl('e', 'Eventi Gate');
 
             const event = {
                 title:       document.getElementById('gr-e-title').value.trim(),
