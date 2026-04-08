@@ -705,6 +705,66 @@ window.grSwitchTab = function(tab) {
         : 'gr-tab bg-gray-200 text-gray-700 py-2 px-5 rounded-lg font-semibold text-sm transition-colors';
 };
 
+// Upload immagine su R2 tramite presigned URL
+async function grUploadImage(fileInput, folder) {
+    const file = fileInput.files[0];
+    if (!file) return null;
+
+    // Ottieni token Firebase per autenticazione
+    const user = auth.currentUser;
+    if (!user) throw new Error('Non autenticato');
+    const token = await user.getIdToken();
+
+    // 1. Richiedi presigned URL
+    const res = await fetch('/api/r2-presign', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type,
+            folder: folder,
+        }),
+    });
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Errore server' }));
+        throw new Error(err.error || 'Errore generazione URL upload');
+    }
+
+    const { presignedUrl, publicUrl } = await res.json();
+
+    // 2. Upload diretto su R2
+    const uploadRes = await fetch(presignedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+    });
+
+    if (!uploadRes.ok) throw new Error('Upload immagine fallito');
+
+    return publicUrl;
+}
+
+// Anteprima immagine selezionata
+function grSetupImagePreview(inputId, previewId) {
+    const input = document.getElementById(inputId);
+    const preview = document.getElementById(previewId);
+    if (!input || !preview) return;
+    input.addEventListener('change', () => {
+        const file = input.files[0];
+        if (file) {
+            const img = preview.querySelector('img');
+            img.src = URL.createObjectURL(file);
+            preview.classList.remove('hidden');
+        } else {
+            preview.classList.add('hidden');
+        }
+    });
+}
+
 function grFeedback(id, msg, ok = true) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -744,25 +804,42 @@ function initGateRadioCMS() {
         `).join('');
     });
 
+    grSetupImagePreview('gr-s-image', 'gr-s-image-preview');
+
     document.getElementById('gr-stream-form')?.addEventListener('submit', async e => {
         e.preventDefault();
-        const stream = {
-            artist:       document.getElementById('gr-s-artist').value.trim(),
-            title:        document.getElementById('gr-s-title').value.trim() || 'LIVE STREAMING',
-            date:         document.getElementById('gr-s-date').value,
-            season:       document.getElementById('gr-s-season').value,
-            soundcloudUrl: document.getElementById('gr-s-url').value.trim() || '#',
-            imageUrl:     document.getElementById('gr-s-image').value.trim(),
-            tags:         document.getElementById('gr-s-tags').value.split(',').map(t => t.trim()).filter(Boolean),
-        };
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Caricamento...';
         try {
+            // Upload immagine se presente
+            const imageInput = document.getElementById('gr-s-image');
+            let imageUrl = '';
+            if (imageInput.files[0]) {
+                grFeedback('gr-stream-feedback', 'Upload immagine in corso...');
+                imageUrl = await grUploadImage(imageInput, 'Grafiche Gate');
+            }
+
+            const stream = {
+                artist:       document.getElementById('gr-s-artist').value.trim(),
+                title:        document.getElementById('gr-s-title').value.trim() || 'LIVE STREAMING',
+                date:         document.getElementById('gr-s-date').value,
+                season:       document.getElementById('gr-s-season').value,
+                soundcloudUrl: document.getElementById('gr-s-url').value.trim() || '#',
+                imageUrl:     imageUrl,
+                tags:         document.getElementById('gr-s-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+            };
             await push(streamsRef, stream);
             await logAudit('gate_radio_stream_add', { artist: stream.artist, date: stream.date });
             grFeedback('gr-stream-feedback', '✓ Live pubblicata!');
             e.target.reset();
             document.getElementById('gr-s-title').value = 'LIVE STREAMING';
+            document.getElementById('gr-s-image-preview').classList.add('hidden');
         } catch (err) {
             grFeedback('gr-stream-feedback', 'Errore: ' + err.message, false);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Pubblica Live';
         }
     });
 
@@ -788,26 +865,42 @@ function initGateRadioCMS() {
         `).join('');
     });
 
+    grSetupImagePreview('gr-e-image', 'gr-e-image-preview');
+
     document.getElementById('gr-event-form')?.addEventListener('submit', async e => {
         e.preventDefault();
-        const event = {
-            title:       document.getElementById('gr-e-title').value.trim(),
-            date:        document.getElementById('gr-e-date').value,
-            location:    document.getElementById('gr-e-location').value.trim(),
-            description: document.getElementById('gr-e-description').value.trim(),
-            details:     document.getElementById('gr-e-details').value.trim(),
-            mainImage:   document.getElementById('gr-e-image').value.trim(),
-            galleryImages: document.getElementById('gr-e-image').value.trim()
-                ? [document.getElementById('gr-e-image').value.trim()] : [],
-            tags: document.getElementById('gr-e-tags').value.split(',').map(t => t.trim()).filter(Boolean),
-        };
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Caricamento...';
         try {
+            // Upload immagine se presente
+            const imageInput = document.getElementById('gr-e-image');
+            let mainImage = '';
+            if (imageInput.files[0]) {
+                grFeedback('gr-event-feedback', 'Upload immagine in corso...');
+                mainImage = await grUploadImage(imageInput, 'Eventi Gate');
+            }
+
+            const event = {
+                title:       document.getElementById('gr-e-title').value.trim(),
+                date:        document.getElementById('gr-e-date').value,
+                location:    document.getElementById('gr-e-location').value.trim(),
+                description: document.getElementById('gr-e-description').value.trim(),
+                details:     document.getElementById('gr-e-details').value.trim(),
+                mainImage:   mainImage,
+                galleryImages: mainImage ? [mainImage] : [],
+                tags: document.getElementById('gr-e-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+            };
             await push(eventsRef, event);
             await logAudit('gate_radio_event_add', { title: event.title, date: event.date });
             grFeedback('gr-event-feedback', '✓ Evento pubblicato!');
             e.target.reset();
+            document.getElementById('gr-e-image-preview').classList.add('hidden');
         } catch (err) {
             grFeedback('gr-event-feedback', 'Errore: ' + err.message, false);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Pubblica Evento';
         }
     });
 }
