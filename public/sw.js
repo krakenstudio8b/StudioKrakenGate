@@ -1,31 +1,15 @@
-const CACHE_NAME = 'gateradio-v2';
+// Service Worker — solo push notifications, niente cache
+const CACHE_NAME = 'gateradio-v3';
 
-const PRECACHE_URLS = [
-  '/login.html',
-  '/index.html',
-  '/eventi.html',
-  '/calendario.html',
-  '/attivita-personale.html',
-  '/obiettivi.html',
-  '/finanze.html',
-  '/pulizie.html',
-  '/documenti.html',
-  '/archivio.html',
-  '/admin.html',
-  '/logogate.png'
-];
-
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
-  );
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
+  // Pulisce tutte le cache vecchie
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(keys.map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -58,25 +42,4 @@ self.addEventListener('notificationclick', (e) => {
   );
 });
 
-self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
-
-  const url = new URL(e.request.url);
-
-  // Lascia passare le richieste Firebase e CDN senza intercettarle
-  if (url.origin !== self.location.origin) return;
-
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      const networkFetch = fetch(e.request).then(response => {
-        if (response && response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        }
-        return response;
-      }).catch(() => cached);
-
-      return cached || networkFetch;
-    })
-  );
-});
+// Nessun fetch handler — i file vengono sempre scaricati dalla rete
