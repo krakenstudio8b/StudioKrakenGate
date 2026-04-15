@@ -1,5 +1,8 @@
 import { database } from './firebase-config.js';
 import { ref, onValue, update, get, set } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-database.js";
+import { currentUser } from './auth-guard.js';
+
+const isAdmin = () => currentUser?.role === 'admin';
 
 // ============================================
 // VARIABILI GLOBALI
@@ -676,6 +679,15 @@ function renderTargets(targets) {
         `;
     }).join('');
 
+    // Solo gli admin possono modificare gli obiettivi
+    if (!isAdmin()) {
+        container.querySelectorAll('.edit-target-btn').forEach(btn => btn.remove());
+        container.querySelectorAll('[data-target-id]').forEach(card => {
+            card.classList.remove('cursor-pointer');
+        });
+        return;
+    }
+
     // Aggiungi event listeners per i pulsanti modifica
     container.querySelectorAll('.edit-target-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -960,6 +972,7 @@ document.addEventListener('authReady', () => {
     }
     initFirebaseListeners();
     initEventListeners();
+    initTargetModal();
 });
 
 // Fallback se authReady non viene dispatchato
@@ -1270,6 +1283,10 @@ function closeTargetModal() {
 }
 
 async function saveTarget() {
+    if (!isAdmin()) {
+        alert('Solo gli admin possono modificare gli obiettivi.');
+        return;
+    }
     const titleInput = document.getElementById('target-title');
     const companySelect = document.getElementById('target-company');
     const iconSelect = document.getElementById('target-icon');
@@ -1333,6 +1350,10 @@ async function saveTarget() {
 }
 
 async function deleteTarget() {
+    if (!isAdmin()) {
+        alert('Solo gli admin possono eliminare gli obiettivi.');
+        return;
+    }
     if (!currentEditingTargetId) return;
 
     if (!confirm('Sei sicuro di voler eliminare questo obiettivo?')) return;
@@ -1358,7 +1379,13 @@ function initTargetModal() {
     const deleteBtn = document.getElementById('delete-target-btn');
     const modal = document.getElementById('target-modal');
 
-    if (addBtn) addBtn.addEventListener('click', () => openTargetModal());
+    if (addBtn) {
+        if (!isAdmin()) {
+            addBtn.classList.add('hidden');
+        } else {
+            addBtn.addEventListener('click', () => openTargetModal());
+        }
+    }
     if (closeBtn) closeBtn.addEventListener('click', closeTargetModal);
     if (saveBtn) saveBtn.addEventListener('click', saveTarget);
     if (deleteBtn) deleteBtn.addEventListener('click', deleteTarget);
@@ -1375,5 +1402,4 @@ function initTargetModal() {
 document.addEventListener('DOMContentLoaded', () => {
     initLoadButton();
     initEditModal();
-    initTargetModal();
 });
