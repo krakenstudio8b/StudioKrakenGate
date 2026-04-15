@@ -53,19 +53,43 @@ function renderTodayWidget() {
 
     const userName = currentUser?.name;
     const today = startOfDay(new Date());
-    const todayEnd = endOfDay(new Date());
-    const todayStr = today.toISOString().slice(0, 10);
+    const in7 = new Date(today);
+    in7.setDate(in7.getDate() + 7);
+    const in7End = endOfDay(in7);
 
-    // Task con scadenza oggi dove sono owner o assegnato
-    const myTasksToday = allTasks.filter(t => {
-        if (!t || t.status === 'done' || t.archived) return false;
-        if (t.dueDate !== todayStr) return false;
-        const isOwner = t.owner === userName;
-        const isAssigned = Array.isArray(t.assignedTo) && t.assignedTo.includes(userName);
-        return isOwner || isAssigned;
-    });
+    const parseDate = (s) => {
+        if (!s) return null;
+        const d = s.length <= 10 ? new Date(s + 'T00:00:00') : new Date(s);
+        return isNaN(d) ? null : d;
+    };
 
-    // Sotto-attività aperte assegnate a me (o a "tutti") con dueDate oggi, o senza dueDate ma del task di oggi
+    const inWindow = (d) => d && d >= today && d <= in7End;
+
+    const dayLabel = (d) => {
+        const diff = Math.round((startOfDay(d) - today) / 86400000);
+        if (diff <= 0) return 'Oggi';
+        if (diff === 1) return 'Domani';
+        return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+    };
+
+    // Task miei aperti con scadenza entro 7 giorni
+    const myTasks = allTasks
+        .filter(t => {
+            if (!t || t.status === 'done' || t.archived) return false;
+            const d = parseDate(t.dueDate);
+            if (!inWindow(d)) return false;
+            const isOwner = t.owner === userName;
+            const isAssigned = Array.isArray(t.assignedTo) && t.assignedTo.includes(userName);
+            return isOwner || isAssigned;
+        })
+        .map(t => ({
+            icon: 'fa-clipboard-check',
+            label: t.title,
+            sub: dayLabel(parseDate(t.dueDate)),
+            date: parseDate(t.dueDate)
+        }));
+
+    // Sotto-attività aperte mie (o "tutti") con scadenza entro 7 giorni
     const mySubtasks = [];
     allTasks.forEach(t => {
         if (!t || !Array.isArray(t.checklist) || t.archived) return;
@@ -73,38 +97,32 @@ function renderTodayWidget() {
             if (!item || item.done) return;
             const mine = item.assignee === userName || item.assignee === 'tutti';
             if (!mine) return;
-            const itemDue = item.dueDate || t.dueDate;
-            if (itemDue === todayStr) {
-                mySubtasks.push({ taskTitle: t.title, text: item.text });
-            }
+            const d = parseDate(item.dueDate || t.dueDate);
+            if (!inWindow(d)) return;
+            mySubtasks.push({
+                icon: 'fa-check-square',
+                label: item.text,
+                sub: `${t.title} · ${dayLabel(d)}`,
+                date: d
+            });
         });
     });
 
-    // Eventi calendario oggi dove sono partecipante
-    const myEventsToday = allEvents.filter(e => {
-        if (!e || !e.start) return false;
-        const evDate = new Date(e.start);
-        if (isNaN(evDate) || evDate < today || evDate > todayEnd) return false;
-        return Array.isArray(e.participants) && e.participants.includes(userName);
-    });
-
-    const items = [
-        ...myTasksToday.map(t => ({
-            icon: 'fa-clipboard-check',
-            label: t.title,
-            sub: t.priority === 'high' ? 'Priorità alta' : (t.priority === 'medium' ? 'Media' : 'Task')
-        })),
-        ...mySubtasks.map(s => ({
-            icon: 'fa-check-square',
-            label: s.text,
-            sub: s.taskTitle
-        })),
-        ...myEventsToday.map(e => {
-            const d = new Date(e.start);
-            const hh = isNaN(d) ? '' : d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-            return { icon: 'fa-calendar-day', label: e.title, sub: hh };
+    // Eventi calendario entro 7 giorni dove sono partecipante
+    const myEvents = allEvents
+        .filter(e => {
+            if (!e || !e.start) return false;
+            const d = parseDate(e.start);
+            if (!inWindow(d)) return false;
+            return Array.isArray(e.participants) && e.participants.includes(userName);
         })
-    ];
+        .map(e => {
+            const d = parseDate(e.start);
+            const hh = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            return { icon: 'fa-calendar-day', label: e.title, sub: `${dayLabel(d)} · ${hh}`, date: d };
+        });
+
+    const items = [...myTasks, ...mySubtasks, ...myEvents].sort((a, b) => a.date - b.date);
 
     countEl.textContent = items.length;
 
@@ -112,13 +130,13 @@ function renderTodayWidget() {
         listEl.innerHTML = `
             <div class="flex flex-col items-center justify-center py-6 text-white/80">
                 <i class="fa-solid fa-mug-hot text-3xl mb-2"></i>
-                <p class="text-sm font-medium">Niente in agenda per oggi</p>
+                <p class="text-sm font-medium">Niente in agenda</p>
                 <p class="text-xs">Goditela ✨</p>
             </div>`;
         return;
     }
 
-    listEl.innerHTML = items.slice(0, 4).map(it => `
+    listEl.innerHTML = items.slice(0, 5).map(it => `
         <div class="mini-row rounded-lg px-3 py-2 flex items-center gap-3">
             <i class="fa-solid ${it.icon} text-white/80 w-5 text-center"></i>
             <div class="flex-1 min-w-0">
@@ -126,7 +144,7 @@ function renderTodayWidget() {
                 ${it.sub ? `<p class="text-xs text-white/80 truncate">${esc(it.sub)}</p>` : ''}
             </div>
         </div>
-    `).join('') + (items.length > 4 ? `<p class="text-xs text-white/80 text-center pt-1">+ altri ${items.length - 4}</p>` : '');
+    `).join('') + (items.length > 5 ? `<p class="text-xs text-white/80 text-center pt-1">+ altri ${items.length - 5}</p>` : '');
 }
 
 function renderWeekWidget() {

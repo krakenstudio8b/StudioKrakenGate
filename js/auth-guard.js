@@ -114,7 +114,7 @@ onAuthStateChanged(auth, async (user) => {
             
             // Se sei loggato e vai su login.html, ti rimanda alla home
             if (currentPage === 'login.html') {
-                 window.location.href = 'index.html';
+                 window.location.href = 'home.html';
                  return;
             }
 

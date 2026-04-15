@@ -7,7 +7,7 @@ import { auth } from './firebase-config.js';
 onAuthStateChanged(auth, (user) => {
     if (user) {
         if (window.location.pathname.endsWith('login.html')) {
-            window.location.href = 'index.html';
+            window.location.href = 'home.html';
         }
     }
 });
