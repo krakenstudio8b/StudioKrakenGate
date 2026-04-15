@@ -896,7 +896,8 @@ function initFirebaseListeners() {
 function computeAutoCalcValue(target) {
     if (!target.autoCalc || target.autoCalc === 'none') return null;
 
-    const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
+    const cutoff = target.autoCalcStartDate || target.startDate;
+    const startDate = cutoff ? new Date(cutoff + 'T00:00:00') : null;
     const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
 
     const inRange = (dateStr) => {
@@ -1207,6 +1208,7 @@ function openTargetModal(targetId = null) {
     const startDateInput = document.getElementById('target-start-date');
     const endDateInput = document.getElementById('target-end-date');
     const autoCalcSelect = document.getElementById('target-autocalc');
+    const autoCalcStartInput = document.getElementById('target-autocalc-start');
 
     if (targetId) {
         // Modifica obiettivo esistente
@@ -1226,6 +1228,7 @@ function openTargetModal(targetId = null) {
         startDateInput.value = target.startDate || '';
         endDateInput.value = target.endDate || '';
         if (autoCalcSelect) autoCalcSelect.value = target.autoCalc || 'none';
+        if (autoCalcStartInput) autoCalcStartInput.value = target.autoCalcStartDate || '';
     } else {
         // Nuovo obiettivo
         currentEditingTargetId = null;
@@ -1239,6 +1242,7 @@ function openTargetModal(targetId = null) {
         valueInput.value = '';
         unitInput.value = '';
         if (autoCalcSelect) autoCalcSelect.value = 'none';
+        if (autoCalcStartInput) autoCalcStartInput.value = '';
         // Default: da oggi a fine anno
         const today = new Date();
         startDateInput.value = today.toISOString().split('T')[0];
@@ -1252,9 +1256,11 @@ function openTargetModal(targetId = null) {
 function toggleAutoCalcFields() {
     const autoCalcSelect = document.getElementById('target-autocalc');
     const currentWrapper = document.getElementById('target-current-wrapper');
-    if (!autoCalcSelect || !currentWrapper) return;
+    const autoCalcStartWrapper = document.getElementById('target-autocalc-start-wrapper');
+    if (!autoCalcSelect) return;
     const isAuto = autoCalcSelect.value && autoCalcSelect.value !== 'none';
-    currentWrapper.classList.toggle('hidden', isAuto);
+    if (currentWrapper) currentWrapper.classList.toggle('hidden', isAuto);
+    if (autoCalcStartWrapper) autoCalcStartWrapper.classList.toggle('hidden', !isAuto);
 }
 
 function closeTargetModal() {
@@ -1273,6 +1279,7 @@ async function saveTarget() {
     const startDateInput = document.getElementById('target-start-date');
     const endDateInput = document.getElementById('target-end-date');
     const autoCalcSelect = document.getElementById('target-autocalc');
+    const autoCalcStartInput = document.getElementById('target-autocalc-start');
 
     const title = titleInput.value.trim();
     if (!title) {
@@ -1292,7 +1299,8 @@ async function saveTarget() {
         unit: unitInput.value.trim(),
         startDate: startDateInput.value,
         endDate: endDateInput.value,
-        autoCalc: autoCalc
+        autoCalc: autoCalc,
+        autoCalcStartDate: isAuto ? (autoCalcStartInput?.value || '') : ''
     };
 
     try {
