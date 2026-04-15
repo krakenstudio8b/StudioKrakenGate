@@ -6,6 +6,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: './index.html',
+        home: './home.html',
         login: './login.html',
         calendario: './calendario.html',
         documenti: './documenti.html',
