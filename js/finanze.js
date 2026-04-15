@@ -1707,19 +1707,20 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
     const date = document.getElementById('income-date').value;
     const amount = parseFloat(document.getElementById('income-amount').value);
     const description = document.getElementById('income-description').value.trim();
+    const company = document.getElementById('income-company')?.value || 'kraken';
     const membersInvolved = Array.from(document.querySelectorAll('#income-members-checkboxes input:checked')).map(cb => cb.value);
 
     if (!date || isNaN(amount) || amount <= 0 || !description || membersInvolved.length === 0) {
         return alert("Compila tutti i campi e seleziona almeno un membro.");
     }
-    
+
     const newIncomeRef = push(incomeRef);
     const newIncomeId = newIncomeRef.key;
     const newCassaMovRef = push(ref(database, 'cassaComune/movements'));
     const newCassaBalance = (cassaComune.balance || 0) + amount;
 
     const incomeUpdates = {};
-    incomeUpdates[`incomeEntries/${newIncomeId}`] = { id: newIncomeId, date, amount, description, membersInvolved };
+    incomeUpdates[`incomeEntries/${newIncomeId}`] = { id: newIncomeId, date, amount, description, company, membersInvolved };
     incomeUpdates[`cassaComune/balance`] = newCassaBalance;
     incomeUpdates[`cassaComune/movements/${newCassaMovRef.key}`] = {
         id: newCassaMovRef.key,

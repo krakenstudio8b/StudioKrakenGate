@@ -7,6 +7,8 @@ import { ref, onValue, update, get, set } from "https://www.gstatic.com/firebase
 let allTasks = [];
 let allMembers = [];
 let allTargets = [];
+let allIncomeEntries = [];
+let allLiveStreams = [];
 let completionRateChart = null;
 let trendChart = null;
 let currentMonthFilter = 'current';
@@ -85,19 +87,6 @@ const placeholderTargets = [
 // ============================================
 
 /**
- * Ottiene la data di creazione del task
- * Prima prova createdAt, poi fallback sull'ID come timestamp
- */
-function getTaskCreationDate(task) {
-    if (task.createdAt) {
-        return new Date(task.createdAt);
-    }
-    const timestamp = parseInt(task.id, 10);
-    if (isNaN(timestamp)) return null;
-    return new Date(timestamp);
-}
-
-/**
  * Ottiene l'intervallo del mese selezionato
  */
 function getMonthRange(filter) {
@@ -137,9 +126,10 @@ function filterTasksByMonth(tasks, filter) {
     const { start, end } = getMonthRange(filter);
 
     return tasks.filter(task => {
-        const createdAt = getTaskCreationDate(task);
-        if (!createdAt) return false;
-        return createdAt >= start && createdAt <= end;
+        if (!task.dueDate) return false;
+        const dueDate = new Date(task.dueDate + 'T00:00:00');
+        if (isNaN(dueDate)) return false;
+        return dueDate >= start && dueDate <= end;
     });
 }
 
@@ -626,6 +616,10 @@ function renderTargets(targets) {
     noTargetsMsg.classList.add('hidden');
 
     container.innerHTML = targets.map(target => {
+        const autoValue = computeAutoCalcValue(target);
+        if (autoValue !== null) {
+            target = { ...target, currentValue: autoValue };
+        }
         const progress = Math.round((target.currentValue / target.targetValue) * 100);
         const clampedProgress = Math.min(progress, 100);
 
@@ -871,6 +865,66 @@ function initFirebaseListeners() {
         }
         renderTargets(allTargets);
     });
+
+    // Listener entrate per auto-calcolo Fatturato Kraken / Gate Radio
+    const incomeRef = ref(database, 'incomeEntries');
+    onValue(incomeRef, (snapshot) => {
+        const data = snapshot.val();
+        if (Array.isArray(data)) {
+            allIncomeEntries = data.filter(Boolean);
+        } else if (data && typeof data === 'object') {
+            allIncomeEntries = Object.values(data);
+        } else {
+            allIncomeEntries = [];
+        }
+        renderTargets(allTargets);
+    });
+
+    // Listener live per auto-calcolo "Set pubblicati"
+    const streamsRef = ref(database, 'gateRadio/streams');
+    onValue(streamsRef, (snapshot) => {
+        const data = snapshot.val();
+        allLiveStreams = data ? Object.values(data) : [];
+        renderTargets(allTargets);
+    });
+}
+
+// ============================================
+// AUTO-CALCOLO VALORI OBIETTIVI
+// ============================================
+
+function computeAutoCalcValue(target) {
+    if (!target.autoCalc || target.autoCalc === 'none') return null;
+
+    const startDate = target.startDate ? new Date(target.startDate + 'T00:00:00') : null;
+    const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
+
+    const inRange = (dateStr) => {
+        if (!dateStr) return false;
+        const d = new Date(dateStr + 'T00:00:00');
+        if (isNaN(d)) return false;
+        if (startDate && d < startDate) return false;
+        if (endDate && d > endDate) return false;
+        return true;
+    };
+
+    if (target.autoCalc === 'incomeKraken') {
+        return allIncomeEntries
+            .filter(e => e && e.company === 'kraken' && inRange(e.date))
+            .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    }
+
+    if (target.autoCalc === 'incomeGateradio') {
+        return allIncomeEntries
+            .filter(e => e && e.company === 'gateradio' && inRange(e.date))
+            .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    }
+
+    if (target.autoCalc === 'liveStreams') {
+        return allLiveStreams.filter(s => s && inRange(s.date)).length;
+    }
+
+    return null;
 }
 
 // ============================================
@@ -884,6 +938,11 @@ function initEventListeners() {
             currentMonthFilter = e.target.value;
             updateDashboard();
         });
+    }
+
+    const autoCalcSelect = document.getElementById('target-autocalc');
+    if (autoCalcSelect) {
+        autoCalcSelect.addEventListener('change', toggleAutoCalcFields);
     }
 }
 
@@ -1147,6 +1206,7 @@ function openTargetModal(targetId = null) {
     const unitInput = document.getElementById('target-unit');
     const startDateInput = document.getElementById('target-start-date');
     const endDateInput = document.getElementById('target-end-date');
+    const autoCalcSelect = document.getElementById('target-autocalc');
 
     if (targetId) {
         // Modifica obiettivo esistente
@@ -1165,6 +1225,7 @@ function openTargetModal(targetId = null) {
         unitInput.value = target.unit || '';
         startDateInput.value = target.startDate || '';
         endDateInput.value = target.endDate || '';
+        if (autoCalcSelect) autoCalcSelect.value = target.autoCalc || 'none';
     } else {
         // Nuovo obiettivo
         currentEditingTargetId = null;
@@ -1177,13 +1238,23 @@ function openTargetModal(targetId = null) {
         currentInput.value = '';
         valueInput.value = '';
         unitInput.value = '';
+        if (autoCalcSelect) autoCalcSelect.value = 'none';
         // Default: da oggi a fine anno
         const today = new Date();
         startDateInput.value = today.toISOString().split('T')[0];
         endDateInput.value = `${today.getFullYear()}-12-31`;
     }
 
+    toggleAutoCalcFields();
     modal.classList.remove('hidden');
+}
+
+function toggleAutoCalcFields() {
+    const autoCalcSelect = document.getElementById('target-autocalc');
+    const currentWrapper = document.getElementById('target-current-wrapper');
+    if (!autoCalcSelect || !currentWrapper) return;
+    const isAuto = autoCalcSelect.value && autoCalcSelect.value !== 'none';
+    currentWrapper.classList.toggle('hidden', isAuto);
 }
 
 function closeTargetModal() {
@@ -1201,6 +1272,7 @@ async function saveTarget() {
     const unitInput = document.getElementById('target-unit');
     const startDateInput = document.getElementById('target-start-date');
     const endDateInput = document.getElementById('target-end-date');
+    const autoCalcSelect = document.getElementById('target-autocalc');
 
     const title = titleInput.value.trim();
     if (!title) {
@@ -1208,15 +1280,19 @@ async function saveTarget() {
         return;
     }
 
+    const autoCalc = autoCalcSelect ? autoCalcSelect.value : 'none';
+    const isAuto = autoCalc && autoCalc !== 'none';
+
     const targetData = {
         title: title,
         company: companySelect.value,
         icon: iconSelect.value,
-        currentValue: parseFloat(currentInput.value) || 0,
+        currentValue: isAuto ? 0 : (parseFloat(currentInput.value) || 0),
         targetValue: parseFloat(valueInput.value) || 100,
         unit: unitInput.value.trim(),
         startDate: startDateInput.value,
-        endDate: endDateInput.value
+        endDate: endDateInput.value,
+        autoCalc: autoCalc
     };
 
     try {
