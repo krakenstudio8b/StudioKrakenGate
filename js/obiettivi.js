@@ -896,6 +896,7 @@ function initFirebaseListeners() {
 function computeAutoCalcValue(target) {
     if (!target.autoCalc || target.autoCalc === 'none') return null;
 
+    const baseline = parseFloat(target.currentValue) || 0;
     const cutoff = target.autoCalcStartDate || target.startDate;
     const startDate = cutoff ? new Date(cutoff + 'T00:00:00') : null;
     const endDate = target.endDate ? new Date(target.endDate + 'T23:59:59') : null;
@@ -909,23 +910,22 @@ function computeAutoCalcValue(target) {
         return true;
     };
 
+    let delta = 0;
     if (target.autoCalc === 'incomeKraken') {
-        return allIncomeEntries
+        delta = allIncomeEntries
             .filter(e => e && e.company === 'kraken' && inRange(e.date))
             .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-    }
-
-    if (target.autoCalc === 'incomeGateradio') {
-        return allIncomeEntries
+    } else if (target.autoCalc === 'incomeGateradio') {
+        delta = allIncomeEntries
             .filter(e => e && e.company === 'gateradio' && inRange(e.date))
             .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    } else if (target.autoCalc === 'liveStreams') {
+        delta = allLiveStreams.filter(s => s && inRange(s.date)).length;
+    } else {
+        return null;
     }
 
-    if (target.autoCalc === 'liveStreams') {
-        return allLiveStreams.filter(s => s && inRange(s.date)).length;
-    }
-
-    return null;
+    return baseline + delta;
 }
 
 // ============================================
@@ -1255,12 +1255,12 @@ function openTargetModal(targetId = null) {
 
 function toggleAutoCalcFields() {
     const autoCalcSelect = document.getElementById('target-autocalc');
-    const currentWrapper = document.getElementById('target-current-wrapper');
     const autoCalcStartWrapper = document.getElementById('target-autocalc-start-wrapper');
+    const currentLabel = document.querySelector('#target-current-wrapper label');
     if (!autoCalcSelect) return;
     const isAuto = autoCalcSelect.value && autoCalcSelect.value !== 'none';
-    if (currentWrapper) currentWrapper.classList.toggle('hidden', isAuto);
     if (autoCalcStartWrapper) autoCalcStartWrapper.classList.toggle('hidden', !isAuto);
+    if (currentLabel) currentLabel.textContent = isAuto ? 'Saldo iniziale' : 'Valore Attuale';
 }
 
 function closeTargetModal() {
@@ -1294,7 +1294,7 @@ async function saveTarget() {
         title: title,
         company: companySelect.value,
         icon: iconSelect.value,
-        currentValue: isAuto ? 0 : (parseFloat(currentInput.value) || 0),
+        currentValue: parseFloat(currentInput.value) || 0,
         targetValue: parseFloat(valueInput.value) || 100,
         unit: unitInput.value.trim(),
         startDate: startDateInput.value,
