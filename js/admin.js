@@ -228,6 +228,10 @@ const loadUsersForManagement = () => {
                             <input type="radio" name="role-${uid}" value="admin" data-uid="${uid}" class="role-radio h-4 w-4" ${user.role === 'admin' ? 'checked' : ''}>
                         </div>
                         <div class="flex items-center gap-2">
+                            <label class="text-sm font-medium">Admin Base</label>
+                            <input type="radio" name="role-${uid}" value="admin_base" data-uid="${uid}" class="role-radio h-4 w-4" ${user.role === 'admin_base' ? 'checked' : ''}>
+                        </div>
+                        <div class="flex items-center gap-2">
                             <label class="text-sm font-medium">Utente</label>
                             <input type="radio" name="role-${uid}" value="user" data-uid="${uid}" class="role-radio h-4 w-4" ${!user.role || user.role === 'user' ? 'checked' : ''}>
                         </div>

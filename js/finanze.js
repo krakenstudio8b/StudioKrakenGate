@@ -365,7 +365,7 @@ const renderCassaComune = () => {
                         <span class="text-xs text-gray-400">${displayDate(m.date)}</span>
                         <span class="font-bold block">${m.type === 'deposit' ? '+' : '-'}€${(m.amount || 0).toFixed(2)}</span>
                     </div>
-                    ${currentUser.role === 'admin' ? adminButtons : ''}
+                    ${(currentUser.role === 'admin' || currentUser.role === 'admin_base') ? adminButtons : ''}
                 </div>
             `;
         }).join('') || '<p class="text-gray-500">Nessun movimento recente.</p>';
@@ -438,7 +438,7 @@ const renderFutureMovements = () => {
 
         const sharesContainerHtml = `<div id="shares-${m.id}" class="mt-2 pt-2 border-t border-gray-200 space-y-1 ${m.isExpanded ? '' : 'hidden'}">${sharesHtml}</div>`;
 
-        const adminButtonsHtml = currentUser.role === 'admin' ? `
+        const adminButtonsHtml = (currentUser.role === 'admin' || currentUser.role === 'admin_base') ? `
             <div class="flex gap-2 mt-2 justify-end flex-wrap">
                 <button data-id="${m.id}" class="convert-future-btn text-xs bg-indigo-500 text-white py-1 px-3 rounded-lg hover:bg-indigo-600">Converti in Spesa</button>
                 <button data-id="${m.id}" data-type="futureMovement" class="open-edit-modal-btn text-xs text-indigo-600 hover:text-indigo-800">Modifica</button>
@@ -853,7 +853,7 @@ const openEditModal = (id, type) => {
     if (!item) return;
 
     const isProtectedType = ['variableExpense', 'incomeEntry', 'fixedExpense', 'cashMovement'].includes(type);
-    if (currentUser.role !== 'admin' && isProtectedType) {
+    if (currentUser.role !== 'admin' && currentUser.role !== 'admin_base' && isProtectedType) {
         return alert("Non hai i permessi per modificare questo elemento.");
     }
     
@@ -1744,7 +1744,7 @@ if (addIncomeBtn) addIncomeBtn.addEventListener('click', () => {
 
 if (addExpenseBtn) {
     // Questo si aggiorna dopo 'authReady', quindi 'currentUser' è disponibile
-    if (currentUser.role === 'admin') {
+    if (currentUser.role === 'admin' || currentUser.role === 'admin_base') {
         addExpenseBtn.textContent = 'Aggiungi Spesa';
     } else {
         addExpenseBtn.textContent = 'Invia Richiesta Spesa';
@@ -1765,8 +1765,8 @@ if (addExpenseBtn) {
         const payerMember = members.find(m => m.name === payer);
         const payerId = (payer === 'Cassa Comune') ? 'Cassa Comune' : payerMember?.id;
 
-        if (currentUser.role === 'admin') {
-            // Admin inserisce spese direttamente
+        if (currentUser.role === 'admin' || currentUser.role === 'admin_base') {
+            // Admin/Admin Base inserisce spese direttamente
             if (payer === 'Cassa Comune') {
                 if ((cassaComune.balance || 0) < amount) {
                     return alert("Errore: Fondi insufficienti nella cassa comune.");

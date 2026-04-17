@@ -17,7 +17,7 @@ let authReadyFired = false;
 // --- LOGICA PERMESSI ---
 const pagePermissions = {
     'finanze.html': ['user_base'],
-    'admin.html': ['user', 'user_base']
+    'admin.html': ['user', 'user_base', 'admin_base']
 };
 
 function getCurrentPage() {
@@ -101,7 +101,7 @@ onAuthStateChanged(auth, async (user) => {
                     adminPanelLink.classList.add('hidden');
                 }
             }
-            
+
             // 2. Link Finanze (NASCONDE PER user_base)
             if (finanzeLink) {
                 if (currentUser.role === 'user_base') {
