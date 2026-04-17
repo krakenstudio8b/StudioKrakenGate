@@ -263,19 +263,20 @@ const sections = {
     adminRequests: document.getElementById('admin-requests-section'),
 };
 
-const toggleSectionsVisibility = () => { 
+const toggleSectionsVisibility = () => {
     const hasMembers = members.length > 0;
+    const isAdminLike = currentUser.role === 'admin' || currentUser.role === 'admin_base';
     Object.values(sections).forEach(section => {
         if(section && section.id === 'admin-requests-section') {
             // Mostra admin-requests solo se sei admin E ci sono membri
-            if(currentUser.role === 'admin' && hasMembers){ 
+            if(currentUser.role === 'admin' && hasMembers){
                 section.classList.remove('hidden');
             } else {
                 section.classList.add('hidden');
             }
         } else if(section) {
-            // Nasconde le altre sezioni se non ci sono membri (filtrati)
-            section.classList.toggle('hidden', !hasMembers);
+            // Admin e admin_base vedono sempre le sezioni; altri solo se ci sono membri
+            section.classList.toggle('hidden', !hasMembers && !isAdminLike);
         }
     });
 };
