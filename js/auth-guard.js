@@ -62,8 +62,7 @@ onAuthStateChanged(auth, async (user) => {
             if (memberSnapshot.exists() && memberSnapshot.val().name) {
                 currentUser.name = memberSnapshot.val().name;
             } else {
-                currentUser.name = user.email; 
-                currentUser.role = 'user_base'; 
+                currentUser.name = user.email;
             }
 
             console.log(`Accesso effettuato come: ${currentUser.name} (Ruolo: ${currentUser.role})`);
